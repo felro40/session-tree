@@ -68,7 +68,7 @@ checkout (read-only).
 - Bundle guard (`tests/js/guards.test.ts`, es-module-lexer): the only import specifiers are
   `@hermes/plugin-sdk`, `react`, `react/jsx-runtime`; no dynamic `import()`, no `import.meta`, no
   `eval(` / `new Function`, no `__require(`, no `react-dom`.
-- **Bundle size: 378 641 bytes** (`desktop/plugin.js`, 31 esbuild inputs; loader cap 16 MiB =
+- **Bundle size: 378 706 bytes** (`desktop/plugin.js`, 31 esbuild inputs; loader cap 16 MiB =
   16 777 216 bytes; the test budget is 2 MiB).
 
 ## Pre-check 2 — listeners of the isolated gateway
