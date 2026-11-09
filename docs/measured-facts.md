@@ -38,7 +38,9 @@ checkout (read-only).
   `ModuleNotFoundError: ruamel`); scripts therefore run through the launcher:
   `<root>/hermes --run-path <script.py> [args]`.
 - **Exact `test:py` command** (`scripts/run-pytest.sh`):
-  `env -i HOME=<root>/userhome HERMES_HOME=<root>/home TMPDIR=<root>/tmp … <root>/hermes --run-path scripts/pytest-main.py -p no:cacheprovider --rootdir tests/py --basetemp ~/.cache/session-tree-e2e/pytest-tmp tests/py`.
+  `env -i HOME=<root>/userhome HERMES_HOME=<root>/home TMPDIR=<root>/tmp … <root>/hermes --run-path scripts/pytest-main.py -p no:cacheprovider --rootdir tests/py --basetemp <root>/pytest-tmp tests/py`
+  (`<root>` = `~/.cache/session-tree-e2e/c<card>-<role>`; card 2 made `--basetemp` per role, it
+  was a shared `~/.cache/session-tree-e2e/pytest-tmp` in card 1).
 - pytest 9.2.0 (MIT) lives in a test-only venv `~/.cache/session-tree-e2e/pytest-venv`
   (created `--system-site-packages` from the committed Python). **Measured:** a venv made from a
   venv with `--system-site-packages` sees the *base interpreter's* site-packages
@@ -216,3 +218,108 @@ boundary in unit tests.
   (`Mounted plugin API routes: /api/plugins/session-tree/` in `logs/gateway.log`).
 - `hermes profile create <name>` sets `gateway.multiplex_profiles: true` in the test config.
 - The core sidebar hides sessions with no messages (`min_messages=1`); the graph model does too.
+
+---
+
+# Measured facts — Session Tree 2/7 (graph core + Dense + inspector)
+
+Measured 2026-11-09 by the card-2 coder in the isolated test Hermes
+`~/.cache/session-tree-e2e/c2-coder/home` (ports 19320–19324; the harness now derives home and
+ports from `SESSION_TREE_CARD`, default 2: `c<card>-<role>`, `19300 + 10·card`, reviewer +5).
+
+## Step 0
+
+HEAD `e8a04a214e05930d45ed0f8167e09cb3f2feda21`, `git status --short` empty. Card-1 baseline
+(reviewer-measured): lint 0, build 0 (378 706 B), `npm test` 35/35, `test:py` 28, `test:e2e` 19/19.
+
+## Bundle
+
+- **`desktop/plugin.js`: 467 052 bytes** (48 esbuild inputs), byte-identical over two builds
+  (sha256 `79bf53b4…d32d0cc`). Loader cap 16 MiB; test budget 2 MiB. No new runtime dependency.
+
+## `projects.tree` as the scope source
+
+- Called through `host.request('projects.tree', { profile, preview_limit: 0 })`, once per profile in
+  the filter (every profile for "All profiles"), merged by project id. Nodes: `id` (an auto
+  project's id is its repo root path; the home bucket is `__no_project__`, label "Home"), `label`,
+  `color` (null for the fixtures' auto projects, so their blocks use the theme's quaternary text
+  colour), `icon`, `isNoProject`, `isAuto`, `repos[].path`, `sessionIds`.
+- `sessionIds` come from `list_sessions_rich(include_children=False, include_archived=False)`
+  (`tui_gateway/methods_projects.py` `_project_tree_inputs`): compression tips by their visible
+  (tip) id, and **no archived rows**. The model therefore matches a row by its id, lineage root or
+  any segment id, and an archived row (shown via "Show archived") by its `git_repo_root`/`cwd`
+  under a project's repo path (longest match), else the home bucket.
+- On a cold page load the gateway socket can still be connecting: the projects query retries
+  (4 × 750 ms) and the page lays nothing out until it settles, so a layout never groups every block
+  under "no project".
+
+## Opening a session from the graph (R2)
+
+Double-click → `host.openSession(id, { intent: 'tab' })`. Measured in the Webapp: a session tab
+"EDGE ROUTING: LIBAVOID" is stacked beside the page, the page keeps its route (`#/session-tree`),
+`host.state.focusedStoredSessionId` becomes the opened id, and the block shows the "open in app"
+ring (R11). Out-of-scope blocks and stand-ins never open.
+
+## Live status sources (R11) — what is real and what is simulated
+
+| Status | Source in this card | How it is checked |
+|---|---|---|
+| running | backend row `is_active` (core 300 s heuristic) | **e2e, real backend path**: `seed-fixtures.py --activate st-sys-pairing` stamps the fixture's last activity now (fixture-only direct SQL on timestamps); the block turns `running` after `sessions.changed`. |
+| running (focused, mid-turn) | `host.state.busy` / `busyBySession[focusedSessionId]` | **simulated**: unit tests inject `host.state` snapshots (`tests/js/status.test.ts`); no provider can run a turn in the test Hermes. |
+| needs input | none — the SDK exposes no source (pre-check 10) | **simulated**: the status function takes a `needsInput` set; unit tests inject it; the page passes an empty set. |
+| unread / pinned | backend row | unit tests; `st-hp-root` shows the pin. |
+| open in app | `host.state.focusedStoredSessionId` | e2e (after the double-click above). |
+
+## R3 navigation in React Flow 12.12.1
+
+- `panOnDrag={[1]}` (middle button only), `panActivationKeyCode="Space"` (Space makes every
+  button pan, `FlowRenderer`: `panOnDrag = panActivationKeyPressed || panOnDrag`), `zoomOnScroll`
+  (zooms at the pointer), `selectionOnDrag={false}`, `selectionKeyCode`/`multiSelectionKeyCode`/
+  `deleteKeyCode` `null`, `zoomOnDoubleClick={false}`, zoom 0.3–2.5.
+- React Flow does not stop the middle button's browser defaults; capture-phase listeners on the
+  canvas (`ctx.addEventListener`) `preventDefault` `mousedown`/`mouseup`/`auxclick` for button 1.
+  e2e: all three arrive `defaultPrevented: true`, no `paste` event, no scroll change.
+- Measured: wheel −240 at a block point zoomed 125 % → 174 % and the point under the cursor moved
+  (0.20, 0.10) px; 12 more wheel-ups clamp at 250 %, 20 wheel-downs at 30 %. Middle-drag (140, 90)
+  panned exactly (140, 90); Space + left-drag (−110, 60) panned (−110, 60); left-drag on empty
+  canvas kept the viewport and cleared the selection.
+- Snap: `snapToGrid` with a 16 px grid and a dot `Background` whose pattern pitch is 16 × zoom; a
+  drop of (+37, +23) px landed on (480, 48) (multiples of 16); with snap off a (13, 7) flow-px drag
+  moved the block by exactly that.
+
+## R13 router (middle ground)
+
+- While a block is dragged, its links are redrawn live from the blocks' current rectangles (the
+  stored route no longer matches the ends, so the plain bezier is drawn). On drop, every link is
+  checked against every other block (`routeLinks`); a crossing one gets an orthogonal A* path on a
+  sparse grid around the obstacles inflated by 12 px (6, then 3 px when a block sits next to a
+  port), drawn with corner radius below the clearance, and validated by sampling.
+- e2e: the cross-project link stretched to 460 px stays plain; dropping `st-md-redline` onto it
+  makes it `data-detoured="true"`; 121 screen-space samples of that path (SVG
+  `getPointAtLength` × CTM) and of all 12 links enter no other block.
+
+## Live refresh
+
+`sessions.changed` / `projects.changed` through `ctx.onEvent`, plus a 10 s poll while the page is
+visible. A branch seeded with `seed-fixtures.py --branch` while the page was open appeared after
+782 ms; none of the 20 existing blocks (one of them user-dragged) moved.
+
+## 500-session scale fixture
+
+Profile `scale` with **Show all** (500 blocks laid out: 10 families of 10 + 400 singles):
+
+- **time to first render: 321 ms** (from choosing the profile to the first block drawn, including the
+  backend fetch of 500 rows and `projects.tree`); React Flow's `onlyRenderVisibleElements` is on
+  above 150 blocks (335 block elements in the DOM at that zoom).
+- **scripted 2 s middle-drag pan: 123 frames in 2003 ms = 61.4 fps** (requestAnimationFrame count,
+  120 real mouse moves).
+
+## Deviations
+
+- `scripts/e2e-foundation.ts` (card 1) keeps all its checks, but two now assert the card-2 graph
+  instead of card 1's plain boxes: blocks + the inspector's singles list together equal the visible
+  rows, and the orphaned branch links from its "Parent not loaded" stand-in instead of being unlinked.
+- The block context menu shows the R14 items disabled (card 3 wires them), so the R5 check can
+  contrast an in-scope block (menu opens) with a dimmed one (no menu).
+- Selecting is limited to in-scope session blocks: stand-ins and dimmed blocks are not selectable
+  from the canvas or the inspector links (R5 "no selection").
