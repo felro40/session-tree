@@ -1,0 +1,7 @@
+{
+  "name": "session-tree",
+  "label": "Session Tree",
+  "description": "Backend for the Session Tree desktop page: session rows with their branch lineage.",
+  "version": "0.1.0",
+  "api": "plugin_api.py"
+}

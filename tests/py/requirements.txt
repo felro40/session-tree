@@ -1,0 +1,3 @@
+# Test-only Python packages for `npm run test:py`. Installed into a venv under the e2e dir
+# (~/.cache/session-tree-e2e/pytest-venv), never into the Python environment Hermes runs in.
+pytest==9.2.0
