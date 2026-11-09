@@ -108,10 +108,16 @@ forbidden.
   for the symlinked dev checkout; only the `desktop/` folder is copied, never `node_modules`).
   Observed: `desktop-plugins/session-tree/{plugin.js,.hermes-package.json}` after the first page load.
 - It ships disabled. The harness enables it the user's way: Capabilities → Plugins → search
-  "session" → catalog **Filters** → **Installed** → switch **"Desktop: Session Tree"**. The choice
+  "session" → catalog **Filters** → **Installed** → the grid card's own package switch
+  **"Session Tree"** (`CatalogSwitch aria-label={pkg.name}`, `plugins-tab.tsx:772`; it enables
+  every half). It then opens the detail view through the deep link
+  `/capabilities?tab=plugins&plugin=session-tree` (`useDeepLinkHighlight`, `plugins-tab.tsx:630`)
+  and asserts that the per-half switch **"Desktop: Session Tree"** reads on. Clicking the card's
+  text does not open the detail view on a first-run home (attempt 1 failed there). The
+  backend-off check uses only the per-half switch, so the agent half stays off. The choice
   persists in the browser's `localStorage['hermes.desktop.pluginDecisions.v2']`
   (`{"session-tree": true}`, `contrib/plugins-store.ts:38`), so every fresh browser context must
-  flip it again (the e2e does).
+  flip it again (the e2e does). The harness never writes that key itself.
 
 ## Pre-check 5 — backend reach; `ctx.socket` in the Webapp
 

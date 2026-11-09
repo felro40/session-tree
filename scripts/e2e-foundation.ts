@@ -403,7 +403,7 @@ async function main(): Promise<void> {
 
       try {
         await signIn(t, off.page)
-        await enableDesktopHalf(t, off.page)
+        await enableDesktopHalf(t, off.page, { via: 'detail' })
         await goto(t, off.page, '/session-tree')
         const empty = off.page.locator('[data-testid="session-tree-backend-off"]')
 

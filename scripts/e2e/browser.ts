@@ -56,57 +56,121 @@ export async function goto(t: TestHermes, page: Page, route: string): Promise<vo
   await page.goto(`${webappBase(t)}/#${route}`)
 }
 
+const DESKTOP_SWITCH = 'Desktop: Session Tree'
+
+async function switchReadsOn(page: Page, name: string): Promise<boolean> {
+  return page
+    .waitForFunction(
+      label => document.querySelector(`[role="switch"][aria-label="${label}"]`)?.getAttribute('aria-checked') === 'true',
+      name,
+      { timeout: 20_000 }
+    )
+    .then(
+      () => true,
+      () => false
+    )
+}
+
 /**
- * Capabilities → Plugins → the session-tree package → "Desktop: Session Tree" switch on.
- * A unified package's desktop half ships disabled; this is the user's own toggle.
- * Returns whether it had to flip the switch.
+ * Opens the package's detail view through the catalog's deep link (`?plugin=<id>`, resolved by
+ * useDeepLinkHighlight to `installed:<key>`), which shows the per-half switches. On a fresh home
+ * the desktop half is copied into desktop-plugins/ by the first root scan, so it can be missing
+ * on the first visit: Rescan, then reload.
  */
-export async function enableDesktopHalf(t: TestHermes, page: Page): Promise<boolean> {
-  const toggle = page.getByRole('switch', { name: 'Desktop: Session Tree' })
+async function openPackageDetail(t: TestHermes, page: Page): Promise<void> {
+  const toggle = page.getByRole('switch', { name: DESKTOP_SWITCH, exact: true })
 
-  // On a fresh home the desktop half is copied into desktop-plugins/ by the first root scan, so
-  // the package's Desktop switch can be missing on the first visit: Rescan, then reload.
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await goto(t, page, '/capabilities?tab=plugins')
-
     if (attempt === 1) {
+      await goto(t, page, '/capabilities?tab=plugins')
       await page.getByRole('button', { name: 'Rescan' }).click().catch(() => undefined)
       await page.waitForTimeout(3000)
-    } else if (attempt === 2) {
+    }
+
+    await goto(t, page, '/capabilities?tab=plugins&plugin=session-tree')
+
+    if (attempt === 2) {
       await page.reload()
     }
 
-    await page.getByPlaceholder('Search plugins').fill('session')
-    // The catalog's own Filters button is the last one on screen (the sidebar has another).
-    await page.getByRole('button', { name: /^Filters/ }).last().click()
-    await page.getByRole('button', { name: 'Installed', exact: true }).click()
-
-    // Grid mode lists the package as a card: open it to reach the per-half switches.
-    if (!(await toggle.waitFor({ timeout: 3000 }).then(() => true, () => false))) {
-      await page.locator('main').getByText('Session Tree', { exact: true }).first().click().catch(() => undefined)
+    if (await toggle.waitFor({ timeout: 15_000 }).then(() => true, () => false)) {
+      return
     }
-
-    if (await toggle.waitFor({ timeout: 10_000 }).then(() => true, () => false)) {
-      break
-    }
-
-    await page.keyboard.press('Escape')
   }
 
   await toggle.waitFor({ timeout: 10_000 })
+}
 
-  if ((await toggle.getAttribute('aria-checked')) === 'true') {
-    return false
+/**
+ * Turns the session-tree desktop half on the way a user does (it ships disabled).
+ * Returns whether a switch had to be flipped.
+ *
+ * - `via: 'package'` (default): the Installed grid card's own package switch
+ *   (`CatalogSwitch aria-label={pkg.name}`), which enables every half; then the detail view's
+ *   "Desktop: Session Tree" switch is asserted on, reached through the deep link.
+ * - `via: 'detail'`: only the per-half "Desktop: Session Tree" switch, for runs where the agent
+ *   half must stay off (the backend-off check).
+ */
+export async function enableDesktopHalf(
+  t: TestHermes,
+  page: Page,
+  { via = 'package' }: { via?: 'detail' | 'package' } = {}
+): Promise<boolean> {
+  let flipped = false
+
+  if (via === 'package') {
+    const card = page.getByRole('switch', { name: 'Session Tree', exact: true })
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await goto(t, page, '/capabilities?tab=plugins')
+
+      if (attempt === 1) {
+        await page.getByRole('button', { name: 'Rescan' }).click().catch(() => undefined)
+        await page.waitForTimeout(3000)
+      } else if (attempt === 2) {
+        await page.reload()
+      }
+
+      await page.getByPlaceholder('Search plugins').fill('session')
+      // Narrow the catalog to installed packages; the catalog's own Filters button is the last
+      // one on screen (the sidebar has another).
+      await page.getByRole('button', { name: /^Filters/ }).last().click()
+      await page.getByRole('button', { name: 'Installed', exact: true }).click()
+
+      if (await card.waitFor({ timeout: 15_000 }).then(() => true, () => false)) {
+        break
+      }
+    }
+
+    await card.waitFor({ timeout: 10_000 })
+
+    if ((await card.getAttribute('aria-checked')) !== 'true') {
+      await card.click()
+      flipped = true
+
+      if (!(await switchReadsOn(page, 'Session Tree'))) {
+        throw new Error('the "Session Tree" package switch did not read on')
+      }
+    }
   }
 
-  await toggle.click()
-  await page.waitForFunction(
-    () => document.querySelector('[role="switch"][aria-label="Desktop: Session Tree"]')?.getAttribute('aria-checked') === 'true',
-    undefined,
-    { timeout: 20_000 }
-  )
+  await openPackageDetail(t, page)
+  const toggle = page.getByRole('switch', { name: DESKTOP_SWITCH, exact: true })
 
-  return true
+  if ((await toggle.getAttribute('aria-checked')) !== 'true') {
+    if (via === 'package') {
+      throw new Error(`the package switch is on but "${DESKTOP_SWITCH}" reads off`)
+    }
+
+    await toggle.click()
+    flipped = true
+  }
+
+  if (!(await switchReadsOn(page, DESKTOP_SWITCH))) {
+    throw new Error(`"${DESKTOP_SWITCH}" did not read on`)
+  }
+
+  return flipped
 }
 
 export async function close(session: Session): Promise<void> {
