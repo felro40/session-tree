@@ -1,6 +1,7 @@
 /**
  * Session rows as the plugin backend returns them (`GET /sessions`), and the
- * pure rules that decide which rows become blocks and which links join them.
+ * pure rules that decide which rows become blocks. Links and families are
+ * `graph.ts`'s.
  *
  * The nesting rule is the desktop sidebar's (`apps/desktop/src/lib/
  * session-branch-tree.ts`, `forkParentId`): a `/new` or idle/daily reset
@@ -40,6 +41,8 @@ export interface SessionRow {
   pinned?: boolean
   unread?: boolean
   is_active?: boolean
+  /** `compression` on a row the core list projected onto its live tip. */
+  continuation_kind?: null | string
 }
 
 export interface SessionsResponse {
@@ -83,68 +86,6 @@ export function isHiddenRow(row: SessionRow): boolean {
 
 export function visibleRows(rows: readonly SessionRow[]): SessionRow[] {
   return rows.filter(row => !isHiddenRow(row))
-}
-
-export type LinkKind = 'branch' | 'reset'
-
-export interface GraphLink {
-  id: string
-  source: string
-  target: string
-  kind: LinkKind
-}
-
-/** Every id a block answers to: its own, its compression root, and each
- *  compression segment (a child may name a middle segment as its parent). */
-export function aliasIndex(rows: readonly SessionRow[]): Map<string, string> {
-  const byAlias = new Map<string, string>()
-
-  for (const row of rows) {
-    for (const alias of [row._lineage_root_id, ...(row._lineage_ids ?? [])]) {
-      const id = trimmed(alias)
-
-      if (id && !byAlias.has(id)) {
-        byAlias.set(id, row.id)
-      }
-    }
-  }
-
-  // A block's own id always wins over another block's alias.
-  for (const row of rows) {
-    byAlias.set(row.id, row.id)
-  }
-
-  return byAlias
-}
-
-/**
- * Links between visible blocks: `/branch` children (solid, by
- * `forkParentId`) and `/new` / idle resets ("continued as", by `_reset_from`).
- * A link whose other end is not a visible block is left out here; the
- * "Parent not loaded" stand-in (R7) is a later card's.
- */
-export function graphLinks(rows: readonly SessionRow[]): GraphLink[] {
-  const byAlias = aliasIndex(rows)
-  const links: GraphLink[] = []
-
-  for (const row of rows) {
-    const parent = forkParentId(row)
-    const resetFrom = trimmed(row._reset_from)
-    const kind: LinkKind | undefined = parent ? 'branch' : resetFrom ? 'reset' : undefined
-    const from = parent ?? resetFrom
-
-    if (!kind || !from) {
-      continue
-    }
-
-    const source = byAlias.get(from)
-
-    if (source && source !== row.id) {
-      links.push({ id: `${kind}:${source}->${row.id}`, source, target: row.id, kind })
-    }
-  }
-
-  return links
 }
 
 /** The number of earlier compression segments folded into a block (R6 ×N). */

@@ -1,9 +1,13 @@
 /**
- * The page's only data source: this plugin's own backend
- * (`dashboard/plugin_api.py`, mounted at `/api/plugins/session-tree/`).
+ * The page's data sources: this plugin's own backend (`dashboard/plugin_api.py`, mounted at
+ * `/api/plugins/session-tree/`) for the session rows, and the gateway's `projects.tree` RPC for
+ * the projects (the PROJECTS pane's own grouping).
  */
+import { host } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
 
+import { mergeProjects, parseProjectsTree } from './model/projects.ts'
+import type { ProjectInfo } from './model/projects.ts'
 import type { SessionsResponse } from './model/sessions.ts'
 
 export interface HealthResponse {
@@ -36,4 +40,32 @@ export function fetchSessions(
   })
 
   return ctx.rest<SessionsResponse>(`/sessions?${query.toString()}`, { timeoutMs: 20000 })
+}
+
+export interface ProfilesResponse {
+  ok: boolean
+  profiles: string[]
+}
+
+/** Every profile this Hermes serves (the profile filter's options). */
+export function fetchProfiles(ctx: PluginContext): Promise<ProfilesResponse> {
+  return ctx.rest<ProfilesResponse>(`/health?${PROFILE_PARAM}=*`, { timeoutMs: 8000 })
+}
+
+/**
+ * Projects for the given profiles from the gateway's own `projects.tree` RPC (the PROJECTS
+ * pane's grouping, colours and icons), merged. A profile whose tree cannot be read adds none;
+ * when no tree can be read the call fails (the page retries, then draws without projects).
+ */
+export async function fetchProjects(profiles: readonly string[]): Promise<ProjectInfo[]> {
+  const results = await Promise.allSettled(
+    profiles.map(profile => host.request<unknown>('projects.tree', { profile, preview_limit: 0 }).then(parseProjectsTree))
+  )
+  const trees = results.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
+
+  if (trees.length === 0 && results.length > 0) {
+    throw (results[0] as PromiseRejectedResult).reason
+  }
+
+  return mergeProjects(trees)
 }

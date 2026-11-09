@@ -13,7 +13,7 @@
     "lint": "eslint . && tsc --noEmit -p tsconfig.json",
     "test": "node --test \"tests/js/**/*.test.ts\"",
     "test:py": "sh scripts/run-pytest.sh",
-    "test:e2e": "node scripts/e2e-foundation.ts"
+    "test:e2e": "sh scripts/run-e2e.sh"
   },
   "dependencies": {
     "@xyflow/react": "12.12.1"

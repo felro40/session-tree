@@ -8,16 +8,33 @@ one conversation fold into one block, and `/new` resets show as a dashed "contin
 page is reached from the sidebar ("Session Tree"), from ⌘K ("Open Session Tree") and at the route
 `/session-tree`; double-clicking a block opens that session in a new tab.
 
-**Status: 1/7 foundation.** The page draws every visible session as a plain box with plain links
-and a temporary layout, from the plugin's own backend. The four view styles, the toolbar, session
-actions, synced layout and settings arrive in cards 2–7.
+**Status: 2/7 graph core + Dense + inspector.** The page draws the session families as a real
+graph in the *Dense + inspector* style: tidy-tree auto-layout grouped by project, `/branch` links,
+"compacted ×N" blocks, dashed "continued as" links, "Parent not loaded" stand-ins, singles in the
+inspector's list (or on the canvas with **Show all**), archived on request, a project scope with
+read-only dimmed blocks outside it, a profile filter, wheel zoom / middle-drag pan / snap grid, the
+on-drop link router, live refresh, and the inspector. Positions live in memory (card 4 persists
+them); the session actions are shown but disabled (card 3); the other three styles come in cards
+5–7.
+
+### Source map
+
+| Path | What |
+|---|---|
+| `src/model/branch-tree.ts` | Port of the desktop's `session-branch-tree.ts` rules (forkParentId nesting, compression collapse); its tests are mirrored in `tests/js/branch-tree.test.ts`. |
+| `src/model/graph.ts` | Rows + `projects.tree` → nodes, edges, families, singles, stand-ins, scope (`buildGraph`). |
+| `src/model/layout.ts`, `layout-memory.ts` | Deterministic tidy-tree layout and the merge that places new sessions without moving placed blocks; in-memory positions per style + profile + scope. |
+| `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense: `curveRouter`); on-drop detours on a sparse orthogonal grid (A*). |
+| `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
+| `src/styles/` | The style registry (`registry.ts`), the style contract (`types.ts`) and the Dense style (`dense/`). |
+| `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`), toolbar and block menu. |
 
 ## Package layout (one unified Hermes package)
 
 | Path | What |
 |---|---|
 | `plugin.yaml`, `__init__.py` | Agent half. No tools; it exists so `plugins.enabled` can mount the backend. |
-| `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`. Read-only today: `GET /health`, `GET /sessions`. |
+| `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`. Read-only today: `GET /health`, `GET /sessions`. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
 | `desktop/plugin.js` | Desktop half. **Built output** of `src/` (`npm run build`), committed so the package installs without a build. |
 | `src/` | TypeScript + JSX source: `plugin.tsx` (registration), `page/`, `settings/`, `model/` (pure graph rules), `shims/react-dom.ts`. |
 | `tests/js/` | node:test unit tests and the static bundle guards. |
@@ -50,7 +67,8 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/e2e-foundation.ts`: starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1) and `scripts/e2e-core-dense.ts` (card 2). Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
 ### The isolated test Hermes
 
@@ -66,8 +84,10 @@ scripts/test-hermes stop
 scripts/test-hermes reset     # stop and move the role's root to ~/.cache/session-tree-e2e/trash/
 ```
 
-- Role `SESSION_TREE_ROLE=coder` (default): home `~/.cache/session-tree-e2e/c1-coder/home`, ports
-  19310–19314 (the Webapp on 19310). `reviewer`: `c1-reviewer`, ports 19315–19319.
+- Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
+  current card, 2): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
+  (+0..+4 coder, +5..+9 reviewer). Card 2: coder home `c2-coder/home`, ports 19320–19324 (the
+  Webapp on 19320); reviewer `c2-reviewer`, ports 19325–19329.
 - Setup writes the test config with `hermes config set` (`webapp.enabled true`, `webapp.host
   127.0.0.1`, `webapp.port`, `plugins.enabled: [session-tree]`), symlinks this checkout into the
   **test home's** `plugins/session-tree`, creates the `work` and `scale` profiles and seeds fixtures.
@@ -77,7 +97,8 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
   `/new` reset chain, an orphaned branch, a cross-project family, 24 singles, 2 archived, one
   recently active session, hidden delegate/cron/kanban/tool sessions, a second profile with 3
   sessions and a 500-session `scale` profile). Direct SQL touches only timestamps of the isolated
-  fixture DB.
+  fixture DB. `--branch NEW PARENT [TITLE]` and `--activate ID` (used by the card-2 e2e) add a live
+  branch and stamp a session active now.
 - The desktop half ships disabled; the e2e enables it in Capabilities → Plugins like a user.
 
 ## Dependencies and licenses

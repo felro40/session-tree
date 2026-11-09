@@ -66,15 +66,15 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState2 = React2.useState, useEffect2 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState5 = React2.useState, useEffect6 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
-      var value2 = getSnapshot(), _useState = useState2({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
+      var value2 = getSnapshot(), _useState = useState5({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
       return useLayoutEffect2(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
         [subscribe, value2, getSnapshot]
-      ), useEffect2(
+      ), useEffect6(
         function() {
           return checkIfSnapshotChanged(inst) && forceUpdate({ inst }), subscribe(function() {
             checkIfSnapshotChanged(inst) && forceUpdate({ inst });
@@ -119,9 +119,9 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef2 = React2.useRef, useEffect2 = React2.useEffect, useMemo4 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React2.useRef, useEffect6 = React2.useEffect, useMemo4 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef2(null);
+      var instRef = useRef5(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
@@ -154,7 +154,7 @@ var require_with_selector_production = __commonJS({
         [getSnapshot, getServerSnapshot, selector2, isEqual]
       );
       var value2 = useSyncExternalStore(subscribe, instRef[0], instRef[1]);
-      return useEffect2(
+      return useEffect6(
         function() {
           inst.hasValue = !0, inst.value = value2;
         },
@@ -688,68 +688,6 @@ svg.react-flow__connectionline {
 // src/page/session-tree-page.tsx
 init_define_import_meta_env();
 import { EmptyState, host as host2, useQuery, useValue } from "@hermes/plugin-sdk";
-import { useMemo as useMemo3 } from "react";
-
-// src/api.ts
-init_define_import_meta_env();
-var PROFILE_PARAM = "session_profile";
-function fetchHealth(ctx, profile) {
-  return ctx.rest(`/health?${PROFILE_PARAM}=${encodeURIComponent(profile)}`, { timeoutMs: 8e3 });
-}
-function fetchSessions(ctx, { profile, includeArchived = !1 }) {
-  let query = new URLSearchParams({
-    [PROFILE_PARAM]: profile,
-    include_archived: String(includeArchived),
-    limit: String(2e3)
-  });
-  return ctx.rest(`/sessions?${query.toString()}`, { timeoutMs: 2e4 });
-}
-
-// src/model/sessions.ts
-init_define_import_meta_env();
-var HIDDEN_SOURCES = /* @__PURE__ */ new Set(["acp", "cron", "kanban", "oneshot", "subagent", "tool"]), trimmed = (value2) => value2?.trim() || void 0;
-function forkParentId(row) {
-  if (!trimmed(row._reset_from))
-    return trimmed(row._branched_from) ?? trimmed(row.parent_session_id);
-}
-function isHiddenRow(row) {
-  if (row.is_internal_child || row.message_count === 0)
-    return !0;
-  let source = (row.source ?? "").trim().toLowerCase();
-  return HIDDEN_SOURCES.has(source);
-}
-function visibleRows(rows) {
-  return rows.filter((row) => !isHiddenRow(row));
-}
-function aliasIndex(rows) {
-  let byAlias = /* @__PURE__ */ new Map();
-  for (let row of rows)
-    for (let alias of [row._lineage_root_id, ...row._lineage_ids ?? []]) {
-      let id2 = trimmed(alias);
-      id2 && !byAlias.has(id2) && byAlias.set(id2, row.id);
-    }
-  for (let row of rows)
-    byAlias.set(row.id, row.id);
-  return byAlias;
-}
-function graphLinks(rows) {
-  let byAlias = aliasIndex(rows), links = [];
-  for (let row of rows) {
-    let parent = forkParentId(row), resetFrom = trimmed(row._reset_from), kind = parent ? "branch" : resetFrom ? "reset" : void 0, from = parent ?? resetFrom;
-    if (!kind || !from)
-      continue;
-    let source = byAlias.get(from);
-    source && source !== row.id && links.push({ id: `${kind}:${source}->${row.id}`, source, target: row.id, kind });
-  }
-  return links;
-}
-function displayTitle(row) {
-  return trimmed(row.title) ?? trimmed(row.preview)?.slice(0, 80) ?? "Untitled session";
-}
-
-// src/page/tree-canvas.tsx
-init_define_import_meta_env();
-import { host } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
@@ -6189,7 +6127,7 @@ function useNodeObserver({ node, nodeType, hasDimensions, resizeObserver }) {
     }
   }, [node.id, nodeType, node.sourcePosition, node.targetPosition]), nodeRef;
 }
-function NodeWrapper({ id: id2, onClick, onMouseEnter, onMouseMove, onMouseLeave, onContextMenu, onDoubleClick, nodesDraggable, elementsSelectable, nodesConnectable, nodesFocusable, resizeObserver, noDragClassName, noPanClassName, disableKeyboardA11y, rfId, nodeTypes: nodeTypes2, nodeClickDistance, onError }) {
+function NodeWrapper({ id: id2, onClick, onMouseEnter, onMouseMove, onMouseLeave, onContextMenu, onDoubleClick, nodesDraggable, elementsSelectable, nodesConnectable, nodesFocusable, resizeObserver, noDragClassName, noPanClassName, disableKeyboardA11y, rfId, nodeTypes, nodeClickDistance, onError }) {
   let { node, internals, isParent } = useStore((s) => {
     let node2 = s.nodeLookup.get(id2), isParent2 = s.parentLookup.has(id2);
     return {
@@ -6197,8 +6135,8 @@ function NodeWrapper({ id: id2, onClick, onMouseEnter, onMouseMove, onMouseLeave
       internals: node2.internals,
       isParent: isParent2
     };
-  }, shallow$1), nodeType = node.type || "default", NodeComponent = nodeTypes2?.[nodeType] || builtinNodeTypes[nodeType];
-  NodeComponent === void 0 && (onError?.("003", errorMessages.error003(nodeType)), nodeType = "default", NodeComponent = nodeTypes2?.default || builtinNodeTypes.default);
+  }, shallow$1), nodeType = node.type || "default", NodeComponent = nodeTypes?.[nodeType] || builtinNodeTypes[nodeType];
+  NodeComponent === void 0 && (onError?.("003", errorMessages.error003(nodeType)), nodeType = "default", NodeComponent = nodeTypes?.default || builtinNodeTypes.default);
   let isDraggable = !!(node.draggable || nodesDraggable && typeof node.draggable > "u"), isSelectable = !!(node.selectable || elementsSelectable && typeof node.selectable > "u"), isConnectable = !!(node.connectable || nodesConnectable && typeof node.connectable > "u"), isFocusable = !!(node.focusable || nodesFocusable && typeof node.focusable > "u"), store = useStoreApi(), hasDimensions = nodeHasDimensions(node), nodeRef = useNodeObserver({ node, nodeType, hasDimensions, resizeObserver }), dragging = useDrag({
     nodeRef,
     disabled: node.hidden || !isDraggable,
@@ -6546,11 +6484,11 @@ function EdgeUpdateAnchors({ isReconnectable, reconnectRadius, edge, sourceX, so
   }, onReconnectSourceMouseDown = (event) => handleEdgeUpdater(event, { nodeId: edge.target, id: edge.targetHandle ?? null, type: "target" }), onReconnectTargetMouseDown = (event) => handleEdgeUpdater(event, { nodeId: edge.source, id: edge.sourceHandle ?? null, type: "source" }), onReconnectMouseEnter = () => setUpdateHover(!0), onReconnectMouseOut = () => setUpdateHover(!1);
   return jsxs(Fragment, { children: [(isReconnectable === !0 || isReconnectable === "source") && jsx(EdgeAnchor, { position: sourcePosition, centerX: sourceX, centerY: sourceY, radius: reconnectRadius, onMouseDown: onReconnectSourceMouseDown, onMouseEnter: onReconnectMouseEnter, onMouseOut: onReconnectMouseOut, type: "source" }), (isReconnectable === !0 || isReconnectable === "target") && jsx(EdgeAnchor, { position: targetPosition, centerX: targetX, centerY: targetY, radius: reconnectRadius, onMouseDown: onReconnectTargetMouseDown, onMouseEnter: onReconnectMouseEnter, onMouseOut: onReconnectMouseOut, type: "target" })] });
 }
-function EdgeWrapper({ id: id2, edgesFocusable, edgesReconnectable, elementsSelectable, onClick, onDoubleClick, onContextMenu, onMouseEnter, onMouseMove, onMouseLeave, reconnectRadius, onReconnect, onReconnectStart, onReconnectEnd, rfId, edgeTypes: edgeTypes2, noPanClassName, onError, disableKeyboardA11y }) {
+function EdgeWrapper({ id: id2, edgesFocusable, edgesReconnectable, elementsSelectable, onClick, onDoubleClick, onContextMenu, onMouseEnter, onMouseMove, onMouseLeave, reconnectRadius, onReconnect, onReconnectStart, onReconnectEnd, rfId, edgeTypes, noPanClassName, onError, disableKeyboardA11y }) {
   let edge = useStore((s) => s.edgeLookup.get(id2)), defaultEdgeOptions = useStore((s) => s.defaultEdgeOptions);
   edge = defaultEdgeOptions ? { ...defaultEdgeOptions, ...edge } : edge;
-  let edgeType = edge.type || "default", EdgeComponent = edgeTypes2?.[edgeType] || builtinEdgeTypes[edgeType];
-  EdgeComponent === void 0 && (onError?.("011", errorMessages.error011(edgeType)), edgeType = "default", EdgeComponent = edgeTypes2?.default || builtinEdgeTypes.default);
+  let edgeType = edge.type || "default", EdgeComponent = edgeTypes?.[edgeType] || builtinEdgeTypes[edgeType];
+  EdgeComponent === void 0 && (onError?.("011", errorMessages.error011(edgeType)), edgeType = "default", EdgeComponent = edgeTypes?.default || builtinEdgeTypes.default);
   let isFocusable = !!(edge.focusable || edgesFocusable && typeof edge.focusable > "u"), isReconnectable = typeof onReconnect < "u" && (edge.reconnectable || edgesReconnectable && typeof edge.reconnectable > "u"), isSelectable = !!(edge.selectable || elementsSelectable && typeof edge.selectable > "u"), edgeRef = useRef(null), [updateHover, setUpdateHover] = useState(!1), [reconnecting, setReconnecting] = useState(!1), store = useStoreApi(), { zIndex = edge.zIndex, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition } = useStore(useCallback((store2) => {
     let sourceNode = store2.nodeLookup.get(edge.source), targetNode = store2.nodeLookup.get(edge.target);
     if (!sourceNode || !targetNode)
@@ -6618,9 +6556,9 @@ var EdgeWrapper$1 = memo(EdgeWrapper), selector$9 = (s) => ({
   connectionMode: s.connectionMode,
   onError: s.onError
 });
-function EdgeRendererComponent({ defaultMarkerColor, onlyRenderVisibleElements, rfId, edgeTypes: edgeTypes2, noPanClassName, onReconnect, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, onEdgeClick, reconnectRadius, onEdgeDoubleClick, onReconnectStart, onReconnectEnd, disableKeyboardA11y }) {
+function EdgeRendererComponent({ defaultMarkerColor, onlyRenderVisibleElements, rfId, edgeTypes, noPanClassName, onReconnect, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, onEdgeClick, reconnectRadius, onEdgeDoubleClick, onReconnectStart, onReconnectEnd, disableKeyboardA11y }) {
   let { edgesFocusable, edgesReconnectable, elementsSelectable, onError } = useStore(selector$9, shallow$1), edgeIds = useVisibleEdgeIds(onlyRenderVisibleElements);
-  return jsxs("div", { className: "react-flow__edges", children: [jsx(MarkerDefinitions$1, { defaultColor: defaultMarkerColor, rfId }), edgeIds.map((id2) => jsx(EdgeWrapper$1, { id: id2, edgesFocusable, edgesReconnectable, elementsSelectable, noPanClassName, onReconnect, onContextMenu: onEdgeContextMenu, onMouseEnter: onEdgeMouseEnter, onMouseMove: onEdgeMouseMove, onMouseLeave: onEdgeMouseLeave, onClick: onEdgeClick, reconnectRadius, onDoubleClick: onEdgeDoubleClick, onReconnectStart, onReconnectEnd, rfId, onError, edgeTypes: edgeTypes2, disableKeyboardA11y }, id2))] });
+  return jsxs("div", { className: "react-flow__edges", children: [jsx(MarkerDefinitions$1, { defaultColor: defaultMarkerColor, rfId }), edgeIds.map((id2) => jsx(EdgeWrapper$1, { id: id2, edgesFocusable, edgesReconnectable, elementsSelectable, noPanClassName, onReconnect, onContextMenu: onEdgeContextMenu, onMouseEnter: onEdgeMouseEnter, onMouseMove: onEdgeMouseMove, onMouseLeave: onEdgeMouseLeave, onClick: onEdgeClick, reconnectRadius, onDoubleClick: onEdgeDoubleClick, onReconnectStart, onReconnectEnd, rfId, onError, edgeTypes, disableKeyboardA11y }, id2))] });
 }
 EdgeRendererComponent.displayName = "EdgeRenderer";
 var EdgeRenderer = memo(EdgeRendererComponent), toTransformString = (transform2) => `translate(${transform2[0]}px,${transform2[1]}px) scale(${transform2[2]})`;
@@ -6718,8 +6656,8 @@ function useStylesLoadedWarning() {
   useEffect(() => {
   }, []);
 }
-function GraphViewComponent({ nodeTypes: nodeTypes2, edgeTypes: edgeTypes2, onInit, onNodeClick, onEdgeClick, onNodeDoubleClick, onEdgeDoubleClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onSelectionContextMenu, onSelectionStart, onSelectionEnd, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, deleteKeyCode, onlyRenderVisibleElements, elementsSelectable, defaultViewport: defaultViewport2, translateExtent, minZoom, maxZoom, preventScrolling, defaultMarkerColor, zoomOnScroll, zoomOnPinch, panOnScroll, panOnScrollSpeed, panOnScrollMode, zoomOnDoubleClick, panOnDrag, autoPanOnSelection, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, onReconnect, onReconnectStart, onReconnectEnd, noDragClassName, noWheelClassName, noPanClassName, disableKeyboardA11y, nodeExtent, rfId, viewport, onViewportChange, nodesDraggable }) {
-  return useNodeOrEdgeTypesWarning(nodeTypes2), useNodeOrEdgeTypesWarning(edgeTypes2), useStylesLoadedWarning(), useOnInitHandler(onInit), useViewportSync(viewport), jsx(FlowRenderer, { onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneContextMenu, onPaneScroll, paneClickDistance, deleteKeyCode, selectionKeyCode, selectionOnDrag, selectionMode, onSelectionStart, onSelectionEnd, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, elementsSelectable, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, defaultViewport: defaultViewport2, translateExtent, minZoom, maxZoom, onSelectionContextMenu, preventScrolling, noDragClassName, noWheelClassName, noPanClassName, disableKeyboardA11y, onViewportChange, isControlledViewport: !!viewport, children: jsxs(Viewport, { children: [jsx(EdgeRenderer, { edgeTypes: edgeTypes2, onEdgeClick, onEdgeDoubleClick, onReconnect, onReconnectStart, onReconnectEnd, onlyRenderVisibleElements, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noPanClassName, disableKeyboardA11y, rfId }), jsx(ConnectionLineWrapper, { style: connectionLineStyle, type: connectionLineType, component: connectionLineComponent, containerStyle: connectionLineContainerStyle }), jsx("div", { className: "react-flow__edgelabel-renderer" }), jsx(NodeRenderer, { nodeTypes: nodeTypes2, onNodeClick, onNodeDoubleClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, nodeClickDistance, onlyRenderVisibleElements, noPanClassName, noDragClassName, disableKeyboardA11y, nodeExtent, rfId, nodesDraggable }), jsx("div", { className: "react-flow__viewport-portal" })] }) });
+function GraphViewComponent({ nodeTypes, edgeTypes, onInit, onNodeClick, onEdgeClick, onNodeDoubleClick, onEdgeDoubleClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onSelectionContextMenu, onSelectionStart, onSelectionEnd, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, deleteKeyCode, onlyRenderVisibleElements, elementsSelectable, defaultViewport: defaultViewport2, translateExtent, minZoom, maxZoom, preventScrolling, defaultMarkerColor, zoomOnScroll, zoomOnPinch, panOnScroll, panOnScrollSpeed, panOnScrollMode, zoomOnDoubleClick, panOnDrag, autoPanOnSelection, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, onReconnect, onReconnectStart, onReconnectEnd, noDragClassName, noWheelClassName, noPanClassName, disableKeyboardA11y, nodeExtent, rfId, viewport, onViewportChange, nodesDraggable }) {
+  return useNodeOrEdgeTypesWarning(nodeTypes), useNodeOrEdgeTypesWarning(edgeTypes), useStylesLoadedWarning(), useOnInitHandler(onInit), useViewportSync(viewport), jsx(FlowRenderer, { onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneContextMenu, onPaneScroll, paneClickDistance, deleteKeyCode, selectionKeyCode, selectionOnDrag, selectionMode, onSelectionStart, onSelectionEnd, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, elementsSelectable, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, defaultViewport: defaultViewport2, translateExtent, minZoom, maxZoom, onSelectionContextMenu, preventScrolling, noDragClassName, noWheelClassName, noPanClassName, disableKeyboardA11y, onViewportChange, isControlledViewport: !!viewport, children: jsxs(Viewport, { children: [jsx(EdgeRenderer, { edgeTypes, onEdgeClick, onEdgeDoubleClick, onReconnect, onReconnectStart, onReconnectEnd, onlyRenderVisibleElements, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noPanClassName, disableKeyboardA11y, rfId }), jsx(ConnectionLineWrapper, { style: connectionLineStyle, type: connectionLineType, component: connectionLineComponent, containerStyle: connectionLineContainerStyle }), jsx("div", { className: "react-flow__edgelabel-renderer" }), jsx(NodeRenderer, { nodeTypes, onNodeClick, onNodeDoubleClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, nodeClickDistance, onlyRenderVisibleElements, noPanClassName, noDragClassName, disableKeyboardA11y, nodeExtent, rfId, nodesDraggable }), jsx("div", { className: "react-flow__viewport-portal" })] }) });
 }
 GraphViewComponent.displayName = "GraphView";
 var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", "https://reactflow.dev/"), getInitialState = ({ nodes, edges, defaultNodes, defaultEdges, width, height, fitView, fitViewOptions, minZoom = 0.5, maxZoom = 2, nodeOrigin, nodeExtent, zIndexMode = "basic" } = {}) => {
@@ -7053,18 +6991,29 @@ var wrapperStyle = {
   position: "relative",
   zIndex: 0
 };
-function ReactFlow({ nodes, edges, defaultNodes, defaultEdges, className, nodeTypes: nodeTypes2, edgeTypes: edgeTypes2, onNodeClick, onEdgeClick, onInit, onMove, onMoveStart, onMoveEnd, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, onNodeDragStart, onNodeDrag, onNodeDragStop, onNodesDelete, onEdgesDelete, onDelete, onSelectionChange, onSelectionDragStart, onSelectionDrag, onSelectionDragStop, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onBeforeDelete, connectionMode, connectionLineType = ConnectionLineType.Bezier, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, deleteKeyCode = "Backspace", selectionKeyCode = "Shift", selectionOnDrag = !1, selectionMode = SelectionMode.Full, panActivationKeyCode = "Space", multiSelectionKeyCode = isMacOs() ? "Meta" : "Control", zoomActivationKeyCode = isMacOs() ? "Meta" : "Control", snapToGrid, snapGrid, onlyRenderVisibleElements = !1, selectNodesOnDrag, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, nodeOrigin = defaultNodeOrigin, edgesFocusable, edgesReconnectable, elementsSelectable = !0, defaultViewport: defaultViewport$1 = defaultViewport, minZoom = 0.5, maxZoom = 2, translateExtent = infiniteExtent, preventScrolling = !0, nodeExtent, defaultMarkerColor = "#b1b1b7", zoomOnScroll = !0, zoomOnPinch = !0, panOnScroll = !1, panOnScrollSpeed = 0.5, panOnScrollMode = PanOnScrollMode.Free, zoomOnDoubleClick = !0, panOnDrag = !0, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance = 1, nodeClickDistance = 0, children: children2, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius = 10, onNodesChange, onEdgesChange, noDragClassName = "nodrag", noWheelClassName = "nowheel", noPanClassName = "nopan", fitView, fitViewOptions, connectOnClick, attributionPosition, proOptions, defaultEdgeOptions, elevateNodesOnSelect = !0, elevateEdgesOnSelect = !1, disableKeyboardA11y = !1, autoPanOnConnect, autoPanOnNodeDrag, autoPanOnSelection = !0, autoPanSpeed, connectionRadius, isValidConnection, onError, style: style2, id: id2, nodeDragThreshold, connectionDragThreshold, viewport, onViewportChange, width, height, colorMode = "light", debug, onScroll, ariaLabelConfig, zIndexMode = "basic", ...rest }, ref) {
+function ReactFlow({ nodes, edges, defaultNodes, defaultEdges, className, nodeTypes, edgeTypes, onNodeClick, onEdgeClick, onInit, onMove, onMoveStart, onMoveEnd, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, onNodeDragStart, onNodeDrag, onNodeDragStop, onNodesDelete, onEdgesDelete, onDelete, onSelectionChange, onSelectionDragStart, onSelectionDrag, onSelectionDragStop, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onBeforeDelete, connectionMode, connectionLineType = ConnectionLineType.Bezier, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, deleteKeyCode = "Backspace", selectionKeyCode = "Shift", selectionOnDrag = !1, selectionMode = SelectionMode.Full, panActivationKeyCode = "Space", multiSelectionKeyCode = isMacOs() ? "Meta" : "Control", zoomActivationKeyCode = isMacOs() ? "Meta" : "Control", snapToGrid, snapGrid, onlyRenderVisibleElements = !1, selectNodesOnDrag, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, nodeOrigin = defaultNodeOrigin, edgesFocusable, edgesReconnectable, elementsSelectable = !0, defaultViewport: defaultViewport$1 = defaultViewport, minZoom = 0.5, maxZoom = 2, translateExtent = infiniteExtent, preventScrolling = !0, nodeExtent, defaultMarkerColor = "#b1b1b7", zoomOnScroll = !0, zoomOnPinch = !0, panOnScroll = !1, panOnScrollSpeed = 0.5, panOnScrollMode = PanOnScrollMode.Free, zoomOnDoubleClick = !0, panOnDrag = !0, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance = 1, nodeClickDistance = 0, children: children2, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius = 10, onNodesChange, onEdgesChange, noDragClassName = "nodrag", noWheelClassName = "nowheel", noPanClassName = "nopan", fitView, fitViewOptions, connectOnClick, attributionPosition, proOptions, defaultEdgeOptions, elevateNodesOnSelect = !0, elevateEdgesOnSelect = !1, disableKeyboardA11y = !1, autoPanOnConnect, autoPanOnNodeDrag, autoPanOnSelection = !0, autoPanSpeed, connectionRadius, isValidConnection, onError, style: style2, id: id2, nodeDragThreshold, connectionDragThreshold, viewport, onViewportChange, width, height, colorMode = "light", debug, onScroll, ariaLabelConfig, zIndexMode = "basic", ...rest }, ref) {
   let rfId = id2 || "1", colorModeClassName = useColorModeClass(colorMode), wrapperOnScroll = useCallback((e) => {
     e.currentTarget.scrollTo({ top: 0, left: 0, behavior: "instant" }), onScroll?.(e);
   }, [onScroll]);
-  return jsx("div", { "data-testid": "rf__wrapper", ...rest, onScroll: wrapperOnScroll, style: { ...style2, ...wrapperStyle }, ref, className: cc(["react-flow", className, colorModeClassName]), id: id2, role: "application", children: jsxs(Wrapper, { nodes, edges, width, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: [jsx(StoreUpdater, { nodes, edges, defaultNodes, defaultEdges, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, edgesFocusable, edgesReconnectable, elementsSelectable, elevateNodesOnSelect, elevateEdgesOnSelect, minZoom, maxZoom, nodeExtent, onNodesChange, onEdgesChange, snapToGrid, snapGrid, connectionMode, translateExtent, connectOnClick, defaultEdgeOptions, fitView, fitViewOptions, onNodesDelete, onEdgesDelete, onDelete, onNodeDragStart, onNodeDrag, onNodeDragStop, onSelectionDrag, onSelectionDragStart, onSelectionDragStop, onMove, onMoveStart, onMoveEnd, noPanClassName, nodeOrigin, rfId, autoPanOnConnect, autoPanOnNodeDrag, autoPanSpeed, onError, connectionRadius, isValidConnection, selectNodesOnDrag, nodeDragThreshold, connectionDragThreshold, onBeforeDelete, debug, ariaLabelConfig, zIndexMode }), jsx(GraphView, { onInit, onNodeClick, onEdgeClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, nodeTypes: nodeTypes2, edgeTypes: edgeTypes2, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, deleteKeyCode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, onlyRenderVisibleElements, defaultViewport: defaultViewport$1, translateExtent, minZoom, maxZoom, preventScrolling, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noDragClassName, noWheelClassName, noPanClassName, rfId, disableKeyboardA11y, nodeExtent, viewport, onViewportChange, nodesDraggable }), jsx(SelectionListener, { onSelectionChange }), children2, jsx(Attribution, { proOptions, position: attributionPosition }), jsx(A11yDescriptions, { rfId, disableKeyboardA11y })] }) });
+  return jsx("div", { "data-testid": "rf__wrapper", ...rest, onScroll: wrapperOnScroll, style: { ...style2, ...wrapperStyle }, ref, className: cc(["react-flow", className, colorModeClassName]), id: id2, role: "application", children: jsxs(Wrapper, { nodes, edges, width, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: [jsx(StoreUpdater, { nodes, edges, defaultNodes, defaultEdges, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, edgesFocusable, edgesReconnectable, elementsSelectable, elevateNodesOnSelect, elevateEdgesOnSelect, minZoom, maxZoom, nodeExtent, onNodesChange, onEdgesChange, snapToGrid, snapGrid, connectionMode, translateExtent, connectOnClick, defaultEdgeOptions, fitView, fitViewOptions, onNodesDelete, onEdgesDelete, onDelete, onNodeDragStart, onNodeDrag, onNodeDragStop, onSelectionDrag, onSelectionDragStart, onSelectionDragStop, onMove, onMoveStart, onMoveEnd, noPanClassName, nodeOrigin, rfId, autoPanOnConnect, autoPanOnNodeDrag, autoPanSpeed, onError, connectionRadius, isValidConnection, selectNodesOnDrag, nodeDragThreshold, connectionDragThreshold, onBeforeDelete, debug, ariaLabelConfig, zIndexMode }), jsx(GraphView, { onInit, onNodeClick, onEdgeClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, nodeTypes, edgeTypes, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, deleteKeyCode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, onlyRenderVisibleElements, defaultViewport: defaultViewport$1, translateExtent, minZoom, maxZoom, preventScrolling, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noDragClassName, noWheelClassName, noPanClassName, rfId, disableKeyboardA11y, nodeExtent, viewport, onViewportChange, nodesDraggable }), jsx(SelectionListener, { onSelectionChange }), children2, jsx(Attribution, { proOptions, position: attributionPosition }), jsx(A11yDescriptions, { rfId, disableKeyboardA11y })] }) });
 }
 var index = fixedForwardRef(ReactFlow), selector$6 = (s) => s.domNode?.querySelector(".react-flow__edgelabel-renderer");
 function EdgeLabelRenderer({ children: children2 }) {
   let edgeLabelRenderer = useStore(selector$6);
   return edgeLabelRenderer ? createPortal(children2, edgeLabelRenderer) : null;
 }
+var viewportSelector = (state) => ({
+  x: state.transform[0],
+  y: state.transform[1],
+  zoom: state.transform[2]
+});
+function useViewport() {
+  return useStore(viewportSelector, shallow$1);
+}
 var error014 = errorMessages.error014();
+function useInternalNode(id2) {
+  return useStore(useCallback((s) => s.nodeLookup.get(id2), [id2]), shallow$1);
+}
 function LinePattern({ dimensions, lineWidth, variant, className }) {
   return jsx("path", { strokeWidth: lineWidth, d: `M${dimensions[0] / 2} 0 V${dimensions[1]} M0 ${dimensions[1] / 2} H${dimensions[0]}`, className: cc(["react-flow__background-pattern", variant, className]) });
 }
@@ -7412,167 +7361,1804 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 }
 var NodeResizeControl = memo(ResizeControl);
 
-// src/page/tree-canvas.tsx
-import { memo as memo2, useCallback as useCallback2, useMemo as useMemo2 } from "react";
+// src/page/session-tree-page.tsx
+import { useCallback as useCallback3, useEffect as useEffect5, useMemo as useMemo3, useState as useState4 } from "react";
+
+// src/api.ts
+init_define_import_meta_env();
+import { host } from "@hermes/plugin-sdk";
+
+// src/model/projects.ts
+init_define_import_meta_env();
+var NO_PROJECT_ID = "__no_project__", str = (value2) => typeof value2 == "string" && value2.trim() ? value2 : null;
+function parseProjectsTree(payload) {
+  let list = payload?.projects;
+  if (!Array.isArray(list))
+    return [];
+  let out = [];
+  for (let raw of list) {
+    let node = raw, id2 = str(node?.id);
+    if (!node || !id2)
+      continue;
+    let repos = Array.isArray(node.repos) ? node.repos : [];
+    out.push({
+      id: id2,
+      label: str(node.label) ?? id2,
+      color: str(node.color),
+      icon: str(node.icon),
+      isNoProject: node.isNoProject === !0 || id2 === NO_PROJECT_ID,
+      isAuto: node.isAuto === !0,
+      path: str(node.path),
+      repoPaths: repos.map((repo) => str(repo?.path)).filter((path) => !!path),
+      sessionIds: Array.isArray(node.sessionIds) ? node.sessionIds.filter((sid) => typeof sid == "string") : []
+    });
+  }
+  return out;
+}
+function mergeProjects(lists) {
+  let byId = /* @__PURE__ */ new Map();
+  for (let list of lists)
+    for (let project of list) {
+      let known = byId.get(project.id);
+      known ? (known.sessionIds = [.../* @__PURE__ */ new Set([...known.sessionIds, ...project.sessionIds])], known.repoPaths = [.../* @__PURE__ */ new Set([...known.repoPaths, ...project.repoPaths])], known.color ??= project.color, known.icon ??= project.icon) : byId.set(project.id, { ...project, sessionIds: [...project.sessionIds], repoPaths: [...project.repoPaths] });
+    }
+  return [...byId.values()];
+}
+var trimSlash = (path) => path.replace(/[/\\]+$/, "");
+function under(path, root2) {
+  let p = trimSlash(path), r = trimSlash(root2);
+  return p === r || p.startsWith(`${r}/`) || p.startsWith(`${r}\\`);
+}
+function projectIndex(projects) {
+  let bySession = /* @__PURE__ */ new Map(), roots = [], noProject = projects.find((project) => project.isNoProject);
+  for (let project of projects) {
+    for (let sid of project.sessionIds)
+      bySession.has(sid) || bySession.set(sid, project.id);
+    if (!project.isNoProject)
+      for (let root2 of [project.path, ...project.repoPaths])
+        root2 && roots.push({ root: root2, id: project.id });
+  }
+  return roots.sort((a, b) => b.root.length - a.root.length || a.id.localeCompare(b.id)), {
+    projects: [...projects],
+    byId: new Map(projects.map((project) => [project.id, project])),
+    projectOf(row) {
+      for (let id2 of [row.id, row._lineage_root_id, ...row._lineage_ids ?? []]) {
+        let hit = id2 ? bySession.get(id2) : void 0;
+        if (hit)
+          return hit;
+      }
+      let place = row.git_repo_root || row.cwd;
+      if (place) {
+        let match = roots.find((entry) => under(place, entry.root));
+        if (match)
+          return match.id;
+      }
+      return noProject?.id;
+    }
+  };
+}
+
+// src/api.ts
+var SESSION_LIMIT = 2e3, PROFILE_PARAM = "session_profile";
+function fetchHealth(ctx, profile) {
+  return ctx.rest(`/health?${PROFILE_PARAM}=${encodeURIComponent(profile)}`, { timeoutMs: 8e3 });
+}
+function fetchSessions(ctx, { profile, includeArchived = !1 }) {
+  let query = new URLSearchParams({
+    [PROFILE_PARAM]: profile,
+    include_archived: String(includeArchived),
+    limit: String(SESSION_LIMIT)
+  });
+  return ctx.rest(`/sessions?${query.toString()}`, { timeoutMs: 2e4 });
+}
+function fetchProfiles(ctx) {
+  return ctx.rest(`/health?${PROFILE_PARAM}=*`, { timeoutMs: 8e3 });
+}
+async function fetchProjects(profiles) {
+  let results = await Promise.allSettled(
+    profiles.map((profile) => host.request("projects.tree", { profile, preview_limit: 0 }).then(parseProjectsTree))
+  ), trees = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  if (trees.length === 0 && results.length > 0)
+    throw results[0].reason;
+  return mergeProjects(trees);
+}
+
+// src/model/graph.ts
+init_define_import_meta_env();
+
+// src/model/branch-tree.ts
+init_define_import_meta_env();
+
+// src/model/sessions.ts
+init_define_import_meta_env();
+var HIDDEN_SOURCES = /* @__PURE__ */ new Set(["acp", "cron", "kanban", "oneshot", "subagent", "tool"]), trimmed = (value2) => value2?.trim() || void 0;
+function forkParentId(row) {
+  if (!trimmed(row._reset_from))
+    return trimmed(row._branched_from) ?? trimmed(row.parent_session_id);
+}
+function isHiddenRow(row) {
+  if (row.is_internal_child || row.message_count === 0)
+    return !0;
+  let source = (row.source ?? "").trim().toLowerCase();
+  return HIDDEN_SOURCES.has(source);
+}
+function visibleRows(rows) {
+  return rows.filter((row) => !isHiddenRow(row));
+}
+function compactedCount(row) {
+  return typeof row.compacted_segments == "number" ? Math.max(0, row.compacted_segments) : Math.max(0, (row._lineage_ids?.length ?? 1) - 1);
+}
+function displayTitle(row) {
+  return trimmed(row.title) ?? trimmed(row.preview)?.slice(0, 80) ?? "Untitled session";
+}
+
+// src/model/branch-tree.ts
+var recency = (session) => session.last_active || session.started_at || 0, profileKey = (session) => (session.profile ?? "").trim() || "default", lineageKey = (session) => `${profileKey(session)}::${session._lineage_root_id?.trim() || session.id}`;
+function collapseCompressionLineages(sessions) {
+  let groups = /* @__PURE__ */ new Map();
+  for (let session of sessions) {
+    let key = lineageKey(session), group = groups.get(key);
+    group ? group.push(session) : groups.set(key, [session]);
+  }
+  if (groups.size === sessions.length)
+    return sessions;
+  let winners = /* @__PURE__ */ new Set();
+  for (let group of groups.values()) {
+    let continuedIds = new Set(group.map((session) => session.parent_session_id?.trim())), score = (session) => continuedIds.has(session.id) ? -1 / 0 : Math.max(session.last_active || 0, session.started_at || 0);
+    winners.add(group.reduce((best, session) => score(session) > score(best) ? session : best));
+  }
+  return sessions.filter((session) => winners.has(session));
+}
+function visibleIdIndex(sessions, input) {
+  let byVisibleId = /* @__PURE__ */ new Map(), key = (session, id2) => `${profileKey(session)}::${id2}`;
+  for (let session of sessions)
+    for (let segment of session._lineage_ids ?? []) {
+      let id2 = segment?.trim();
+      id2 && !byVisibleId.has(key(session, id2)) && byVisibleId.set(key(session, id2), session);
+    }
+  for (let session of sessions) {
+    let rootId = session._lineage_root_id?.trim();
+    rootId && byVisibleId.set(key(session, rootId), session);
+  }
+  for (let session of sessions)
+    byVisibleId.set(key(session, session.id), session);
+  let survivorByLineage = new Map(sessions.map((session) => [lineageKey(session), session]));
+  for (let session of input) {
+    let survivor = survivorByLineage.get(lineageKey(session));
+    survivor && !byVisibleId.has(key(session, session.id)) && byVisibleId.set(key(session, session.id), survivor);
+  }
+  return byVisibleId;
+}
+function lookupVisible(index2, session, id2) {
+  return index2.get(`${profileKey(session)}::${id2.trim()}`);
+}
+function isOwnCompressionAncestry(session, parentId) {
+  let rootId = session._lineage_root_id?.trim();
+  return parentId === rootId || (session._lineage_ids ?? []).some((id2) => id2?.trim() === parentId) ? !0 : !!(rootId && rootId !== session.id && !session._branched_from?.trim());
+}
+function resolveBranchParent(session, index2) {
+  let parentId = forkParentId(session);
+  if (!parentId)
+    return { kind: "none" };
+  let parent = lookupVisible(index2, session, parentId);
+  return parent ? parent === session || lineageKey(parent) === lineageKey(session) ? { kind: "none" } : { kind: "nested", parent } : isOwnCompressionAncestry(session, parentId) ? { kind: "none" } : { kind: "missing", parentId };
+}
+
+// src/model/graph.ts
+var ALL_PROJECTS = "all", ALL_PROFILES = "*", STANDIN_PREFIX = "missing:", byCreated = (model) => (a, b) => {
+  let na = model.nodeById.get(a), nb = model.nodeById.get(b);
+  return (na?.createdAt ?? 0) - (nb?.createdAt ?? 0) || a.localeCompare(b);
+};
+function filterRows(rows, options) {
+  return rows.filter(
+    (row) => !isHiddenRow(row) && (options.showArchived || !row.archived) && (options.profile === ALL_PROFILES || profileKey(row) === options.profile)
+  );
+}
+function buildGraph(rows, projects, options) {
+  let input = filterRows(rows, options), sessions = collapseCompressionLineages(input), index2 = visibleIdIndex(sessions, input), projectsIdx = projectIndex(projects), idCount = /* @__PURE__ */ new Map();
+  for (let row of sessions)
+    idCount.set(row.id, (idCount.get(row.id) ?? 0) + 1);
+  let nodeIdOf = /* @__PURE__ */ new Map();
+  for (let row of sessions)
+    nodeIdOf.set(row, (idCount.get(row.id) ?? 0) > 1 ? `${profileKey(row)}/${row.id}` : row.id);
+  let nodes = [], nodeById = /* @__PURE__ */ new Map();
+  for (let row of sessions) {
+    let id2 = nodeIdOf.get(row), projectId = projectsIdx.projectOf(row), node = {
+      id: id2,
+      kind: "session",
+      row,
+      title: displayTitle(row),
+      projectId,
+      profile: profileKey(row),
+      archived: !!row.archived,
+      compacted: compactedCount(row),
+      createdAt: row.started_at || row.last_active || 0,
+      lastActive: recency(row),
+      outOfScope: !1,
+      readOnly: !1,
+      familyId: id2,
+      single: !0
+    };
+    nodes.push(node), nodeById.set(id2, node);
+  }
+  let edges = [], parentOf = /* @__PURE__ */ new Map(), continuedFrom = /* @__PURE__ */ new Map();
+  for (let row of sessions) {
+    let target = nodeIdOf.get(row), resolved = resolveBranchParent(row, index2);
+    if (resolved.kind === "nested") {
+      let source = nodeIdOf.get(resolved.parent);
+      edges.push({ id: `branch:${source}->${target}`, source, target, kind: "branch", fromStandin: !1 }), parentOf.set(target, source);
+      continue;
+    }
+    if (resolved.kind === "missing") {
+      let source = `${STANDIN_PREFIX}${profileKey(row)}/${resolved.parentId}`;
+      if (!nodeById.has(source)) {
+        let standin = {
+          id: source,
+          kind: "standin",
+          title: "Parent not loaded",
+          profile: profileKey(row),
+          archived: !1,
+          compacted: 0,
+          createdAt: (row.started_at || 0) - 1,
+          lastActive: 0,
+          outOfScope: !1,
+          readOnly: !0,
+          familyId: source,
+          single: !1,
+          missingId: resolved.parentId
+        };
+        nodes.push(standin), nodeById.set(source, standin);
+      }
+      edges.push({ id: `branch:${source}->${target}`, source, target, kind: "branch", fromStandin: !0 }), parentOf.set(target, source);
+      continue;
+    }
+    let resetFrom = row._reset_from?.trim(), predecessor = resetFrom ? lookupVisible(index2, row, resetFrom) : void 0;
+    if (predecessor && predecessor !== row) {
+      let source = nodeIdOf.get(predecessor);
+      edges.push({ id: `reset:${source}->${target}`, source, target, kind: "reset", fromStandin: !1 }), continuedFrom.set(target, source);
+    }
+  }
+  let model = {
+    options,
+    nodes,
+    edges,
+    families: [],
+    nodeById,
+    childrenOf: /* @__PURE__ */ new Map(),
+    parentOf,
+    continuedAs: /* @__PURE__ */ new Map(),
+    continuedFrom,
+    projects: projectsIdx.projects,
+    singles: []
+  };
+  for (let edge of edges) {
+    let into = edge.kind === "branch" ? model.childrenOf : model.continuedAs;
+    into.set(edge.source, [...into.get(edge.source) ?? [], edge.target]);
+  }
+  let order = byCreated(model);
+  for (let list of [...model.childrenOf.values(), ...model.continuedAs.values()])
+    list.sort(order);
+  for (let node of nodes)
+    node.kind === "standin" && (node.projectId = model.childrenOf.get(node.id)?.map((id2) => nodeById.get(id2)?.projectId).find(Boolean));
+  return assignFamilies(model), applyScope(model, options.scope), model;
+}
+function assignFamilies(model) {
+  let parent = new Map(model.nodes.map((node) => [node.id, node.id])), find2 = (id2) => {
+    let root2 = id2;
+    for (; parent.get(root2) !== root2; )
+      root2 = parent.get(root2);
+    return parent.set(id2, root2), root2;
+  };
+  for (let edge of model.edges) {
+    let a = find2(edge.source), b = find2(edge.target);
+    a !== b && parent.set(a < b ? b : a, a < b ? a : b);
+  }
+  let members = /* @__PURE__ */ new Map();
+  for (let node of model.nodes) {
+    let root2 = find2(node.id);
+    members.set(root2, [...members.get(root2) ?? [], node.id]);
+  }
+  let order = byCreated(model);
+  for (let [root2, ids] of members) {
+    ids.sort(order);
+    let family = {
+      id: root2,
+      nodeIds: ids,
+      inScope: !0,
+      lastActive: Math.max(0, ...ids.map((id2) => model.nodeById.get(id2)?.lastActive ?? 0))
+    }, sessionIds = ids.filter((id2) => model.nodeById.get(id2)?.kind === "session"), lead = sessionIds.find((id2) => !model.parentOf.has(id2) && !model.continuedFrom.has(id2)) ?? sessionIds[0];
+    family.projectId = lead ? model.nodeById.get(lead)?.projectId : void 0;
+    for (let id2 of ids) {
+      let node = model.nodeById.get(id2);
+      node.familyId = root2, node.single = ids.length === 1;
+    }
+    model.families.push(family);
+  }
+  model.families.sort((a, b) => b.lastActive - a.lastActive || a.id.localeCompare(b.id)), model.singles = model.families.filter((family) => family.nodeIds.length === 1).map((family) => model.nodeById.get(family.nodeIds[0]));
+}
+function applyScope(model, scope) {
+  let all = scope === ALL_PROJECTS;
+  for (let node of model.nodes)
+    node.kind === "session" && (node.outOfScope = !all && (node.projectId ?? NO_PROJECT_ID) !== scope, node.readOnly = node.outOfScope);
+  for (let node of model.nodes)
+    if (node.kind === "standin") {
+      let children2 = model.childrenOf.get(node.id) ?? [];
+      node.outOfScope = !all && children2.every((id2) => model.nodeById.get(id2)?.outOfScope), node.readOnly = !0;
+    }
+  for (let family of model.families)
+    family.inScope = family.nodeIds.some((id2) => {
+      let node = model.nodeById.get(id2);
+      return node?.kind === "session" && !node.outOfScope;
+    });
+}
+function lineageOf(model, id2) {
+  let set3 = /* @__PURE__ */ new Set();
+  if (!id2 || !model.nodeById.has(id2))
+    return set3;
+  let up = id2;
+  for (; up && !set3.has(up); )
+    set3.add(up), up = model.parentOf.get(up) ?? model.continuedFrom.get(up);
+  let stack = [id2], down = /* @__PURE__ */ new Set([id2]);
+  for (; stack.length > 0; ) {
+    let next = stack.pop();
+    for (let child of [...model.childrenOf.get(next) ?? [], ...model.continuedAs.get(next) ?? []])
+      down.has(child) || (down.add(child), set3.add(child), stack.push(child));
+  }
+  return set3;
+}
+function singlesInScope(model) {
+  return model.singles.filter((node) => !node.outOfScope);
+}
 
 // src/model/layout.ts
 init_define_import_meta_env();
-var recency = (row) => row?.last_active || row?.started_at || 0;
-function layoutForest(rows, links) {
-  let ids = new Set(rows.map((row) => row.id)), rowById = new Map(rows.map((row) => [row.id, row])), children2 = /* @__PURE__ */ new Map(), continuedAs = /* @__PURE__ */ new Map(), hasParent = /* @__PURE__ */ new Set(), linked = /* @__PURE__ */ new Set();
-  for (let link2 of links) {
-    if (!ids.has(link2.source) || !ids.has(link2.target) || (linked.add(link2.source), linked.add(link2.target), hasParent.has(link2.target)))
-      continue;
-    hasParent.add(link2.target);
-    let into = link2.kind === "branch" ? children2 : continuedAs;
-    into.set(link2.source, [...into.get(link2.source) ?? [], link2.target]);
-  }
-  let byRecency = (a, b) => recency(rowById.get(b)) - recency(rowById.get(a)) || a.localeCompare(b);
-  for (let list of [...children2.values(), ...continuedAs.values()])
-    list.sort(byRecency);
-  let positions = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set(), step = 50, cursorY = 0, pendingSuccessors = [], place = (id2, depth) => {
-    if (seen.has(id2))
-      return positions.get(id2)?.y ?? cursorY;
-    seen.add(id2), pendingSuccessors.push(...continuedAs.get(id2) ?? []);
-    let kids = (children2.get(id2) ?? []).filter((kid) => !seen.has(kid)), y;
+var GROUP_PREFIX = "group:", LABEL_WIDTH = 240, groupKey = (projectId) => `${GROUP_PREFIX}${projectId ?? NO_PROJECT_ID}`;
+function laidOutFamilies(model, spec) {
+  return model.families.filter((family) => spec.includeSingles || family.nodeIds.length > 1);
+}
+function layoutFamily(model, family, spec) {
+  let step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, members = new Set(family.nodeIds), positions = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set(), cursorY = 0, byCreated2 = (a, b) => (model.nodeById.get(a)?.createdAt ?? 0) - (model.nodeById.get(b)?.createdAt ?? 0) || a.localeCompare(b), place = (id2, depth) => {
+    seen.add(id2);
+    let kids = (model.childrenOf.get(id2) ?? []).filter((kid) => members.has(kid) && !seen.has(kid)), y;
     if (kids.length === 0)
       y = cursorY, cursorY += step;
     else {
       let ys = kids.map((kid) => place(kid, depth + 1));
-      y = (Math.min(...ys) + Math.max(...ys)) / 2;
+      y = (ys[0] + ys[ys.length - 1]) / 2;
     }
-    return positions.set(id2, { x: depth * 280, y }), y;
-  }, placeFamily = (root2) => {
-    for (place(root2, 0), cursorY += 36; pendingSuccessors.length > 0; ) {
-      let next = pendingSuccessors;
-      pendingSuccessors = [];
-      for (let successor of next)
-        seen.has(successor) || (place(successor, 0), cursorY += 36);
+    return positions.set(id2, { x: depth * column, y }), y;
+  }, roots = family.nodeIds.filter((id2) => !model.parentOf.has(id2) || !members.has(model.parentOf.get(id2))), queue = roots.filter((id2) => !model.continuedFrom.has(id2)).sort(byCreated2), placeTree = (root2) => {
+    if (seen.has(root2))
+      return;
+    positions.size > 0 && (cursorY += spec.treeGap);
+    let before = new Set(positions.keys());
+    place(root2, 0);
+    let successors = [...positions.keys()].filter((id2) => !before.has(id2)).flatMap((id2) => model.continuedAs.get(id2) ?? []).filter((id2) => members.has(id2)).sort(byCreated2);
+    for (let successor of successors)
+      placeTree(successor);
+  };
+  for (let root2 of queue)
+    placeTree(root2);
+  for (let id2 of [...roots, ...family.nodeIds].sort(byCreated2))
+    placeTree(id2);
+  return { positions, height: Math.max(0, cursorY - spec.rowGap) };
+}
+function groupOrder(model, families) {
+  let present = new Set(families.map((family) => family.projectId ?? NO_PROJECT_ID)), order = [], scope = model.options.scope;
+  scope !== ALL_PROJECTS && present.has(scope) && order.push(scope);
+  for (let project of model.projects)
+    !project.isNoProject && present.has(project.id) && !order.includes(project.id) && order.push(project.id);
+  for (let id2 of [...present].sort())
+    id2 !== NO_PROJECT_ID && !order.includes(id2) && order.push(id2);
+  return present.has(NO_PROJECT_ID) && !order.includes(NO_PROJECT_ID) && order.push(NO_PROJECT_ID), order.map((id2) => id2 === NO_PROJECT_ID ? void 0 : id2);
+}
+function layoutFamilies(model, families, spec, top, skipLabels = /* @__PURE__ */ new Set()) {
+  let positions = /* @__PURE__ */ new Map(), labels = [], step = spec.nodeHeight + spec.rowGap, y = top;
+  for (let projectId of groupOrder(model, families)) {
+    let inGroup = families.filter((family) => (family.projectId ?? NO_PROJECT_ID) === (projectId ?? NO_PROJECT_ID)), key = groupKey(projectId);
+    if (inGroup.length === 0)
+      continue;
+    skipLabels.has(key) || (labels.push({ id: key, projectId }), positions.set(key, { x: 0, y }), y += spec.labelHeight);
+    let trees = inGroup.filter((family) => family.nodeIds.length > 1), singles = inGroup.filter((family) => family.nodeIds.length === 1);
+    for (let family of trees) {
+      let local2 = layoutFamily(model, family, spec);
+      for (let [id2, point] of local2.positions)
+        positions.set(id2, { x: point.x, y: point.y + y });
+      y += local2.height + spec.familyGap;
     }
-  }, roots = rows.map((row) => row.id).filter((id2) => linked.has(id2) && !hasParent.has(id2)).sort(byRecency);
-  for (let root2 of roots)
-    placeFamily(root2);
-  for (let row of rows)
-    linked.has(row.id) && !seen.has(row.id) && placeFamily(row.id);
-  return rows.filter((row) => !linked.has(row.id)).sort((a, b) => byRecency(a.id, b.id)).forEach((row, index2) => {
-    positions.set(row.id, {
-      x: index2 % 4 * 280,
-      y: cursorY + Math.floor(index2 / 4) * step
-    });
-  }), positions;
+    singles.forEach((family, index2) => {
+      positions.set(family.nodeIds[0], {
+        x: index2 % spec.singlesColumns * (spec.nodeWidth + spec.columnGap),
+        y: y + Math.floor(index2 / spec.singlesColumns) * step
+      });
+    }), singles.length > 0 && (y += Math.ceil(singles.length / spec.singlesColumns) * step - spec.rowGap + spec.familyGap), y += spec.groupGap - spec.familyGap;
+  }
+  return { positions, labels, bottom: y };
+}
+function layoutGraph(model, spec) {
+  let { positions, labels } = layoutFamilies(model, laidOutFamilies(model, spec), spec, 0);
+  return { positions, labels };
+}
+function rectOf(id2, point, spec) {
+  return id2.startsWith(GROUP_PREFIX) ? { x: point.x, y: point.y, width: LABEL_WIDTH, height: spec.labelHeight } : { x: point.x, y: point.y, width: spec.nodeWidth, height: spec.nodeHeight };
+}
+function overlaps(a, b) {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+function mergeLayout(previous, model, spec) {
+  if (!previous || previous.size === 0)
+    return layoutGraph(model, spec);
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, occupied = () => [...positions].filter(([id2]) => shown.has(id2) || id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)), bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), freeRow = (x, y, rects) => {
+    let candidate = { x, y };
+    for (; rects.some((rect) => overlaps(rect, rectOf("", candidate, spec))); )
+      candidate = { x, y: candidate.y + step };
+    return candidate;
+  }, newFamilies = [];
+  for (let family of families) {
+    if (!family.nodeIds.some((id2) => positions.has(id2))) {
+      newFamilies.push(family);
+      continue;
+    }
+    for (let id2 of family.nodeIds) {
+      if (positions.has(id2))
+        continue;
+      let rects = occupied(), parent = model.parentOf.get(id2), predecessor = model.continuedFrom.get(id2), child = (model.childrenOf.get(id2) ?? []).find((kid) => positions.has(kid)), start2;
+      if (parent && positions.has(parent)) {
+        let p = positions.get(parent), siblings = (model.childrenOf.get(parent) ?? []).filter((kid) => kid !== id2 && positions.has(kid)), below = siblings.length > 0 ? Math.max(...siblings.map((kid) => positions.get(kid).y)) + step : p.y;
+        start2 = { x: p.x + column, y: below };
+      } else if (predecessor && positions.has(predecessor)) {
+        let p = positions.get(predecessor);
+        start2 = { x: p.x, y: p.y + step + spec.treeGap };
+      } else if (child) {
+        let c = positions.get(child);
+        start2 = { x: c.x - column, y: c.y };
+      } else
+        start2 = { x: 0, y: bottomOf(rects) + spec.familyGap };
+      positions.set(id2, freeRow(start2.x, start2.y, rects));
+    }
+  }
+  if (newFamilies.length > 0) {
+    let top = bottomOf(occupied()) + spec.groupGap, labelled = new Set([...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX))), block = layoutFamilies(model, newFamilies, spec, top, labelled);
+    for (let [id2, point] of block.positions)
+      positions.set(id2, point);
+  }
+  for (let family of families) {
+    let key = groupKey(family.projectId === NO_PROJECT_ID ? void 0 : family.projectId);
+    if (positions.has(key))
+      continue;
+    let topmost = families.filter((other) => (other.projectId ?? NO_PROJECT_ID) === (family.projectId ?? NO_PROJECT_ID)).flatMap((other) => other.nodeIds).map((id2) => positions.get(id2)).filter((point) => !!point).reduce((best, point) => !best || point.y < best.y || point.y === best.y && point.x < best.x ? point : best, void 0);
+    if (topmost) {
+      let spot = { x: topmost.x, y: topmost.y - spec.labelHeight };
+      occupied().some((rect) => overlaps(rect, rectOf(key, spot, spec))) || positions.set(key, spot);
+    }
+  }
+  let present = new Set(families.map((family) => groupKey(family.projectId === NO_PROJECT_ID ? void 0 : family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(id2)).map((id2) => {
+    let projectId = id2.slice(GROUP_PREFIX.length);
+    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
+  });
+  return { positions, labels };
 }
 
-// src/page/tree-canvas.tsx
-import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
-var SessionBlock = memo2(function({ data }) {
+// src/model/layout-memory.ts
+init_define_import_meta_env();
+var LayoutMemory = class {
+  byKey = /* @__PURE__ */ new Map();
+  get(key) {
+    return this.byKey.get(key);
+  }
+  /** Runs `compute` against the stored positions and keeps its result. Idempotent. */
+  place(key, compute) {
+    let result = compute(this.byKey.get(key));
+    return this.byKey.set(key, result.positions), result;
+  }
+  /** A drop: these blocks now sit here (last write wins per block). */
+  move(key, moves) {
+    this.byKey.set(key, new Map([...this.byKey.get(key) ?? [], ...moves]));
+  }
+  /** Re-arrange: forget this layout so the next `place` lays it out fresh. */
+  reset(key) {
+    this.byKey.delete(key);
+  }
+};
+
+// src/model/status.ts
+init_define_import_meta_env();
+function liveStatus(row, host4) {
+  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host4.focusedStoredSessionId && ids.has(host4.focusedStoredSessionId)), focusedBusy = open && (host4.busy || !!(host4.focusedSessionId && host4.busyBySession[host4.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host4.busyBySession[row.id], needsInput = [...ids].some((id2) => host4.needsInput.has(id2)), unread = !!row.unread;
+  return {
+    running,
+    needsInput,
+    unread,
+    pinned: !!row.pinned,
+    open,
+    tone: running ? "running" : needsInput ? "needs-input" : unread ? "unread" : "idle"
+  };
+}
+
+// src/styles/registry.ts
+init_define_import_meta_env();
+
+// src/styles/dense/index.ts
+init_define_import_meta_env();
+
+// src/model/route.ts
+init_define_import_meta_env();
+var VEC = { down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 } }, round = (n) => Math.round(n * 100) / 100, pt = (p) => `${round(p.x)} ${round(p.y)}`;
+function pathToSvg(path) {
+  let d = `M${pt(path.start)}`;
+  for (let seg of path.segs)
+    d += seg.kind === "L" ? ` L${pt(seg.to)}` : seg.kind === "Q" ? ` Q${pt(seg.c)} ${pt(seg.to)}` : ` C${pt(seg.c1)} ${pt(seg.c2)} ${pt(seg.to)}`;
+  return d;
+}
+function samplePath(path, perSeg = 24) {
+  let out = [path.start], from = path.start;
+  for (let seg of path.segs) {
+    for (let i = 1; i <= perSeg; i += 1) {
+      let t = i / perSeg, u = 1 - t;
+      seg.kind === "L" ? out.push({ x: from.x + (seg.to.x - from.x) * t, y: from.y + (seg.to.y - from.y) * t }) : seg.kind === "Q" ? out.push({
+        x: u * u * from.x + 2 * u * t * seg.c.x + t * t * seg.to.x,
+        y: u * u * from.y + 2 * u * t * seg.c.y + t * t * seg.to.y
+      }) : out.push({
+        x: u * u * u * from.x + 3 * u * u * t * seg.c1.x + 3 * u * t * t * seg.c2.x + t * t * t * seg.to.x,
+        y: u * u * u * from.y + 3 * u * u * t * seg.c1.y + 3 * u * t * t * seg.c2.y + t * t * t * seg.to.y
+      });
+    }
+    from = seg.to;
+  }
+  return out;
+}
+function insideRect(point, rect, inset = 0) {
+  return point.x > rect.x + inset && point.x < rect.x + rect.width - inset && point.y > rect.y + inset && point.y < rect.y + rect.height - inset;
+}
+function pathHits(path, rects, inset = 0.5) {
+  let samples = samplePath(path);
+  return rects.some((rect) => samples.some((sample) => insideRect(sample, rect, inset)));
+}
+function routeOf(path, detoured) {
+  let samples = samplePath(path, 12);
+  return { path, svg: pathToSvg(path), detoured, mid: samples[Math.floor(samples.length / 2)] };
+}
+function curvePath(from, to) {
+  let horizontal = from.dir === "left" || from.dir === "right", span = Math.abs(horizontal ? to.x - from.x : to.y - from.y), d = Math.max(horizontal ? 24 : 14, span / 2), a = VEC[from.dir], b = VEC[to.dir];
+  return {
+    start: { x: from.x, y: from.y },
+    segs: [
+      {
+        kind: "C",
+        c1: { x: from.x + a.x * d, y: from.y + a.y * d },
+        c2: { x: to.x + b.x * d, y: to.y + b.y * d },
+        to: { x: to.x, y: to.y }
+      }
+    ]
+  };
+}
+var DEFAULT_GRID = { margin: 12, bendPenalty: 40 }, Heap = class {
+  items = [];
+  get size() {
+    return this.items.length;
+  }
+  push(f, s) {
+    let items = this.items;
+    items.push({ f, s });
+    let i = items.length - 1;
+    for (; i > 0; ) {
+      let p = i - 1 >> 1;
+      if (items[p].f <= items[i].f)
+        break;
+      [items[p], items[i]] = [items[i], items[p]], i = p;
+    }
+  }
+  pop() {
+    let items = this.items, top = items[0], last = items.pop();
+    if (items.length > 0) {
+      items[0] = last;
+      let i = 0;
+      for (; ; ) {
+        let l = 2 * i + 1, r = l + 1, m = i;
+        if (l < items.length && items[l].f < items[m].f && (m = l), r < items.length && items[r].f < items[m].f && (m = r), m === i)
+          break;
+        [items[m], items[i]] = [items[i], items[m]], i = m;
+      }
+    }
+    return top.s;
+  }
+}, uniqueSorted = (values) => [...new Set(values.map(round))].sort((a, b) => a - b);
+function orthogonalRoute(from, to, obstacles, options = DEFAULT_GRID) {
+  let m = options.margin, inflated = obstacles.map((r) => ({ x: r.x - m, y: r.y - m, width: r.width + 2 * m, height: r.height + 2 * m })), start2 = { x: round(from.x + VEC[from.dir].x * m), y: round(from.y + VEC[from.dir].y * m) }, goal = { x: round(to.x + VEC[to.dir].x * m), y: round(to.y + VEC[to.dir].y * m) };
+  if (inflated.some((r) => insideRect(start2, r)) || inflated.some((r) => insideRect(goal, r)))
+    return null;
+  let allX = [start2.x, goal.x, ...inflated.flatMap((r) => [r.x, r.x + r.width])], allY = [start2.y, goal.y, ...inflated.flatMap((r) => [r.y, r.y + r.height])], extraX = [start2.x + VEC[from.dir].x * m, goal.x + VEC[to.dir].x * m, Math.min(...allX) - m, Math.max(...allX) + m], extraY = [start2.y + VEC[from.dir].y * m, goal.y + VEC[to.dir].y * m, Math.min(...allY) - m, Math.max(...allY) + m], xs = uniqueSorted([...allX, ...extraX]), ys = uniqueSorted([...allY, ...extraY]), W = xs.length, H = ys.length, blockedPoint = (x, y) => inflated.some((r) => insideRect({ x, y }, r)), blockedH = (y, x1, x2) => inflated.some((r) => y > r.y && y < r.y + r.height && x1 < r.x + r.width && x2 > r.x), blockedV = (x, y1, y2) => inflated.some((r) => x > r.x && x < r.x + r.width && y1 < r.y + r.height && y2 > r.y), si = xs.indexOf(start2.x), sj = ys.indexOf(start2.y), gi = xs.indexOf(goal.x), gj = ys.indexOf(goal.y), DIRS = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1]
+  ], key = (i, j, d) => (j * W + i) * 5 + d, g = /* @__PURE__ */ new Map(), came = /* @__PURE__ */ new Map(), open = new Heap(), h = (i, j) => Math.abs(xs[i] - goal.x) + Math.abs(ys[j] - goal.y), startKey = key(si, sj, 4), firstDir = { right: 0, left: 1, down: 2, up: 3 }[from.dir], lastDir = { right: 1, left: 0, down: 3, up: 2 }[to.dir];
+  g.set(startKey, 0), open.push(h(si, sj), startKey);
+  let found = -1, expanded = 0;
+  for (; open.size > 0 && expanded < 2e5; ) {
+    let current = open.pop(), d = current % 5, cell = (current - d) / 5, i = cell % W, j = (cell - i) / W;
+    if (expanded += 1, i === gi && j === gj && d !== (lastDir ^ 1)) {
+      found = current;
+      break;
+    }
+    let base = g.get(current);
+    for (let nd = 0; nd < 4; nd += 1) {
+      if (d === 4 && nd !== firstDir || d !== 4 && (d ^ 1) === nd)
+        continue;
+      let ni = i + DIRS[nd][0], nj = j + DIRS[nd][1];
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H || blockedPoint(xs[ni], ys[nj]) || (nd < 2 ? blockedH(ys[j], Math.min(xs[i], xs[ni]), Math.max(xs[i], xs[ni])) : blockedV(xs[i], Math.min(ys[j], ys[nj]), Math.max(ys[j], ys[nj]))))
+        continue;
+      let step = Math.abs(xs[ni] - xs[i]) + Math.abs(ys[nj] - ys[j]), cost = base + step + (d !== 4 && d !== nd ? options.bendPenalty : 0), next = key(ni, nj, nd);
+      cost < (g.get(next) ?? 1 / 0) && (g.set(next, cost), came.set(next, current), open.push(cost + h(ni, nj), next));
+    }
+  }
+  if (found < 0)
+    return null;
+  let cells = [];
+  for (let s = found; s !== void 0; s = came.get(s)) {
+    let d = s % 5, cell = (s - d) / 5, i = cell % W;
+    cells.push({ x: xs[i], y: ys[(cell - i) / W] });
+  }
+  return cells.reverse(), simplify([{ x: from.x, y: from.y }, ...cells, { x: to.x, y: to.y }]);
+}
+function simplify(points) {
+  let out = [];
+  for (let p of points) {
+    let last = out[out.length - 1];
+    if (!(last && Math.abs(last.x - p.x) < 1e-6 && Math.abs(last.y - p.y) < 1e-6)) {
+      if (out.length >= 2) {
+        let a = out[out.length - 2], b = out[out.length - 1];
+        if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(b.x - p.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6 && Math.abs(b.y - p.y) < 1e-6) {
+          out[out.length - 1] = p;
+          continue;
+        }
+      }
+      out.push(p);
+    }
+  }
+  return out;
+}
+function roundedPolyline(points, radius) {
+  let segs = [];
+  for (let k = 1; k < points.length; k += 1) {
+    let corner = points[k];
+    if (k === points.length - 1) {
+      segs.push({ kind: "L", to: corner });
+      break;
+    }
+    let prev = points[k - 1], next = points[k + 1], inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y), outLen = Math.hypot(next.x - corner.x, next.y - corner.y), r = Math.min(radius, inLen / 2, outLen / 2), a = { x: corner.x - (corner.x - prev.x) / (inLen || 1) * r, y: corner.y - (corner.y - prev.y) / (inLen || 1) * r }, b = { x: corner.x + (next.x - corner.x) / (outLen || 1) * r, y: corner.y + (next.y - corner.y) / (outLen || 1) * r };
+    segs.push({ kind: "L", to: a }, { kind: "Q", c: corner, to: b });
+  }
+  return { start: points[0], segs };
+}
+function nearObstacles(from, to, obstacles, reach = 360) {
+  let x1 = Math.min(from.x, to.x) - reach, x2 = Math.max(from.x, to.x) + reach, y1 = Math.min(from.y, to.y) - reach, y2 = Math.max(from.y, to.y) + reach;
+  return obstacles.filter((r) => r.x < x2 && r.x + r.width > x1 && r.y < y2 && r.y + r.height > y1);
+}
+function detour(from, to, obstacles, radius, ends = []) {
+  for (let margin of [12, 6, 3]) {
+    let path = detourWith(from, to, obstacles, Math.min(radius, margin - 2), ends, margin);
+    if (path)
+      return path;
+  }
+}
+function detourWith(from, to, obstacles, radius, ends, margin) {
+  let options = { ...DEFAULT_GRID, margin }, near = [...nearObstacles(from, to, obstacles), ...ends], points = orthogonalRoute(from, to, near, options) ?? // A wider search only while the grid stays small (its size grows with the square of the count).
+  (obstacles.length <= 120 && obstacles.length + ends.length > near.length ? orthogonalRoute(from, to, [...obstacles, ...ends], options) : null);
+  if (!points)
+    return;
+  let rounded = roundedPolyline(points, radius);
+  if (!pathHits(rounded, obstacles))
+    return rounded;
+  let sharp = roundedPolyline(points, 0);
+  return pathHits(sharp, obstacles) ? void 0 : sharp;
+}
+var curveRouter = {
+  shape: "curve",
+  live: (from, to) => routeOf(curvePath(from, to), !1),
+  route({ from, to, obstacles, ends }) {
+    let plain = curvePath(from, to);
+    if (!pathHits(plain, obstacles))
+      return routeOf(plain, !1);
+    let around = detour(from, to, obstacles, 10, ends);
+    return around ? routeOf(around, !0) : routeOf(plain, !1);
+  }
+};
+function routeLinks(links, rects, router) {
+  let all = [...rects], out = /* @__PURE__ */ new Map();
+  for (let link2 of links) {
+    let obstacles = all.filter(([id2]) => id2 !== link2.source && id2 !== link2.target).map(([, rect]) => rect), ends = [rects.get(link2.source), rects.get(link2.target)].filter((rect) => !!rect);
+    out.set(link2.id, router.route({ from: link2.from, to: link2.to, obstacles, ends }));
+  }
+  return out;
+}
+
+// src/styles/shared.tsx
+init_define_import_meta_env();
+import { Codicon } from "@hermes/plugin-sdk";
+import { memo as memo2 } from "react";
+import { Fragment as Fragment2, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+function BlockHandles({ resetX }) {
+  return /* @__PURE__ */ jsxs2(Fragment2, { children: [
+    /* @__PURE__ */ jsx2(Handle, { type: "target", position: Position.Left, isConnectable: !1, className: "session-tree__handle" }),
+    /* @__PURE__ */ jsx2(
+      Handle,
+      {
+        id: "up",
+        type: "target",
+        position: Position.Top,
+        isConnectable: !1,
+        className: "session-tree__handle",
+        style: { left: resetX }
+      }
+    ),
+    /* @__PURE__ */ jsx2(Handle, { type: "source", position: Position.Right, isConnectable: !1, className: "session-tree__handle" }),
+    /* @__PURE__ */ jsx2(
+      Handle,
+      {
+        id: "down",
+        type: "source",
+        position: Position.Bottom,
+        isConnectable: !1,
+        className: "session-tree__handle",
+        style: { left: resetX }
+      }
+    )
+  ] });
+}
+function blockHandles(width, height, resetX) {
+  return [
+    { type: "target", position: Position.Left, x: 0, y: height / 2, width: 1, height: 1 },
+    { id: "up", type: "target", position: Position.Top, x: resetX, y: 0, width: 1, height: 1 },
+    { type: "source", position: Position.Right, x: width - 1, y: height / 2, width: 1, height: 1 },
+    { id: "down", type: "source", position: Position.Bottom, x: resetX, y: height - 1, width: 1, height: 1 }
+  ];
+}
+function ProjectGlyph({ project, size = 12 }) {
+  return project ? project.color && !project.icon ? /* @__PURE__ */ jsx2("span", { className: "session-tree__glyph-dot", "aria-hidden": "true", style: { backgroundColor: project.color } }) : /* @__PURE__ */ jsx2(
+    Codicon,
+    {
+      name: project.icon || (project.isNoProject ? "home" : project.isAuto ? "repo" : "folder-library"),
+      size,
+      className: "session-tree__glyph-icon",
+      style: project.color ? { color: project.color } : void 0
+    }
+  ) : /* @__PURE__ */ jsx2("span", { className: "session-tree__glyph-dot session-tree__glyph-dot--none", "aria-hidden": "true" });
+}
+var projectColor = (project) => project?.color || "var(--ui-text-quaternary)", GroupLabel = memo2(function({ data }) {
   return /* @__PURE__ */ jsxs2(
     "div",
     {
-      className: "session-tree__block",
-      "data-testid": "session-tree-block",
-      "data-session-id": data.row.id,
-      title: data.title,
-      style: { width: 220, height: 36 },
+      className: `session-tree__group-label${data.dimmed ? " is-dimmed" : ""}`,
+      "data-testid": "session-tree-group-label",
+      "data-project-id": data.project?.id ?? "",
+      style: { "--st-pc": projectColor(data.project) },
       children: [
-        /* @__PURE__ */ jsx2(Handle, { type: "target", position: Position.Left, isConnectable: !1, className: "session-tree__handle" }),
-        /* @__PURE__ */ jsx2(Handle, { id: "up", type: "target", position: Position.Top, isConnectable: !1, className: "session-tree__handle" }),
-        /* @__PURE__ */ jsx2("span", { className: "session-tree__block-title", children: data.title }),
-        /* @__PURE__ */ jsx2(Handle, { type: "source", position: Position.Right, isConnectable: !1, className: "session-tree__handle" }),
-        /* @__PURE__ */ jsx2(Handle, { id: "down", type: "source", position: Position.Bottom, isConnectable: !1, className: "session-tree__handle" })
+        /* @__PURE__ */ jsx2(ProjectGlyph, { project: data.project, size: 11 }),
+        /* @__PURE__ */ jsx2("span", { children: data.label })
       ]
     }
   );
 });
-function SessionLink(props) {
-  let { id: id2, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props, kind = data?.kind ?? "branch", [path, labelX, labelY] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 8
-  });
-  return /* @__PURE__ */ jsxs2("g", { "data-testid": "session-tree-link", "data-source": source, "data-target": target, "data-kind": kind, children: [
-    /* @__PURE__ */ jsx2(BaseEdge, { id: id2, path, className: `session-tree__link session-tree__link--${kind}` }),
-    kind === "reset" && // EdgeLabelRenderer portals into the flow's label layer: the react-dom shim's proof.
-    /* @__PURE__ */ jsx2(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx2(
-      "div",
-      {
-        className: "session-tree__link-label nodrag nopan",
-        "data-testid": "session-tree-link-label",
-        "data-link-id": id2,
-        style: { transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` },
-        children: "continued as"
-      }
-    ) })
+
+// src/styles/dense/dense-flow.tsx
+init_define_import_meta_env();
+import { Codicon as Codicon2 } from "@hermes/plugin-sdk";
+import { memo as memo3 } from "react";
+
+// src/model/format.ts
+init_define_import_meta_env();
+function shortAge(epochSeconds, nowMs = Date.now()) {
+  if (!epochSeconds)
+    return "—";
+  let seconds = Math.max(0, nowMs / 1e3 - epochSeconds);
+  if (seconds < 60)
+    return "now";
+  let minutes = seconds / 60;
+  if (minutes < 60)
+    return `${Math.floor(minutes)}m`;
+  let hours = minutes / 60;
+  if (hours < 24)
+    return `${Math.floor(hours)}h`;
+  let days = hours / 24;
+  return days < 14 ? `${Math.floor(days)}d` : days < 60 ? `${Math.floor(days / 7)}w` : days < 365 ? `${Math.floor(days / 30)}mo` : `${Math.floor(days / 365)}y`;
+}
+function agoLabel(epochSeconds, nowMs = Date.now()) {
+  let age = shortAge(epochSeconds, nowMs);
+  return age === "now" || age === "—" ? age : `${age} ago`;
+}
+var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dateTimeLabel(epochSeconds) {
+  if (!epochSeconds)
+    return "—";
+  let date2 = new Date(epochSeconds * 1e3), hh = String(date2.getHours()).padStart(2, "0"), mm = String(date2.getMinutes()).padStart(2, "0");
+  return `${MONTHS[date2.getMonth()]} ${date2.getDate()}, ${hh}:${mm}`;
+}
+function compactNumber(value2) {
+  let n = Number(value2 ?? 0);
+  return Number.isFinite(n) ? Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : Math.abs(n) >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(Math.round(n)) : "—";
+}
+function costLabel(actual, estimated) {
+  let value2 = typeof actual == "number" && actual > 0 ? actual : estimated;
+  return typeof value2 == "number" && Number.isFinite(value2) ? `$${value2.toFixed(2)}` : "—";
+}
+
+// src/styles/dense/spec.ts
+init_define_import_meta_env();
+function denseLayoutSpec({ showAll }) {
+  return {
+    nodeWidth: 168,
+    nodeHeight: 26,
+    columnGap: 54,
+    rowGap: 8,
+    treeGap: 26,
+    familyGap: 18,
+    groupGap: 30,
+    labelHeight: 26,
+    singlesColumns: 4,
+    includeSingles: showAll
+  };
+}
+function densePorts(kind, source, target) {
+  return kind === "reset" ? {
+    from: { x: source.x + 22, y: source.y + source.height, dir: "down" },
+    to: { x: target.x + 22, y: target.y, dir: "up" }
+  } : {
+    from: { x: source.x + source.width, y: source.y + source.height / 2, dir: "right" },
+    to: { x: target.x, y: target.y + target.height / 2, dir: "left" }
+  };
+}
+
+// src/styles/dense/dense-flow.tsx
+import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+function blockClass(data, selected2, extra = "") {
+  let { node } = data;
+  return [
+    "session-tree__block",
+    "st-dense",
+    extra,
+    selected2 ? "is-selected" : "",
+    data.inLineage ? "is-lineage" : "",
+    data.status?.open ? "is-open" : "",
+    node.archived ? "is-archived" : "",
+    node.outOfScope ? "is-out-of-scope" : ""
+  ].filter(Boolean).join(" ");
+}
+var DenseBlock = memo3(function({ data, selected: selected2 }) {
+  let { node, status, project } = data, row = node.row, tone = status?.tone ?? "idle";
+  return /* @__PURE__ */ jsxs3(
+    "div",
+    {
+      className: blockClass(data, !!selected2),
+      "data-testid": "session-tree-block",
+      "data-session-id": row.id,
+      "data-node-id": node.id,
+      "data-project-id": node.projectId ?? "",
+      "data-status": tone,
+      "data-open": status?.open ? "true" : void 0,
+      "data-archived": node.archived ? "true" : void 0,
+      "data-out-of-scope": node.outOfScope ? "true" : void 0,
+      "data-lineage": data.inLineage ? "true" : void 0,
+      style: { width: 168, height: 26, "--st-pc": projectColor(project) },
+      children: [
+        /* @__PURE__ */ jsx3(BlockHandles, { resetX: 22 }),
+        /* @__PURE__ */ jsx3("span", { className: `st-dot st-dot--${tone}`, "aria-label": tone === "idle" ? void 0 : tone }),
+        status?.pinned && /* @__PURE__ */ jsx3(Codicon2, { name: "pinned", size: 11, className: "st-pin" }),
+        /* @__PURE__ */ jsx3("span", { className: "st-title", children: node.title }),
+        node.compacted > 0 && /* @__PURE__ */ jsxs3("span", { className: "st-cmp", "data-testid": "session-tree-compacted", title: `compacted ×${node.compacted}`, children: [
+          /* @__PURE__ */ jsx3(Codicon2, { name: "layers", size: 11 }),
+          "×",
+          node.compacted
+        ] }),
+        /* @__PURE__ */ jsx3("span", { className: "st-age", children: shortAge(row.last_active || row.started_at, data.nowMs) })
+      ]
+    }
+  );
+}), DenseStandin = memo3(function({ data }) {
+  let { node } = data;
+  return /* @__PURE__ */ jsxs3(
+    "div",
+    {
+      className: blockClass(data, !1, "is-standin"),
+      "data-testid": "session-tree-standin",
+      "data-node-id": node.id,
+      "data-missing-id": node.missingId,
+      "data-out-of-scope": node.outOfScope ? "true" : void 0,
+      style: { width: 168, height: 26 },
+      children: [
+        /* @__PURE__ */ jsx3(BlockHandles, { resetX: 22 }),
+        /* @__PURE__ */ jsx3("span", { className: "st-title", children: "Parent not loaded" }),
+        /* @__PURE__ */ jsx3("span", { className: "st-age", children: "?" })
+      ]
+    }
+  );
+});
+function rectOfInternal(node) {
+  return {
+    x: node.internals.positionAbsolute.x,
+    y: node.internals.positionAbsolute.y,
+    width: node.measured?.width ?? node.width ?? 168,
+    height: node.measured?.height ?? node.height ?? 26
+  };
+}
+var samePort = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+function DenseLink({ id: id2, source, target, data }) {
+  let sourceNode = useInternalNode(source), targetNode = useInternalNode(target);
+  if (!sourceNode || !targetNode || !data)
+    return null;
+  let { from, to } = densePorts(data.kind, rectOfInternal(sourceNode), rectOfInternal(targetNode)), route = data.route && samePort(data.route.from, from) && samePort(data.route.to, to) ? data.route.route : curveRouter.live(from, to), classes = [
+    "session-tree__link",
+    `session-tree__link--${data.kind}`,
+    data.fromStandin ? "session-tree__link--standin" : "",
+    data.highlighted ? "is-highlighted" : "",
+    data.dimmed ? "is-dimmed" : ""
+  ].filter(Boolean).join(" ");
+  return /* @__PURE__ */ jsxs3(
+    "g",
+    {
+      "data-testid": "session-tree-link",
+      "data-source": source,
+      "data-target": target,
+      "data-kind": data.kind,
+      "data-standin": data.fromStandin ? "true" : void 0,
+      "data-detoured": route.detoured ? "true" : "false",
+      "data-highlighted": data.highlighted ? "true" : void 0,
+      className: data.dimmed ? "is-dimmed" : void 0,
+      children: [
+        /* @__PURE__ */ jsx3(BaseEdge, { id: id2, path: route.svg, className: classes }),
+        data.kind === "reset" ? /* @__PURE__ */ jsx3(
+          "path",
+          {
+            className: `session-tree__link-end${data.highlighted ? " is-highlighted" : ""}`,
+            d: `M${to.x - 3} ${to.y - 5} L${to.x + 3} ${to.y - 5} L${to.x} ${to.y - 1}Z`
+          }
+        ) : /* @__PURE__ */ jsx3("circle", { className: `session-tree__link-end${data.highlighted ? " is-highlighted" : ""}`, cx: to.x - 2, cy: to.y, r: 2 }),
+        data.kind === "reset" && // EdgeLabelRenderer portals into the flow's label layer (the react-dom shim's proof).
+        /* @__PURE__ */ jsx3(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx3(
+          "div",
+          {
+            className: "session-tree__link-label nodrag nopan",
+            "data-testid": "session-tree-link-label",
+            "data-link-id": id2,
+            style: { transform: `translate(0, -50%) translate(${route.mid.x + 6}px, ${route.mid.y}px)` },
+            children: "continued as"
+          }
+        ) })
+      ]
+    }
+  );
+}
+
+// src/styles/dense/inspector.tsx
+init_define_import_meta_env();
+import { Codicon as Codicon3 } from "@hermes/plugin-sdk";
+import { useState as useState2 } from "react";
+import { Fragment as Fragment3, jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
+var ACTIONS_LATER = "Session actions arrive in a later version";
+function NodeLink({
+  model,
+  id: id2,
+  relation,
+  onSelect,
+  onOpen,
+  nowMs
+}) {
+  let node = model.nodeById.get(id2);
+  if (!node)
+    return null;
+  let project = node.projectId ? model.projects.find((p) => p.id === node.projectId) : void 0;
+  return /* @__PURE__ */ jsxs4(
+    "button",
+    {
+      type: "button",
+      className: `st-lk${node.outOfScope ? " is-dim" : ""}`,
+      "data-testid": "session-tree-inspector-link",
+      "data-node-id": node.id,
+      "data-relation": relation ?? "",
+      title: node.kind === "standin" ? "Parent not loaded" : node.title,
+      disabled: node.readOnly,
+      style: { "--st-pc": projectColor(project) },
+      onClick: () => onSelect(node.id, !0),
+      onDoubleClick: () => onOpen(node),
+      children: [
+        relation && /* @__PURE__ */ jsx4("span", { className: "st-rel", children: relation }),
+        /* @__PURE__ */ jsx4("span", { className: "st-lk-dot" }),
+        /* @__PURE__ */ jsx4("span", { className: "st-lk-title", children: node.kind === "standin" ? "Parent not loaded" : node.title }),
+        /* @__PURE__ */ jsx4("span", { className: "st-lk-age", children: node.row ? shortAge(node.row.last_active || node.row.started_at, nowMs) : "?" })
+      ]
+    }
+  );
+}
+function Stat({ field, label, value: value2, title }) {
+  return /* @__PURE__ */ jsxs4("div", { children: [
+    /* @__PURE__ */ jsx4("small", { children: label }),
+    /* @__PURE__ */ jsx4("b", { "data-field": field, title, children: value2 })
   ] });
 }
-var nodeTypes = { block: SessionBlock }, edgeTypes = { link: SessionLink };
-function TreeCanvas({ rows }) {
-  let { nodes, edges } = useMemo2(() => {
-    let links = graphLinks(rows), positions = layoutForest(rows, links), nodes2 = rows.map((row) => ({
-      id: row.id,
-      type: "block",
-      position: positions.get(row.id) ?? { x: 0, y: 0 },
-      data: { title: displayTitle(row), row },
-      draggable: !1,
-      connectable: !1
-    })), edges2 = links.map((link2) => ({
-      id: link2.id,
-      source: link2.source,
-      target: link2.target,
-      // "Continued as" runs from the predecessor's bottom edge to the successor's top edge.
-      ...link2.kind === "reset" ? { sourceHandle: "down", targetHandle: "up" } : {},
-      type: "link",
-      data: { kind: link2.kind },
-      selectable: !1
-    }));
-    return { nodes: nodes2, edges: edges2 };
-  }, [rows]), openInTab = useCallback2((_event, node) => {
-    host.openSession(node.id, { intent: "tab" });
-  }, []);
-  return /* @__PURE__ */ jsx2("div", { className: "session-tree__canvas", "data-testid": "session-tree-canvas", children: /* @__PURE__ */ jsx2(
-    index,
+function StatusTags({ node, status }) {
+  let tags = [];
+  return status?.open && tags.push({ key: "open", label: "● open in app", tone: "acc" }), status?.running && tags.push({ key: "running", label: "running", tone: "run" }), status?.needsInput && tags.push({ key: "needs-input", label: "needs input", tone: "ask" }), status?.unread && tags.push({ key: "unread", label: "unread", tone: "acc" }), status?.pinned && tags.push({ key: "pinned", label: "pinned" }), node.archived && tags.push({ key: "archived", label: "archived" }), node.compacted > 0 && tags.push({ key: "compacted", label: `compacted ×${node.compacted}`, tone: "acc" }), node.outOfScope && tags.push({ key: "out-of-scope", label: "outside this project" }), /* @__PURE__ */ jsx4("div", { className: "st-tags", "data-testid": "session-tree-inspector-tags", children: tags.map((tag) => /* @__PURE__ */ jsx4("span", { className: `st-tag${tag.tone ? ` st-tag--${tag.tone}` : ""}`, "data-tag": tag.key, children: tag.label }, tag.key)) });
+}
+function Actions() {
+  return /* @__PURE__ */ jsxs4("div", { className: "st-acts", "data-testid": "session-tree-inspector-actions", children: [
+    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act st-act--primary", disabled: !0, title: ACTIONS_LATER, children: [
+      /* @__PURE__ */ jsx4(Codicon3, { name: "link-external", size: 12 }),
+      "Open"
+    ] }),
+    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, children: [
+      /* @__PURE__ */ jsx4(Codicon3, { name: "git-branch", size: 12 }),
+      "Branch"
+    ] }),
+    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, "aria-label": "Rename", children: /* @__PURE__ */ jsx4(Codicon3, { name: "edit", size: 12 }) }),
+    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, "aria-label": "Archive", children: /* @__PURE__ */ jsx4(Codicon3, { name: "archive", size: 12 }) }),
+    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, "aria-label": "More actions", children: /* @__PURE__ */ jsx4(Codicon3, { name: "ellipsis", size: 12 }) })
+  ] });
+}
+function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }) {
+  let row = node.row, project = node.projectId ? model.projects.find((p) => p.id === node.projectId) : void 0, parent = model.parentOf.get(node.id), from = model.continuedFrom.get(node.id), continuedAs = model.continuedAs.get(node.id) ?? [], children2 = model.childrenOf.get(node.id) ?? [], segments = row._lineage_ids && row._lineage_ids.length > 1 ? row._lineage_ids : null, linkProps = { model, onSelect, onOpen, nowMs };
+  return /* @__PURE__ */ jsxs4(Fragment3, { children: [
+    /* @__PURE__ */ jsxs4("div", { className: "st-ih", children: [
+      /* @__PURE__ */ jsx4(ProjectGlyph, { project, size: 11 }),
+      /* @__PURE__ */ jsx4("span", { "data-field": "project", children: project?.label ?? "No project" }),
+      model.options.profile === "*" && /* @__PURE__ */ jsx4("span", { className: "st-ih-profile", "data-field": "profile", children: node.profile }),
+      /* @__PURE__ */ jsx4("span", { className: "st-ih-id", "data-field": "id", title: row.id, children: row.id })
+    ] }),
+    /* @__PURE__ */ jsx4("div", { className: "st-it", "data-field": "title", children: node.title }),
+    /* @__PURE__ */ jsx4(StatusTags, { node, status }),
+    /* @__PURE__ */ jsx4(Actions, {}),
+    /* @__PURE__ */ jsx4("div", { className: "st-sec", children: /* @__PURE__ */ jsxs4("div", { className: "st-kv", children: [
+      /* @__PURE__ */ jsx4(Stat, { field: "last-used", label: "Last used", value: agoLabel(row.last_active || row.started_at, nowMs), title: dateTimeLabel(row.last_active) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "started", label: "Started", value: dateTimeLabel(row.started_at) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "messages", label: "Messages", value: String(row.message_count ?? 0) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "tool-calls", label: "Tool calls", value: String(row.tool_call_count ?? 0) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "tokens-in", label: "Tokens in", value: compactNumber(row.input_tokens), title: String(row.input_tokens ?? 0) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "tokens-out", label: "Tokens out", value: compactNumber(row.output_tokens), title: String(row.output_tokens ?? 0) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "cost", label: "Cost", value: costLabel(row.actual_cost_usd, row.estimated_cost_usd) }),
+      /* @__PURE__ */ jsx4(Stat, { field: "model", label: "Model", value: row.model || "—", title: row.model ?? void 0 })
+    ] }) }),
+    /* @__PURE__ */ jsxs4("div", { className: "st-sec", children: [
+      /* @__PURE__ */ jsx4("div", { className: "st-sh", children: /* @__PURE__ */ jsx4("span", { children: "Compression" }) }),
+      node.compacted > 0 ? /* @__PURE__ */ jsxs4("div", { "data-testid": "session-tree-inspector-compression", children: [
+        /* @__PURE__ */ jsxs4("div", { className: "st-cmpline", "data-field": "compression", children: [
+          /* @__PURE__ */ jsx4(Codicon3, { name: "layers", size: 12 }),
+          "compacted ×",
+          node.compacted,
+          " — ",
+          node.compacted,
+          " earlier segment",
+          node.compacted > 1 ? "s" : ""
+        ] }),
+        /* @__PURE__ */ jsx4("div", { className: "st-segs", children: Array.from({ length: node.compacted + 1 }, (_, index2) => /* @__PURE__ */ jsx4("i", { className: index2 === node.compacted ? "is-current" : void 0 }, index2)) }),
+        segments && /* @__PURE__ */ jsx4("div", { className: "st-seglist", children: segments.map((segment, index2) => /* @__PURE__ */ jsxs4("div", { children: [
+          /* @__PURE__ */ jsx4("span", { children: index2 === segments.length - 1 ? "Current segment" : `Segment ${index2 + 1}` }),
+          /* @__PURE__ */ jsx4("span", { className: "st-mono", children: segment })
+        ] }, segment)) })
+      ] }) : /* @__PURE__ */ jsx4("div", { className: "st-none", "data-field": "compression", children: "Not compacted · single segment" })
+    ] }),
+    /* @__PURE__ */ jsxs4("div", { className: "st-sec", children: [
+      /* @__PURE__ */ jsx4("div", { className: "st-sh", children: /* @__PURE__ */ jsx4("span", { children: "Lineage" }) }),
+      parent && /* @__PURE__ */ jsx4(NodeLink, { ...linkProps, id: parent, relation: "parent" }),
+      from && /* @__PURE__ */ jsx4(NodeLink, { ...linkProps, id: from, relation: "cont. from" }),
+      continuedAs.map((id2) => /* @__PURE__ */ jsx4(NodeLink, { ...linkProps, id: id2, relation: "cont. as" }, id2)),
+      !parent && !from && continuedAs.length === 0 && /* @__PURE__ */ jsx4("div", { className: "st-none", children: "Root session · no parent" })
+    ] }),
+    /* @__PURE__ */ jsxs4("div", { className: "st-sec", children: [
+      /* @__PURE__ */ jsxs4("div", { className: "st-sh", children: [
+        /* @__PURE__ */ jsx4("span", { children: "Children" }),
+        /* @__PURE__ */ jsx4("span", { "data-field": "children-count", children: children2.length })
+      ] }),
+      children2.map((id2) => /* @__PURE__ */ jsx4(NodeLink, { ...linkProps, id: id2 }, id2)),
+      children2.length === 0 && /* @__PURE__ */ jsx4("div", { className: "st-none", children: "No branches yet" })
+    ] })
+  ] });
+}
+function DenseInspector(props) {
+  let { model, selectedId, statusOf, onSelect, onOpen, nowMs } = props, [singlesOpen, setSinglesOpen] = useState2(!0), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model);
+  return /* @__PURE__ */ jsxs4("aside", { className: "st-insp", "data-testid": "session-tree-inspector", "data-selected-id": node?.id ?? "", children: [
+    /* @__PURE__ */ jsxs4("div", { className: "st-ib", children: [
+      !node && /* @__PURE__ */ jsxs4("div", { className: "st-empty", "data-testid": "session-tree-inspector-empty", children: [
+        "Select a session to inspect it.",
+        /* @__PURE__ */ jsx4("br", {}),
+        "Click a block · double-click opens it in a tab"
+      ] }),
+      node?.kind === "session" && /* @__PURE__ */ jsx4(SessionDetails, { ...props, node, status: statusOf(node) })
+    ] }),
+    /* @__PURE__ */ jsxs4("div", { className: `st-singles${singlesOpen ? "" : " is-collapsed"}`, "data-testid": "session-tree-singles", children: [
+      /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-singles-toggle", onClick: () => setSinglesOpen((open) => !open), "aria-expanded": singlesOpen, children: [
+        /* @__PURE__ */ jsx4(Codicon3, { name: singlesOpen ? "chevron-down" : "chevron-right", size: 12 }),
+        /* @__PURE__ */ jsx4("b", { children: "Singles" }),
+        /* @__PURE__ */ jsx4("span", { "data-testid": "session-tree-singles-count", children: singles.length }),
+        "· no branches"
+      ] }),
+      singlesOpen && /* @__PURE__ */ jsxs4("div", { className: "st-sl", children: [
+        singles.map((single) => /* @__PURE__ */ jsx4(NodeLink, { model, id: single.id, onSelect, onOpen, nowMs }, single.id)),
+        singles.length === 0 && /* @__PURE__ */ jsx4("div", { className: "st-none", children: "No singles in this scope" })
+      ] })
+    ] })
+  ] });
+}
+
+// src/styles/dense/index.ts
+var denseStyle = {
+  id: "dense",
+  label: "Dense + inspector",
+  nodeTypes: { "dense-session": DenseBlock, "dense-standin": DenseStandin, group: GroupLabel },
+  nodeType: { session: "dense-session", standin: "dense-standin", group: "group" },
+  edgeTypes: { "dense-link": DenseLink },
+  edgeType: "dense-link",
+  nodeSize: { width: 168, height: 26 },
+  layoutSpec: denseLayoutSpec,
+  layout: (model, previous, spec) => mergeLayout(previous, model, spec),
+  draggable: !0,
+  singles: "inspector-list",
+  router: curveRouter,
+  ports: densePorts,
+  grid: 16,
+  resetPortX: 22,
+  Panel: DenseInspector
+};
+
+// src/styles/registry.ts
+var DEFAULT_STYLE_ID = "dense", STYLES = /* @__PURE__ */ new Map([[denseStyle.id, denseStyle]]);
+function getStyle(id2) {
+  return STYLES.get(id2) ?? STYLES.get(DEFAULT_STYLE_ID);
+}
+
+// src/page/graph-canvas.tsx
+init_define_import_meta_env();
+import { useCallback as useCallback2, useEffect as useEffect3, useMemo as useMemo2, useRef as useRef3, useState as useState3 } from "react";
+
+// src/page/plugin-context.ts
+init_define_import_meta_env();
+import { createContext as createContext2, useContext as useContext2 } from "react";
+var PluginCtx = createContext2(null);
+function usePluginCtx() {
+  let ctx = useContext2(PluginCtx);
+  if (!ctx)
+    throw new Error("Session Tree component rendered outside its plugin context");
+  return ctx;
+}
+
+// src/page/session-menu.tsx
+init_define_import_meta_env();
+import { useEffect as useEffect2, useRef as useRef2 } from "react";
+import { jsx as jsx5 } from "react/jsx-runtime";
+var ITEMS = [
+  "Appearance ▸",
+  "Pin",
+  "Rename…",
+  "Move to project ▸",
+  "Copy ID",
+  null,
+  "Branch",
+  "Export",
+  "Mark as read",
+  null,
+  "Archive",
+  "Delete"
+];
+function SessionMenu({ menu, onClose }) {
+  let ctx = usePluginCtx(), ref = useRef2(null);
+  return useEffect2(() => {
+    let offDown = ctx.addEventListener(
+      document,
+      "pointerdown",
+      (event) => {
+        ref.current?.contains(event.target) || onClose();
+      },
+      !0
+    ), offKey = ctx.addEventListener(document, "keydown", (event) => {
+      event.key === "Escape" && onClose();
+    });
+    return () => {
+      offDown(), offKey();
+    };
+  }, [ctx, onClose]), /* @__PURE__ */ jsx5(
+    "div",
     {
-      nodes,
-      edges,
-      nodeTypes,
-      edgeTypes,
-      onNodeDoubleClick: openInTab,
-      zoomOnDoubleClick: !1,
-      nodesConnectable: !1,
-      fitView: !0,
-      minZoom: 0.3,
-      maxZoom: 2.5,
-      proOptions: { hideAttribution: !0 }
+      ref,
+      className: "session-tree__menu",
+      role: "menu",
+      "data-testid": "session-tree-menu",
+      "data-node-id": menu.nodeId,
+      style: { left: menu.x, top: menu.y },
+      onContextMenu: (event) => event.preventDefault(),
+      children: ITEMS.map(
+        (item, index2) => item === null ? /* @__PURE__ */ jsx5("hr", {}, `sep-${index2}`) : /* @__PURE__ */ jsx5(
+          "button",
+          {
+            type: "button",
+            role: "menuitem",
+            disabled: !0,
+            className: item === "Delete" ? "is-danger" : void 0,
+            title: "Session actions arrive in a later version",
+            children: item
+          },
+          item
+        )
+      )
     }
-  ) });
+  );
+}
+
+// src/page/graph-canvas.tsx
+import { jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
+var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350;
+function GraphCanvas(props) {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onOpen, statusOf, snap, nowMs } = props, ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState3(), [menu, setMenu] = useState3(), [tooltip, setTooltip] = useState3(), spaceDown = useRef3(!1), tooltipTimer = useRef3(void 0), shown = useMemo2(() => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)), [model, spec]), lineage = useMemo2(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo2(() => {
+    let out = /* @__PURE__ */ new Map();
+    for (let id2 of shown) {
+      let point = positions.get(id2);
+      point && out.set(id2, rectOf(id2, point, spec));
+    }
+    return out;
+  }, [shown, positions, spec]), routes = useMemo2(() => {
+    let ends = model.edges.filter((edge) => rects.has(edge.source) && rects.has(edge.target)).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, ...style2.ports(edge.kind, rects.get(edge.source), rects.get(edge.target)) })), routed = routeLinks(ends, rects, style2.router), out = /* @__PURE__ */ new Map();
+    for (let end of ends)
+      out.set(end.id, { from: end.from, to: end.to, route: routed.get(end.id) });
+    return out;
+  }, [model, rects, style2]), baseNodes = useMemo2(() => {
+    let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
+    for (let label of labels) {
+      let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
+      point && nodes2.push({
+        id: label.id,
+        type: style2.nodeType.group,
+        position: point,
+        data: {
+          project,
+          label: project?.label ?? "No project",
+          dimmed: model.options.scope !== "all" && (label.projectId ?? "__no_project__") !== model.options.scope
+        },
+        draggable: !1,
+        selectable: !1,
+        focusable: !1,
+        connectable: !1,
+        width: LABEL_WIDTH,
+        height: spec.labelHeight,
+        measured: { width: LABEL_WIDTH, height: spec.labelHeight },
+        className: "session-tree__group-node",
+        zIndex: -1
+      });
+    }
+    for (let node of model.nodes) {
+      let point = positions.get(node.id);
+      !point || !shown.has(node.id) || nodes2.push({
+        id: node.id,
+        type: node.kind === "standin" ? style2.nodeType.standin : style2.nodeType.session,
+        position: point,
+        data: {
+          node,
+          status: statusOf(node),
+          project: node.projectId ? projectById.get(node.projectId) : void 0,
+          inLineage: lineage.has(node.id) && node.id !== selectedId,
+          nowMs
+        },
+        draggable: style2.draggable && !node.readOnly,
+        selectable: !node.readOnly,
+        connectable: !1,
+        selected: node.id === selectedId && !node.readOnly,
+        width,
+        height,
+        measured: { width, height },
+        handles
+      });
+    }
+    return nodes2;
+  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs]), nodes = useMemo2(
+    () => drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes,
+    [baseNodes, drag2]
+  ), edges = useMemo2(
+    () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
+      let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        ...edge.kind === "reset" ? { sourceHandle: "down", targetHandle: "up" } : {},
+        type: style2.edgeType,
+        selectable: !1,
+        focusable: !1,
+        data: {
+          kind: edge.kind,
+          fromStandin: edge.fromStandin,
+          highlighted: lineage.has(edge.source) && lineage.has(edge.target),
+          dimmed: !!(source?.outOfScope && target?.outOfScope),
+          route: routes.get(edge.id)
+        }
+      };
+    }),
+    [model, shown, style2, lineage, routes]
+  ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback2(() => {
+    tooltipTimer.current?.(), tooltipTimer.current = void 0, setTooltip(void 0);
+  }, []), onNodesChange = useCallback2((changes) => {
+    let moves = changes.filter(
+      (change) => change.type === "position" && !!change.position && change.dragging === !0
+    );
+    moves.length > 0 && setDrag((previous) => {
+      let next = new Map(previous);
+      for (let move of moves)
+        next.set(move.id, move.position);
+      return next;
+    });
+  }, []), onNodeDragStart = useCallback2(() => {
+    hideTooltip(), setMenu(void 0);
+  }, [hideTooltip]), onNodeDragStop = useCallback2(
+    (_event, _node, dragged) => {
+      let moves = /* @__PURE__ */ new Map();
+      for (let item of dragged)
+        item.id.startsWith(GROUP_PREFIX) || moves.set(item.id, { x: item.position.x, y: item.position.y });
+      setDrag(void 0), moves.size > 0 && onMove(moves);
+    },
+    [onMove]
+  ), graphNode = useCallback2((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback2(
+    (_event, flowNode) => {
+      let node = graphNode(flowNode);
+      setMenu(void 0), node && !node.readOnly && onSelect(node.id);
+    },
+    [graphNode, onSelect]
+  ), onNodeDoubleClick = useCallback2(
+    (_event, flowNode) => {
+      let node = graphNode(flowNode);
+      node && !node.readOnly && node.kind === "session" && onOpen(node);
+    },
+    [graphNode, onOpen]
+  ), onNodeContextMenu = useCallback2(
+    (event, flowNode) => {
+      event.preventDefault();
+      let node = graphNode(flowNode);
+      if (hideTooltip(), !node || node.readOnly || !wrapper.current) {
+        setMenu(void 0);
+        return;
+      }
+      let box = wrapper.current.getBoundingClientRect();
+      onSelect(node.id), setMenu({ nodeId: node.id, x: event.clientX - box.left, y: event.clientY - box.top });
+    },
+    [graphNode, hideTooltip, onSelect]
+  ), onNodeMouseEnter = useCallback2(
+    (event, flowNode) => {
+      let node = graphNode(flowNode), target = event.currentTarget;
+      !node || !wrapper.current || (tooltipTimer.current?.(), tooltipTimer.current = ctx.setTimeout(() => {
+        if (!wrapper.current || !target.isConnected)
+          return;
+        let box = wrapper.current.getBoundingClientRect(), rect = target.getBoundingClientRect(), text = node.kind === "standin" ? STANDIN_TIP : node.outOfScope ? OUT_OF_SCOPE_TIP : node.title;
+        setTooltip({ text, nodeId: node.id, x: rect.left - box.left, y: rect.bottom - box.top + 6 });
+      }, TOOLTIP_DELAY_MS));
+    },
+    [ctx, graphNode]
+  );
+  useEffect3(() => {
+    let element = wrapper.current;
+    if (!element)
+      return;
+    let middle = (event) => {
+      event.button === 1 && event.preventDefault();
+    }, offs = [
+      ctx.addEventListener(element, "mousedown", middle, !0),
+      ctx.addEventListener(element, "mouseup", middle, !0),
+      ctx.addEventListener(element, "auxclick", middle, !0),
+      ctx.addEventListener(
+        element,
+        "pointerdown",
+        (event) => {
+          let pointer2 = event, target = pointer2.target;
+          pointer2.button !== 0 || spaceDown.current || !target || target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && (onSelect(null), setMenu(void 0));
+        },
+        !0
+      ),
+      ctx.addEventListener(window, "keydown", (event) => {
+        event.code === "Space" && (spaceDown.current = !0);
+      }),
+      ctx.addEventListener(window, "keyup", (event) => {
+        event.code === "Space" && (spaceDown.current = !1);
+      }),
+      ctx.addEventListener(window, "blur", () => {
+        spaceDown.current = !1;
+      })
+    ];
+    return () => offs.forEach((off) => off());
+  }, [ctx, onSelect]), useEffect3(() => () => tooltipTimer.current?.(), []);
+  let closeMenu = useCallback2(() => setMenu(void 0), []);
+  return /* @__PURE__ */ jsxs5(
+    "div",
+    {
+      ref: wrapper,
+      className: `session-tree__canvas${snap ? " has-grid" : ""}`,
+      "data-testid": "session-tree-canvas",
+      "data-style": style2.id,
+      "data-snap": snap ? "on" : "off",
+      "data-grid": style2.grid,
+      onContextMenu: (event) => {
+        event.preventDefault();
+      },
+      children: [
+        /* @__PURE__ */ jsx6(
+          index,
+          {
+            nodes,
+            edges,
+            nodeTypes,
+            edgeTypes,
+            onNodesChange,
+            onNodeDragStart,
+            onNodeDragStop,
+            onNodeClick,
+            onNodeDoubleClick,
+            onNodeContextMenu,
+            onNodeMouseEnter,
+            onNodeMouseLeave: hideTooltip,
+            onMoveStart: hideTooltip,
+            onPaneContextMenu: closeMenu,
+            panOnDrag: [1],
+            panActivationKeyCode: "Space",
+            zoomOnScroll: !0,
+            panOnScroll: !1,
+            zoomOnDoubleClick: !1,
+            zoomOnPinch: !0,
+            selectionOnDrag: !1,
+            selectionKeyCode: null,
+            multiSelectionKeyCode: null,
+            deleteKeyCode: null,
+            nodesConnectable: !1,
+            nodesFocusable: !1,
+            edgesFocusable: !1,
+            elevateNodesOnSelect: !1,
+            snapToGrid: snap,
+            snapGrid: [style2.grid, style2.grid],
+            minZoom: MIN_ZOOM,
+            maxZoom: MAX_ZOOM,
+            onlyRenderVisibleElements: nodes.length > VISIBLE_ONLY_ABOVE,
+            fitView: !0,
+            fitViewOptions: { padding: 0.08, maxZoom: 1.25 },
+            proOptions: { hideAttribution: !0 },
+            children: snap && /* @__PURE__ */ jsx6(Background, { variant: BackgroundVariant.Dots, gap: style2.grid, size: 1.3 })
+          }
+        ),
+        tooltip && /* @__PURE__ */ jsx6(
+          "div",
+          {
+            className: "session-tree__tooltip",
+            role: "tooltip",
+            "data-testid": "session-tree-tooltip",
+            "data-node-id": tooltip.nodeId,
+            style: { left: tooltip.x, top: tooltip.y },
+            children: tooltip.text
+          }
+        ),
+        menu && /* @__PURE__ */ jsx6(SessionMenu, { menu, onClose: closeMenu })
+      ]
+    }
+  );
+}
+
+// src/page/toolbar.tsx
+init_define_import_meta_env();
+import { Codicon as Codicon4 } from "@hermes/plugin-sdk";
+import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
+var noFocus = (event) => event.preventDefault();
+function ToolButton({
+  testId,
+  title,
+  pressed,
+  onClick,
+  children: children2,
+  className
+}) {
+  return /* @__PURE__ */ jsx7(
+    "button",
+    {
+      type: "button",
+      className: `st-tb${pressed ? " is-on" : ""}${className ? ` ${className}` : ""}`,
+      "data-testid": testId,
+      title,
+      "aria-label": title,
+      "aria-pressed": pressed === void 0 ? void 0 : pressed,
+      onMouseDown: noFocus,
+      onClick,
+      children: children2
+    }
+  );
+}
+var ZOOM_STEP = 1.2;
+function Toolbar(props) {
+  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope);
+  return /* @__PURE__ */ jsxs6("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
+    /* @__PURE__ */ jsxs6("span", { className: "st-brand", children: [
+      /* @__PURE__ */ jsx7(Codicon4, { name: "type-hierarchy", size: 14 }),
+      "Session tree"
+    ] }),
+    /* @__PURE__ */ jsxs6("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
+      /* @__PURE__ */ jsx7(
+        "button",
+        {
+          type: "button",
+          role: "radio",
+          "aria-checked": props.scope === ALL_PROJECTS,
+          className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
+          "data-scope": ALL_PROJECTS,
+          title: "All projects",
+          onMouseDown: noFocus,
+          onClick: () => props.onScope(ALL_PROJECTS),
+          children: "All"
+        }
+      ),
+      scoped.map((project) => /* @__PURE__ */ jsxs6(
+        "button",
+        {
+          type: "button",
+          role: "radio",
+          "aria-checked": props.scope === project.id,
+          className: props.scope === project.id ? "is-on" : void 0,
+          "data-scope": project.id,
+          title: `Project: ${project.label}`,
+          onMouseDown: noFocus,
+          onClick: () => props.onScope(project.id),
+          children: [
+            /* @__PURE__ */ jsx7(ProjectGlyph, { project, size: 11 }),
+            project.label
+          ]
+        },
+        project.id
+      ))
+    ] }),
+    /* @__PURE__ */ jsxs6("label", { className: "st-profile", title: "Profile", children: [
+      /* @__PURE__ */ jsx7(Codicon4, { name: "account", size: 12 }),
+      /* @__PURE__ */ jsxs6(
+        "select",
+        {
+          "data-testid": "session-tree-profile",
+          "aria-label": "Profile",
+          value: props.profile,
+          onChange: (event) => props.onProfile(event.target.value),
+          children: [
+            props.profiles.map((name) => /* @__PURE__ */ jsx7("option", { value: name, children: name }, name)),
+            /* @__PURE__ */ jsx7("option", { value: ALL_PROFILES, children: "All profiles" })
+          ]
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsx7("span", { className: "st-spacer" }),
+    /* @__PURE__ */ jsxs6(
+      ToolButton,
+      {
+        testId: "session-tree-show-all",
+        title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
+        pressed: props.showAll,
+        onClick: () => props.onShowAll(!props.showAll),
+        children: [
+          /* @__PURE__ */ jsx7(Codicon4, { name: "list-flat", size: 13 }),
+          "Show all"
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxs6(
+      ToolButton,
+      {
+        testId: "session-tree-show-archived",
+        title: "Show archived",
+        pressed: props.showArchived,
+        onClick: () => props.onShowArchived(!props.showArchived),
+        children: [
+          /* @__PURE__ */ jsx7(Codicon4, { name: "archive", size: 13 }),
+          "Archived"
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx7(Codicon4, { name: "refresh", size: 13 }) }),
+    /* @__PURE__ */ jsx7("span", { className: "st-sep" }),
+    /* @__PURE__ */ jsxs6(
+      ToolButton,
+      {
+        testId: "session-tree-snap",
+        title: `Snap to grid (${props.snap ? "on" : "off"})`,
+        pressed: props.snap,
+        onClick: () => props.onSnap(!props.snap),
+        children: [
+          /* @__PURE__ */ jsx7(Codicon4, { name: "symbol-numeric", size: 13 }),
+          "Snap"
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsx7("span", { className: "st-sep" }),
+    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+      zoomTo(clamp2(getZoom() / ZOOM_STEP));
+    }, children: "−" }),
+    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+      zoomTo(1);
+    }, className: "st-zoom", children: /* @__PURE__ */ jsxs6("span", { "data-testid": "session-tree-zoom", children: [
+      Math.round(zoom3 * 100),
+      "%"
+    ] }) }),
+    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+      zoomTo(clamp2(getZoom() * ZOOM_STEP));
+    }, children: "+" }),
+    /* @__PURE__ */ jsxs6(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+      /* @__PURE__ */ jsx7(Codicon4, { name: "screen-full", size: 13 }),
+      "Fit"
+    ] })
+  ] });
+}
+
+// src/page/use-live-refresh.ts
+init_define_import_meta_env();
+import { useEffect as useEffect4, useRef as useRef4 } from "react";
+var POLL_MS = 1e4;
+function useLiveRefresh(ctx, refresh) {
+  let latest = useRef4(refresh);
+  useEffect4(() => {
+    latest.current = refresh;
+  }), useEffect4(() => {
+    let offSessions = ctx.onEvent("sessions.changed", () => latest.current.sessions()), offProjects = ctx.onEvent("projects.changed", () => {
+      latest.current.projects(), latest.current.sessions();
+    }), offPoll = ctx.setInterval(() => {
+      document.visibilityState === "visible" && (latest.current.sessions(), latest.current.projects());
+    }, POLL_MS);
+    return () => {
+      offSessions(), offProjects(), offPoll();
+    };
+  }, [ctx]);
 }
 
 // src/page/session-tree-page.tsx
-import { jsx as jsx3 } from "react/jsx-runtime";
-var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.";
+import { Fragment as Fragment4, jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
+var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx }) {
-  let profile = useValue(host2.state.profile) || "default", health = useQuery({
-    queryKey: ["session-tree", "health", profile],
-    queryFn: () => fetchHealth(ctx, profile),
+  return /* @__PURE__ */ jsx8(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx8(ReactFlowProvider, { children: /* @__PURE__ */ jsx8(PageBody, { ctx }) }) });
+}
+function PageBody({ ctx }) {
+  let activeProfile = useValue(host2.state.profile) || "default", [profileChoice, setProfileChoice] = useState4(null), profile = profileChoice ?? activeProfile, [scopeChoice, setScope] = useState4(ALL_PROJECTS), [showAll, setShowAll] = useState4(!1), [showArchived, setShowArchived] = useState4(!1), [snap, setSnap] = useState4(!1), [selectedChoice, setSelectedId] = useState4(null), [memory] = useState4(() => new LayoutMemory()), [layoutVersion, setLayoutVersion] = useState4(0), [fitRequest, setFitRequest] = useState4(0), [nowMs, setNowMs] = useState4(() => Date.now()), style2 = getStyle(DEFAULT_STYLE_ID), flow = useReactFlow(), health = useQuery({
+    queryKey: ["session-tree", "health", activeProfile],
+    queryFn: () => fetchHealth(ctx, activeProfile),
+    retry: !1,
+    refetchOnWindowFocus: !1
+  }), profiles = useQuery({
+    queryKey: ["session-tree", "profiles"],
+    queryFn: () => fetchProfiles(ctx),
     retry: !1,
     refetchOnWindowFocus: !1
   }), sessions = useQuery({
-    queryKey: ["session-tree", "sessions", profile],
-    queryFn: () => fetchSessions(ctx, { profile }),
+    queryKey: ["session-tree", "sessions", profile, showArchived],
+    queryFn: () => fetchSessions(ctx, { profile, includeArchived: showArchived }),
     retry: !1,
     refetchOnWindowFocus: !1
-  }), rows = useMemo3(() => visibleRows(sessions.data?.sessions ?? []), [sessions.data]), body;
-  return health.isError ? body = /* @__PURE__ */ jsx3("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx3(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) : sessions.isError ? body = /* @__PURE__ */ jsx3("div", { className: "session-tree__state", "data-testid": "session-tree-error", children: /* @__PURE__ */ jsx3(EmptyState, { title: "Could not load sessions", description: errorText(sessions.error) }) }) : health.isPending || sessions.isPending ? body = /* @__PURE__ */ jsx3("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx3(EmptyState, { title: "Loading sessions…" }) }) : rows.length === 0 ? body = /* @__PURE__ */ jsx3("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx3(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) }) : body = /* @__PURE__ */ jsx3(TreeCanvas, { rows }), /* @__PURE__ */ jsx3(
+  }), profileNames = useMemo3(() => {
+    let names = new Set(profiles.data?.profiles ?? []);
+    return names.add(activeProfile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
+  }, [profiles.data, activeProfile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
+    queryKey: ["session-tree", "projects", projectProfiles.join(",")],
+    queryFn: () => fetchProjects(projectProfiles),
+    // The gateway socket may still be connecting on a cold page load.
+    retry: 4,
+    retryDelay: 750,
+    refetchOnWindowFocus: !1
+  });
+  useLiveRefresh(ctx, {
+    sessions: () => {
+      sessions.refetch();
+    },
+    projects: () => {
+      projects.refetch();
+    }
+  }), useEffect5(() => ctx.setInterval(() => setNowMs(Date.now()), 6e4), [ctx]);
+  let projectList = useMemo3(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, rows = useMemo3(() => sessions.data?.sessions ?? [], [sessions.data]), model = useMemo3(
+    () => buildGraph(rows, projectList, { profile, showArchived, scope }),
+    [rows, projectList, profile, showArchived, scope]
+  ), spec = useMemo3(() => style2.layoutSpec({ showAll }), [style2, showAll]), layoutKey = `${style2.id}|${profile}|${scope}`, ready = !!sessions.data && !projects.isPending, layout = useMemo3(
+    () => ready ? memory.place(layoutKey, (previous) => style2.layout(model, previous, spec)) : EMPTY_LAYOUT,
+    // `layoutVersion` re-runs the merge after a drop or a Re-arrange changed the memory.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the memory's change signal
+    [ready, memory, layoutKey, style2, model, spec, layoutVersion]
+  ), busy = useValue(host2.state.busy), busyBySession = useValue(host2.state.busyBySession), focusedSessionId = useValue(host2.state.focusedSessionId), focusedStoredSessionId = useValue(host2.state.focusedStoredSessionId), hostStatus = useMemo3(
+    () => ({
+      busy: !!busy,
+      busyBySession: busyBySession ?? {},
+      focusedSessionId: focusedSessionId ?? null,
+      focusedStoredSessionId: focusedStoredSessionId ?? null,
+      needsInput: NO_NEEDS_INPUT
+    }),
+    [busy, busyBySession, focusedSessionId, focusedStoredSessionId]
+  ), statusOf = useCallback3((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback3(() => {
+    let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
+    flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : void 0 });
+  }, [flow, model, spec, scope]);
+  useEffect5(() => {
+    fitRequest > 0 && fit();
+  }, [fitRequest]);
+  let requestFit = useCallback3(() => setFitRequest((count) => count + 1), []), onSelect = useCallback3(
+    (id2, reveal = !1) => {
+      let node = id2 ? model.nodeById.get(id2) : void 0;
+      if (id2 && (!node || node.readOnly))
+        return;
+      setSelectedId(id2);
+      let point = id2 ? layout.positions.get(id2) : void 0;
+      if (reveal && point) {
+        let { zoom: zoom3 } = flow.getViewport();
+        flow.setCenter(point.x + style2.nodeSize.width / 2, point.y + style2.nodeSize.height / 2, { zoom: zoom3, duration: 0 });
+      }
+    },
+    [model, layout, flow, style2]
+  ), onMove = useCallback3(
+    (moves) => {
+      memory.move(layoutKey, moves), setLayoutVersion((version) => version + 1);
+    },
+    [memory, layoutKey]
+  ), onRearrange = useCallback3(() => {
+    memory.reset(layoutKey), setLayoutVersion((version) => version + 1), requestFit();
+  }, [memory, layoutKey, requestFit]), onOpen = useCallback3(
+    (node) => {
+      !node.row || node.readOnly || host2.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
+    },
+    [activeProfile]
+  ), visibleCount = useMemo3(() => visibleRows(rows).length, [rows]), onCanvas = useMemo3(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec]), Panel2 = style2.Panel;
+  if (health.isError)
+    return /* @__PURE__ */ jsx8("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx8(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
+  let body;
+  return sessions.isError ? body = /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-error", children: /* @__PURE__ */ jsx8(EmptyState, { title: "Could not load sessions", description: errorText(sessions.error) }) }) : health.isPending || sessions.isPending || projects.isPending ? body = /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx8(EmptyState, { title: "Loading sessions…" }) }) : model.nodes.length === 0 ? body = /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx8(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) }) : body = /* @__PURE__ */ jsxs7(Fragment4, { children: [
+    /* @__PURE__ */ jsx8(
+      GraphCanvas,
+      {
+        style: style2,
+        spec,
+        model,
+        positions: layout.positions,
+        labels: layout.labels,
+        selectedId,
+        onSelect,
+        onMove,
+        onOpen,
+        statusOf,
+        snap,
+        nowMs
+      }
+    ),
+    onCanvas === 0 && /* @__PURE__ */ jsx8("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: "No branched sessions here — the sessions without branches are listed on the right." })
+  ] }), /* @__PURE__ */ jsxs7(
     "div",
     {
       className: "session-tree",
       "data-testid": "session-tree-page",
       "data-profile": profile,
-      "data-row-count": sessions.data ? rows.length : void 0,
-      children: body
+      "data-scope": scope,
+      "data-style": style2.id,
+      "data-row-count": sessions.data ? visibleCount : void 0,
+      "data-node-count": sessions.data ? model.nodes.length : void 0,
+      "data-canvas-count": sessions.data ? onCanvas : void 0,
+      "data-projects": projects.isError ? "error" : projects.data ? String(projectList.length) : "loading",
+      title: projects.isError ? `projects.tree: ${errorText(projects.error)}` : void 0,
+      children: [
+        /* @__PURE__ */ jsx8(
+          Toolbar,
+          {
+            projects: projectList,
+            scope,
+            onScope: (next) => {
+              setScope(next), requestFit();
+            },
+            profiles: profileNames,
+            profile,
+            onProfile: (next) => {
+              setProfileChoice(next), setScope(ALL_PROJECTS), setSelectedId(null), requestFit();
+            },
+            showAll,
+            onShowAll: (on) => {
+              setShowAll(on), requestFit();
+            },
+            showArchived,
+            onShowArchived: setShowArchived,
+            snap,
+            onSnap: setSnap,
+            minZoom: MIN_ZOOM,
+            maxZoom: MAX_ZOOM,
+            onFit: fit,
+            onRearrange,
+            singlesCount: model.singles.length
+          }
+        ),
+        /* @__PURE__ */ jsxs7("div", { className: "session-tree__main", children: [
+          /* @__PURE__ */ jsx8("div", { className: "session-tree__stage", children: body }),
+          Panel2 && sessions.data && /* @__PURE__ */ jsx8(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+        ] })
+      ]
     }
   );
 }
@@ -7583,24 +9169,25 @@ function errorText(error) {
 // src/settings/settings-page.tsx
 init_define_import_meta_env();
 import { ListRow, SegmentedControl } from "@hermes/plugin-sdk";
-import { jsx as jsx4 } from "react/jsx-runtime";
+import { jsx as jsx9 } from "react/jsx-runtime";
 var STYLE_OPTIONS = [{ id: "dense", label: "Dense + inspector" }];
 function SettingsPage() {
-  return /* @__PURE__ */ jsx4("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", children: /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsx9("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", children: /* @__PURE__ */ jsx9(
     ListRow,
     {
       id: "session-tree-view-style",
       title: "View style",
       description: "How the session graph is drawn. More styles arrive in later versions.",
-      action: /* @__PURE__ */ jsx4(SegmentedControl, { options: STYLE_OPTIONS, value: "dense", onChange: () => {
+      action: /* @__PURE__ */ jsx9(SegmentedControl, { options: STYLE_OPTIONS, value: "dense", onChange: () => {
       } })
     }
   ) });
 }
 
 // src/styles.css
-var styles_default = `/* Session Tree — own styles. Colours only through the app theme (var(--ui-*)),
-   so light and dark follow the host. React Flow's base.css ships its own
+var styles_default = `/* Session Tree — own styles. Colours only through the app theme (var(--ui-*)) and project
+   colours from data (--st-pc), so light and dark follow the host. Status dots use the theme's
+   own semantic colours (--ui-green / --ui-yellow). React Flow's base.css ships its own
    defaults; every --xy-* variable it reads is pointed at a theme variable here. */
 
 .session-tree {
@@ -7611,6 +9198,9 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   height: 100%;
   min-height: 0;
   color: var(--ui-text-primary);
+  font-size: 12px;
+  line-height: 1.3;
+  user-select: none;
 }
 
 .session-tree__state {
@@ -7621,17 +9211,46 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   color: var(--ui-text-secondary);
 }
 
-.session-tree__canvas {
-  position: relative;
+.session-tree__main {
+  display: flex;
   flex: 1;
   min-height: 0;
 }
 
+.session-tree__stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-tree__canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--ui-bg-editor);
+}
+
+.session-tree__hint {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-secondary);
+  pointer-events: none;
+}
+
 .session-tree .react-flow {
   --xy-background-color: transparent;
+  --xy-background-pattern-color: var(--ui-stroke-secondary);
   --xy-edge-stroke: var(--ui-stroke-primary);
   --xy-edge-stroke-selected: var(--ui-accent);
-  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-width: 1;
   --xy-node-color: var(--ui-text-primary);
   --xy-node-border: none;
   --xy-node-background-color: transparent;
@@ -7642,27 +9261,163 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   --xy-attribution-background-color: transparent;
 }
 
-.session-tree__block {
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  padding: 0 10px;
-  border: 1px solid var(--ui-stroke-secondary);
-  border-radius: 6px;
-  background: var(--ui-bg-elevated);
-  color: var(--ui-text-primary);
-  font-size: 12.5px;
-  line-height: 1;
+.session-tree .react-flow__node {
   cursor: default;
-  user-select: none;
 }
 
-.session-tree__block-title {
+.session-tree .react-flow__node.draggable {
+  cursor: pointer;
+}
+
+.session-tree .react-flow__node.dragging {
+  cursor: grabbing;
+}
+
+.session-tree .react-flow__pane {
+  cursor: default;
+}
+
+.session-tree .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* --- toolbar --------------------------------------------------------------------------- */
+
+.st-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  background: var(--ui-bg-chrome);
   overflow: hidden;
-  min-width: 0;
-  text-overflow: ellipsis;
+}
+
+.st-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 2px;
+  font-weight: 600;
   white-space: nowrap;
 }
+
+.st-brand .codicon {
+  color: var(--ui-accent);
+}
+
+.st-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--ui-stroke-tertiary);
+}
+
+.st-spacer {
+  flex: 1;
+}
+
+.st-tb,
+.st-scope button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.st-tb:hover,
+.st-scope button:hover {
+  background: var(--ui-control-hover-background);
+  color: var(--ui-text-primary);
+}
+
+.st-tb.is-on,
+.st-scope button.is-on {
+  border-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 18%, transparent);
+  color: var(--ui-text-primary);
+}
+
+.st-zoom {
+  min-width: 44px;
+  color: var(--ui-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.st-scope {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 1px;
+  min-width: 0;
+  padding: 1px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.st-scope button {
+  height: 20px;
+  border-radius: 4px;
+}
+
+.st-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 6px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 5px;
+  color: var(--ui-text-secondary);
+}
+
+.st-profile select {
+  max-width: 120px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 11.5px;
+  outline: 0;
+}
+
+.st-profile option {
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-primary);
+}
+
+.session-tree__glyph-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.session-tree__glyph-dot--none {
+  background: var(--ui-text-quaternary);
+}
+
+.session-tree__glyph-icon {
+  flex: none;
+}
+
+/* --- blocks (Dense) -------------------------------------------------------------------- */
 
 .session-tree__handle {
   width: 1px;
@@ -7674,25 +9429,571 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   pointer-events: none;
 }
 
+.session-tree__block {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  padding: 0 6px 0 9px;
+  overflow: hidden;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-primary);
+  font-size: 12px;
+  line-height: 1;
+  transition: opacity 0.15s, border-color 0.12s, background 0.12s;
+}
+
+.session-tree__block::before {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--st-pc, var(--ui-text-quaternary));
+  content: '';
+}
+
+.session-tree__block:hover {
+  border-color: var(--ui-stroke-primary);
+}
+
+.session-tree__block.is-lineage {
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, var(--ui-stroke-secondary));
+}
+
+.session-tree__block.is-selected {
+  border-color: var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-bg-elevated));
+}
+
+.session-tree__block.is-open {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 55%, transparent);
+}
+
+.session-tree__block.is-archived {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.session-tree__block.is-out-of-scope {
+  opacity: 0.16;
+}
+
+.session-tree__block.is-standin {
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.6;
+}
+
+.session-tree__block.is-standin::before {
+  display: none;
+}
+
+.session-tree__block.is-standin .st-title {
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+}
+
+.session-tree__block.is-standin.is-out-of-scope {
+  opacity: 0.16;
+}
+
+.st-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-text-quaternary);
+  border-radius: 50%;
+}
+
+.st-dot--running {
+  border-color: var(--ui-green);
+  background: var(--ui-green);
+  animation: st-pulse 1.6s infinite;
+}
+
+.st-dot--needs-input {
+  border-color: var(--ui-yellow);
+  background: var(--ui-yellow);
+}
+
+.st-dot--unread {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+}
+
+@keyframes st-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ui-green) 60%, transparent);
+  }
+
+  70% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.st-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-age {
+  flex: none;
+  color: var(--ui-text-tertiary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-cmp {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  color: var(--ui-accent);
+  font-size: 10px;
+}
+
+.st-pin {
+  flex: none;
+  color: var(--ui-text-tertiary);
+}
+
+.session-tree__group-node {
+  pointer-events: none;
+}
+
+.session-tree__group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.session-tree__group-label.is-dimmed {
+  opacity: 0.3;
+}
+
+/* --- links (Dense) --------------------------------------------------------------------- */
+
 .session-tree__link {
   fill: none;
-  stroke: var(--ui-stroke-primary);
-  stroke-width: 1.5;
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 55%, transparent);
+  stroke-width: 1;
 }
 
 .session-tree__link--reset {
-  stroke: var(--ui-text-quaternary);
-  stroke-dasharray: 4 4;
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 80%, transparent);
+  stroke-dasharray: 4 3;
+}
+
+.session-tree__link--standin {
+  stroke-dasharray: 2 3;
+}
+
+.session-tree__link.is-highlighted {
+  stroke: var(--ui-accent);
+  stroke-width: 1.6;
+}
+
+.session-tree__link-end {
+  fill: color-mix(in srgb, var(--ui-text-tertiary) 65%, transparent);
+}
+
+.session-tree__link-end.is-highlighted {
+  fill: var(--ui-accent);
+}
+
+g.is-dimmed {
+  opacity: 0.18;
 }
 
 .session-tree__link-label {
   position: absolute;
-  padding: 1px 4px;
-  border-radius: 4px;
+  padding: 0 3px;
+  border-radius: 3px;
   background: var(--ui-bg-editor);
   color: var(--ui-text-tertiary);
-  font-size: 10.5px;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
   pointer-events: none;
+}
+
+/* --- tooltip + menu -------------------------------------------------------------------- */
+
+.session-tree__tooltip {
+  position: absolute;
+  z-index: 30;
+  max-width: 320px;
+  padding: 4px 8px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 5px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ui-text-primary) 18%, transparent);
+  color: var(--ui-text-primary);
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
+.session-tree__menu {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 3px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--ui-text-primary) 22%, transparent);
+}
+
+.session-tree__menu button {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-text-tertiary);
+  font: inherit;
+  text-align: left;
+}
+
+.session-tree__menu button.is-danger {
+  color: color-mix(in srgb, var(--ui-red) 60%, var(--ui-text-tertiary));
+}
+
+.session-tree__menu hr {
+  margin: 3px 2px;
+  border: 0;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+
+/* --- inspector (Dense) ----------------------------------------------------------------- */
+
+.st-insp {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 264px;
+  min-height: 0;
+  border-left: 1px solid var(--ui-stroke-tertiary);
+  background: var(--ui-bg-sidebar);
+  user-select: text;
+}
+
+.st-ib {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 11px;
+  overflow: auto;
+}
+
+.st-empty {
+  padding: 30px 6px;
+  color: var(--ui-text-tertiary);
+  text-align: center;
+}
+
+.st-ih {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+}
+
+.st-ih-profile {
+  padding: 0 5px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.st-ih-id,
+.st-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.st-ih-id {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-it {
+  margin: 5px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.st-it.is-standin {
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+}
+
+.st-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.st-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 6px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 9px;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+}
+
+.st-tag--run {
+  border-color: color-mix(in srgb, var(--ui-green) 45%, transparent);
+  color: var(--ui-green);
+}
+
+.st-tag--ask {
+  border-color: color-mix(in srgb, var(--ui-yellow) 50%, transparent);
+  color: var(--ui-yellow);
+}
+
+.st-tag--acc {
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, transparent);
+  color: var(--ui-accent);
+}
+
+.st-acts {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.st-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 11px;
+}
+
+.st-act:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.st-act--primary {
+  border-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+}
+
+.st-sec {
+  padding: 8px 0;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+
+.st-sh {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.st-kv {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.st-kv > div {
+  min-width: 0;
+}
+
+.st-kv small {
+  display: block;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+}
+
+.st-kv b {
+  display: block;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-cmpline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.st-cmpline .codicon {
+  color: var(--ui-accent);
+}
+
+.st-segs {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin-top: 6px;
+}
+
+.st-segs i {
+  flex: 1;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ui-text-tertiary) 35%, transparent);
+}
+
+.st-segs i.is-current {
+  background: var(--ui-accent);
+}
+
+.st-seglist {
+  margin-top: 5px;
+  color: var(--ui-text-tertiary);
+  font-size: 10.5px;
+}
+
+.st-seglist div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.st-none {
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+}
+
+.st-standin-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.st-lk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% + 10px);
+  margin: 0 -5px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-lk:hover {
+  background: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+}
+
+.st-lk:disabled {
+  cursor: default;
+}
+
+.st-lk:disabled:hover {
+  background: transparent;
+}
+
+.st-lk.is-dim {
+  opacity: 0.45;
+}
+
+.st-lk-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st-pc, var(--ui-text-quaternary));
+}
+
+.st-lk-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-lk-age {
+  color: var(--ui-text-tertiary);
+  font-size: 10.5px;
+}
+
+.st-rel {
+  flex: none;
+  width: 56px;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+}
+
+.st-singles {
+  flex: none;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+
+.st-singles-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-tertiary);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-singles-toggle b {
+  color: var(--ui-text-primary);
+  font-weight: 600;
+}
+
+.st-sl {
+  max-height: 180px;
+  padding: 0 11px 8px;
+  overflow: auto;
 }
 
 .session-tree__settings {
@@ -7702,7 +10003,7 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
 `;
 
 // src/plugin.tsx
-import { jsx as jsx5 } from "react/jsx-runtime";
+import { jsx as jsx10 } from "react/jsx-runtime";
 var PLUGIN_ID = "session-tree", ROUTE_PATH = "/session-tree";
 function injectStyles(ctx) {
   let style2 = document.createElement("style");
@@ -7719,7 +10020,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx5(SessionTreePage, { ctx })
+        render: () => /* @__PURE__ */ jsx10(SessionTreePage, { ctx })
       },
       {
         id: "nav",
@@ -7740,7 +10041,7 @@ var plugin = {
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx5(SettingsPage, {})
+      render: () => /* @__PURE__ */ jsx10(SettingsPage, {})
     });
   }
 }, plugin_default = plugin;

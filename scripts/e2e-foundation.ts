@@ -1,5 +1,7 @@
 /**
- * e2e — Session Tree 1/7 foundation, against the isolated test Hermes (coder ports 19310-19314).
+ * e2e — Session Tree 1/7 foundation, against the isolated test Hermes (the role's port block,
+ * scripts/e2e/harness.ts; card 2: coder 19320-19324). Card 2 updated the block and link checks to
+ * the graph model (singles in the inspector, the "Parent not loaded" stand-in).
  *
  *   npm run test:e2e            (SESSION_TREE_ROLE=reviewer for the reviewer's home/ports)
  *   KEEP_RUNNING=1 npm run test:e2e   leaves the test gateway up afterwards
@@ -11,7 +13,8 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { aliasIndex, forkParentId, graphLinks, visibleRows } from '../src/model/sessions.ts'
+import { buildGraph } from '../src/model/graph.ts'
+import { forkParentId, visibleRows } from '../src/model/sessions.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
@@ -213,14 +216,22 @@ async function main(): Promise<void> {
       return { rows: body.sessions.length, ms }
     })
 
-    await check('box count equals the visible-row count, ids match, hidden kinds absent', async () => {
+    await check('every visible session is a block on the canvas or a single in the inspector; hidden kinds absent', async () => {
+      // Card 2: branched sessions are canvas blocks, sessions without branches are listed in the
+      // Dense inspector's Singles list (R8) until "Show all" is on.
       const blocks = await domBlocks(s)
+      const singles = await s.page.$$eval('[data-testid="session-tree-singles"] [data-node-id]', nodes =>
+        nodes.map(n => n.getAttribute('data-node-id') ?? '')
+      )
+      const model = buildGraph(rows, [], { profile: 'default', showArchived: false, scope: 'all' })
+      const sessionsInModel = model.nodes.filter(node => node.kind === 'session')
 
-      assert(blocks.length === visible.length, `${blocks.length} blocks, ${visible.length} visible rows`)
-      sameSet(blocks, visible.map(r => r.id), 'block ids')
+      sameSet(blocks, sessionsInModel.filter(node => !node.single).map(node => node.id), 'canvas block ids')
+      sameSet(singles, model.singles.map(node => node.id), 'singles list ids')
+      sameSet([...blocks, ...singles], visible.map(r => r.id), 'blocks + singles vs visible rows')
 
       for (const id of [...manifest.hidden, ...manifest.archived, manifest.orphan.deleted_parent]) {
-        assert(!blocks.includes(id), `${id} is drawn`)
+        assert(!blocks.includes(id) && !singles.includes(id), `${id} is drawn`)
       }
 
       const compressed = manifest.compressed
@@ -235,12 +246,13 @@ async function main(): Promise<void> {
 
       assert(tipRow?.compacted_segments === compressed.segments, `compacted_segments ${tipRow?.compacted_segments}`)
 
-      return { blocks: blocks.length }
+      return { blocks: blocks.length, singles: singles.length }
     })
 
     await check('links match forkParentId (branch) and _reset_from (continued as) for the fixtures', async () => {
       const links = await domLinks(s)
-      const expected = graphLinks(visible).map(l => `${l.kind}:${l.source}->${l.target}`)
+      const model = buildGraph(rows, [], { profile: 'default', showArchived: false, scope: 'all' })
+      const expected = model.edges.map(l => `${l.kind}:${l.source}->${l.target}`)
 
       sameSet(links, expected, 'links vs graph model')
 
@@ -252,17 +264,23 @@ async function main(): Promise<void> {
         assert(links.includes(`reset:${from}->${to}`), `missing continued-as ${from}->${to}`)
       }
 
-      const alias = aliasIndex(visible)
-
-      for (const link of links.filter(l => l.startsWith('branch:'))) {
+      for (const link of links.filter(l => l.startsWith('branch:') && !l.startsWith('branch:missing:'))) {
         const [, source, target] = /^branch:(.+)->(.+)$/.exec(link)!
         const row = visible.find(r => r.id === target)!
+        const parentRow = visible.find(r => r.id === source)!
+        const named = forkParentId(row)!
 
-        assert(alias.get(forkParentId(row)!) === source, `${target}'s forkParentId does not resolve to ${source}`)
+        assert(
+          named === source || parentRow._lineage_root_id === named || (parentRow._lineage_ids ?? []).includes(named),
+          `${target}'s forkParentId ${named} does not resolve to ${source}`
+        )
       }
 
-      // The deleted parent's branch child is drawn, unlinked (its stand-in is a later card's).
-      assert(!links.some(l => l.endsWith(`->${manifest.orphan.child}`)), 'orphan child linked to something')
+      // Card 2 (R7): the deleted parent's branch child hangs off a "Parent not loaded" stand-in.
+      assert(
+        links.includes(`branch:missing:default/${manifest.orphan.deleted_parent}->${manifest.orphan.child}`),
+        'orphan child is not linked to its stand-in'
+      )
 
       return { links: links.length }
     })

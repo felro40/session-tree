@@ -7,7 +7,7 @@
  * so nothing here is bundled: esbuild marks it external.
  */
 declare module '@hermes/plugin-sdk' {
-  import type { ComponentType, ReactNode } from 'react'
+  import type { ComponentType, CSSProperties, ReactNode } from 'react'
 
   export interface ReadableAtom<T> {
     get(): T
@@ -26,6 +26,8 @@ declare module '@hermes/plugin-sdk' {
     state: {
       profile: ReadableAtom<string>
       focusedStoredSessionId: ReadableAtom<null | string>
+      focusedSessionId: ReadableAtom<null | string>
+      busy: ReadableAtom<boolean>
       busyBySession: ReadableAtom<Record<string, boolean>>
       gateway: ReadableAtom<string>
     }
@@ -114,11 +116,13 @@ declare module '@hermes/plugin-sdk' {
     queryKey: readonly unknown[]
     queryFn: () => Promise<T>
     retry?: boolean | number
+    retryDelay?: number
     refetchOnWindowFocus?: boolean
     staleTime?: number
   }): UseQueryResult<T>
 
   export const EmptyState: ComponentType<{ title: string; description?: string; className?: string }>
+  export const Codicon: ComponentType<{ name: string; size?: number | string; className?: string; style?: CSSProperties }>
   export const ListRow: ComponentType<{
     title: ReactNode
     description?: ReactNode

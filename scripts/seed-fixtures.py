@@ -22,7 +22,10 @@ DIRECT SQL is used only on this isolated fixture DB, and only for fields no API 
 ``started_at`` / ``last_activity_at`` / ``ended_at`` so rows have realistic ages.
 
 ``--touch`` renames one fixture through ``set_session_title`` (a real state.db change, used by the
-e2e to provoke ``sessions.changed``). Prints a JSON manifest of what it created.
+e2e to provoke ``sessions.changed``). ``--branch NEW_ID PARENT_ID [TITLE]`` adds a ``/branch`` child
+of a seeded session through the same API (the live-refresh check). ``--activate ID`` re-opens a
+session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
+so the core list's 300 s ``is_active`` heuristic reports it. Prints a JSON manifest of what it created.
 """
 
 from __future__ import annotations
@@ -227,9 +230,53 @@ def touch() -> dict:
         db.close()
 
 
+def add_branch(new_id: str, parent: str, title: str) -> dict:
+    """A ``/branch`` child of a seeded session, created now (the e2e's live-refresh probe)."""
+    db = SessionDB(db_path=HOME / "state.db")
+    try:
+        if db.get_session(parent) is None:
+            sys.exit(f"no session {parent}")
+        if db.get_session(new_id) is not None:
+            return {"branch": new_id, "parent": parent, "created": False}
+        parent_row = db.get_session(parent)
+        project = Path(parent_row["git_repo_root"]).name if parent_row.get("git_repo_root") else None
+        Seeder(db, "default").branch(new_id, title, parent, project=project, age_h=0.02, messages=2)
+        return {"branch": new_id, "parent": parent, "created": True}
+    finally:
+        db.close()
+
+
+def activate(sid: str) -> dict:
+    """Re-open *sid* with its last activity now. Fixture-only direct SQL (timestamps have no API)."""
+    db = SessionDB(db_path=HOME / "state.db")
+    try:
+        if db.get_session(sid) is None:
+            sys.exit(f"no session {sid}")
+        now = time.time()
+
+        def write(conn):
+            conn.execute("UPDATE sessions SET ended_at=NULL, end_reason=NULL, last_activity_at=? WHERE id=?", (now, sid))
+        db._execute_write(write)
+        return {"activated": sid, "at": now}
+    finally:
+        db.close()
+
+
 def main() -> None:
     if "--touch" in sys.argv:
         print(json.dumps(touch()))
+        return
+    if "--branch" in sys.argv:
+        args = sys.argv[sys.argv.index("--branch") + 1:]
+        if len(args) < 2:
+            sys.exit("usage: --branch NEW_ID PARENT_ID [TITLE]")
+        print(json.dumps(add_branch(args[0], args[1], args[2] if len(args) > 2 else f"Live branch {args[0]}")))
+        return
+    if "--activate" in sys.argv:
+        args = sys.argv[sys.argv.index("--activate") + 1:]
+        if not args:
+            sys.exit("usage: --activate ID")
+        print(json.dumps(activate(args[0])))
         return
     ensure_repos()
     manifest_file = HOME.parent / "fixtures-manifest.json"

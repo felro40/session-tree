@@ -1,16 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import {
-  aliasIndex,
-  compactedCount,
-  displayTitle,
-  forkParentId,
-  graphLinks,
-  HIDDEN_SOURCES,
-  isHiddenRow,
-  visibleRows
-} from '../../src/model/sessions.ts'
+import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
+import { compactedCount, displayTitle, forkParentId, HIDDEN_SOURCES, isHiddenRow, visibleRows } from '../../src/model/sessions.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 
 const row = (id: string, extra: Partial<SessionRow> = {}): SessionRow => ({
@@ -22,6 +14,15 @@ const row = (id: string, extra: Partial<SessionRow> = {}): SessionRow => ({
   last_active: 2000,
   ...extra
 })
+
+/** The graph model's links between drawn blocks (card 1's `graphLinks`, now `buildGraph`). */
+const links = (rows: SessionRow[]) =>
+  buildGraph(rows, [], { profile: 'default', showArchived: false, scope: ALL_PROJECTS }).edges.map(edge => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    kind: edge.kind
+  }))
 
 describe('forkParentId (the desktop sidebar rule)', () => {
   it('nests a /branch child under _branched_from', () => {
@@ -70,7 +71,7 @@ describe('isHiddenRow / visibleRows (R6)', () => {
   })
 })
 
-describe('graphLinks', () => {
+describe('graph links', () => {
   it('links branch children to their parent and resets as "continued as"', () => {
     const rows = [
       row('root'),
@@ -78,7 +79,7 @@ describe('graphLinks', () => {
       row('next', { _reset_from: 'root', parent_session_id: 'root' })
     ]
 
-    assert.deepEqual(graphLinks(rows), [
+    assert.deepEqual(links(rows), [
       { id: 'branch:root->kid', source: 'root', target: 'kid', kind: 'branch' },
       { id: 'reset:root->next', source: 'root', target: 'next', kind: 'reset' }
     ])
@@ -92,26 +93,28 @@ describe('graphLinks', () => {
     ]
 
     assert.deepEqual(
-      graphLinks(rows).map(l => `${l.source}->${l.target}`),
+      links(rows).map(l => `${l.source}->${l.target}`),
       ['tip->a', 'tip->b']
     )
-    assert.equal(aliasIndex(rows).get('seg2'), 'tip')
   })
 
-  it('omits links whose parent is not loaded (deleted / hidden / outside the page)', () => {
-    assert.deepEqual(graphLinks([row('orphan', { _branched_from: 'gone' })]), [])
+  it('links a branch whose parent is not loaded to a "Parent not loaded" stand-in (R7)', () => {
+    assert.deepEqual(
+      links([row('orphan', { _branched_from: 'gone' })]).map(l => `${l.source}->${l.target}`),
+      ['missing:default/gone->orphan']
+    )
   })
 
   it('never links a block to itself', () => {
     const rows = [row('tip', { _lineage_ids: ['seg1', 'tip'], _branched_from: 'seg1' })]
 
-    assert.deepEqual(graphLinks(rows), [])
+    assert.deepEqual(links(rows), [])
   })
 
   it("prefers a block's own id over another block's alias", () => {
     const rows = [row('x', { _lineage_ids: ['y', 'x'] }), row('y'), row('k', { _branched_from: 'y' })]
 
-    assert.deepEqual(graphLinks(rows).map(l => l.source), ['y'])
+    assert.deepEqual(links(rows).map(l => l.source), ['y'])
   })
 })
 
