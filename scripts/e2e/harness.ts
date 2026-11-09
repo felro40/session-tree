@@ -1,9 +1,12 @@
 /**
  * Test-Hermes harness: one isolated Hermes per role, outside ~/.hermes.
  *
- *   root  /home/david/.cache/session-tree-e2e/c1-<role>/
+ *   root  /home/david/.cache/session-tree-e2e/c<card>-<role>/
  *   home  <root>/home            (HERMES_HOME of the isolated gateway)
- *   ports coder 19310-19314, reviewer 19315-19319 (the Webapp listens on the first)
+ *   ports 19300 + 10·card: coder +0..+4, reviewer +5..+9 (the Webapp listens on the first);
+ *         card 2 (the default): coder 19320-19324, reviewer 19325-19329
+ *
+ * The card number comes from SESSION_TREE_CARD (default: the current card, 2).
  *
  * The user's real Hermes is never touched: no writes under ~/.hermes, no build in the
  * Hermes checkout (`hermes webapp --skip-build` always), and the package is linked
@@ -24,7 +27,14 @@ const NODE_BIN = dirname(process.execPath)
 
 export type Role = 'coder' | 'reviewer'
 
-const PORT_BASE: Record<Role, number> = { coder: 19310, reviewer: 19315 }
+/** The card whose test home and port block this run uses (each card of the set has its own). */
+export const CARD = Number(process.env.SESSION_TREE_CARD ?? 2)
+
+if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
+  throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)
+}
+
+const PORT_BASE: Record<Role, number> = { coder: 19300 + CARD * 10, reviewer: 19305 + CARD * 10 }
 /** Ports the user's live Hermes and host services hold; never used here. */
 export const FORBIDDEN_PORTS = [9119, 9120, 8765, 5720, 13000, 18000, 2019, 24800, 22, 25, 53, 80, 443, 631]
 
@@ -44,7 +54,7 @@ export function testHermes(role: Role = (process.env.SESSION_TREE_ROLE as Role) 
     throw new Error(`role must be coder or reviewer, got ${role}`)
   }
 
-  const root = join(E2E_ROOT, `c1-${role}`)
+  const root = join(E2E_ROOT, `c${CARD}-${role}`)
   const base = PORT_BASE[role]
 
   return {

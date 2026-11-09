@@ -22,11 +22,13 @@ export default tseslint.config(
       'no-restricted-globals': [
         'error',
         { name: 'setInterval', message: 'Use ctx.setInterval (tracked, cleared on unload).' },
+        { name: 'setTimeout', message: 'Use ctx.setTimeout (tracked, cleared on unload).' },
         { name: 'addEventListener', message: 'Use ctx.addEventListener (tracked, cleared on unload).' }
       ],
       'no-restricted-properties': [
         'error',
         { object: 'window', property: 'setInterval', message: 'Use ctx.setInterval.' },
+        { object: 'window', property: 'setTimeout', message: 'Use ctx.setTimeout.' },
         { object: 'window', property: 'addEventListener', message: 'Use ctx.addEventListener.' }
       ],
       // Only the loader's import map; react-dom is aliased to src/shims/react-dom.ts at build time.

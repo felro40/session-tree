@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
 
-from conftest import PREFIX
+from conftest import PREFIX, REPO
 
 #: The SessionInfo fields /sessions must carry (card 1: lineage, flags, place, figures, text).
 REQUIRED_FIELDS = {
@@ -160,7 +164,8 @@ def test_profile_filtering(client):
 def test_limit_caps_and_reports_truncation(client):
     response = get(client, "/sessions", session_profile="default", limit=5)
     body = response.json()
-    # A pinned row past the window is back-filled like the core list, so >= 5 before the cut.
+    # The only pinned row (st-hp-root, 2 h old) is among the 5 most recent, so nothing is
+    # back-filled past the window here (see the limit=3 test below for the back-fill).
     assert len(body["sessions"]) == 5 and body["limit"] == 5 and body["truncated"] is True
     capped = get(client, "/sessions", session_profile="*", limit=999999).json()
     assert capped["limit"] == 2000 and capped["truncated"] is False
@@ -172,6 +177,53 @@ def test_rows_are_most_recent_first(client):
     rows = rows_of(client, session_profile="default")
     recency = [row["last_active"] or row["started_at"] for row in rows]
     assert recency == sorted(recency, reverse=True)
+
+
+def test_pinned_row_past_the_limit_is_back_filled(client):
+    # Card-1 review item 1: the window is the core ``_pinned_window``, not a plain cut. The 3 most
+    # recent rows are st-sys-pairing, st-hp-mockup and st-hp-routing; the pinned st-hp-root (2 h)
+    # is past them and must still arrive, after the window.
+    body = get(client, "/sessions", session_profile="default", limit=3).json()
+    ids = [row["id"] for row in body["sessions"]]
+    assert ids[:3] == ["st-sys-pairing", "st-hp-mockup", "st-hp-routing"]
+    assert "st-hp-root" in ids and ids.index("st-hp-root") >= 3
+    assert body["sessions"][ids.index("st-hp-root")]["pinned"] is True
+    assert body["truncated"] is True
+
+
+def _visible_ids(rows: list[dict]) -> list[str]:
+    """The desktop half's own ``visibleRows`` (src/model/sessions.ts), run by node."""
+    node = os.environ.get("SESSION_TREE_NODE")
+    if not node:
+        pytest.fail("SESSION_TREE_NODE is not set (scripts/run-pytest.sh passes it)")
+    out = subprocess.run([node, str(REPO / "tests" / "py" / "visible-rows-cli.ts")], input=json.dumps(rows),
+                         capture_output=True, text=True, timeout=60, check=True)
+    return json.loads(out.stdout)
+
+
+def test_delegate_child_is_flagged_and_dropped_by_visible_rows(client, hermes_home):
+    # Card-1 review item 2: with ``sessions.show_subagents: true`` the core listing includes
+    # delegate_task runs; the backend flags them and the graph model's visibleRows drops them.
+    config = hermes_home / "config.yaml"
+    original = config.read_text(encoding="utf-8")
+    try:
+        config.write_text(original + "sessions:\n  show_subagents: true\n", encoding="utf-8")
+        later = time.time_ns() + 5_000_000_000
+        os.utime(config, ns=(later, later))  # a fresh mtime for any mtime-keyed config cache
+        rows = rows_of(client, session_profile="default")
+    finally:
+        config.write_text(original, encoding="utf-8")
+        latest = time.time_ns() + 10_000_000_000
+        os.utime(config, ns=(latest, latest))
+    delegate = by_id(rows).get("st-hidden-delegate")
+    assert delegate is not None, "show_subagents did not surface the delegate run"
+    assert delegate["is_internal_child"] is True
+    assert all(row["is_internal_child"] is False for row in rows if row["id"] != "st-hidden-delegate")
+    visible = _visible_ids(rows)
+    assert "st-hidden-delegate" not in visible
+    assert "st-hp-root" in visible
+    # Back to the default shape: the delegate run is gone again.
+    assert "st-hidden-delegate" not in by_id(rows_of(client, session_profile="default"))
 
 
 # --- read-only --------------------------------------------------------------------------------

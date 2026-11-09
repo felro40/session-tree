@@ -6,14 +6,16 @@
 # 2. The test-Hermes launcher (<root>/hermes, see scripts/e2e/harness.ts) bootstraps Hermes's
 #    runtime (the exact command `hermes --print-runtime-command` prints, with the install's
 #    committed venv Python) and runs scripts/pytest-main.py inside it.
-# 3. Tests seed their own tmp Hermes home under ~/.cache/session-tree-e2e/pytest-tmp.
+# 3. Tests seed their own tmp Hermes home under ~/.cache/session-tree-e2e/c<card>-<role>/pytest-tmp.
 set -e
 repo=$(cd "$(dirname "$0")/.." && pwd)
 e2e=${SESSION_TREE_E2E_ROOT:-$HOME/.cache/session-tree-e2e}
 role=${SESSION_TREE_ROLE:-coder}
-root="$e2e/c1-$role"
+card=${SESSION_TREE_CARD:-2}
+root="$e2e/c$card-$role"
 NODE=${NODE:-node}
 command -v "$NODE" >/dev/null 2>&1 || NODE=/home/david/.hermes/tools/node-26.12.1-linux-x64/bin/node
+NODE=$(command -v "$NODE")
 
 "$NODE" "$repo/scripts/e2e/test-hermes-cli.ts" launcher >/dev/null
 python=$("$NODE" "$repo/scripts/e2e/test-hermes-cli.ts" python)
@@ -27,12 +29,13 @@ if ! "$venv/bin/python" -m pip show pytest 2>/dev/null | grep -q '^Version: 9.2.
 fi
 site=$(ls -d "$venv"/lib/python3*/site-packages)
 
-basetemp="$e2e/pytest-tmp"
+# Per role (and card): two roles running at once must not share pytest's --basetemp.
+basetemp="$root/pytest-tmp"
 mkdir -p "$root/tmp"
 cd "$repo"
 exec env -i \
   HOME="$root/userhome" HERMES_HOME="$root/home" TMPDIR="$root/tmp" \
   HERMES_GATEWAY_LOCK_DIR="$root/locks" PATH=/usr/bin:/bin LANG=C.UTF-8 \
-  SESSION_TREE_PYTEST_SITE="$site" PYTHONDONTWRITEBYTECODE=1 \
+  SESSION_TREE_PYTEST_SITE="$site" SESSION_TREE_NODE="$NODE" PYTHONDONTWRITEBYTECODE=1 \
   "$root/hermes" --run-path "$repo/scripts/pytest-main.py" \
   -p no:cacheprovider --rootdir "$repo/tests/py" --basetemp "$basetemp" "$repo/tests/py" "$@"

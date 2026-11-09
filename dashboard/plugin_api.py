@@ -158,9 +158,13 @@ def sessions(
         # A profile that filled its page may hold more rows than were read.
         full_page = full_page or len(rows) >= capped
         merged.extend(rows)
+    from hermes_cli.web_routers.profiles import _pinned_window
+
     merged.sort(key=lambda row: row.get("last_active") or row.get("started_at") or 0, reverse=True)
     truncated = full_page or len(merged) > capped
-    window = [_shape(row) for row in merged[:capped]]
+    # The core window: the first ``capped`` rows by recency plus every pinned row past them (the
+    # per-profile queries back-fill pinned rows past their LIMIT; a plain cut would drop them).
+    window = [_shape(row) for row in _pinned_window(merged, 0, capped)]
     return {
         "sessions": window,
         "profiles": [name for name, _home in targets],

@@ -19,6 +19,7 @@ import { mkdirSync, renameSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  CARD,
   configure,
   E2E_ROOT,
   ensureLauncher,
@@ -91,7 +92,7 @@ switch (command) {
       const trash = join(E2E_ROOT, 'trash')
 
       mkdirSync(trash, { recursive: true })
-      renameSync(t.root, join(trash, `c1-${t.role}-${Date.now()}`))
+      renameSync(t.root, join(trash, `c${CARD}-${t.role}-${Date.now()}`))
     }
 
     console.log(JSON.stringify({ reset: true, root: t.root }))
