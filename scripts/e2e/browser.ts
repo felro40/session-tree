@@ -62,15 +62,38 @@ export async function goto(t: TestHermes, page: Page, route: string): Promise<vo
  * Returns whether it had to flip the switch.
  */
 export async function enableDesktopHalf(t: TestHermes, page: Page): Promise<boolean> {
-  await goto(t, page, '/capabilities?tab=plugins')
-  await page.getByPlaceholder('Search plugins').fill('session')
-  // The catalog's own Filters button is the last one on screen (the sidebar has another).
-  await page.getByRole('button', { name: /^Filters/ }).last().click()
-  await page.getByRole('button', { name: 'Installed', exact: true }).click()
-
   const toggle = page.getByRole('switch', { name: 'Desktop: Session Tree' })
 
-  await toggle.waitFor({ timeout: 20_000 })
+  // On a fresh home the desktop half is copied into desktop-plugins/ by the first root scan, so
+  // the package's Desktop switch can be missing on the first visit: Rescan, then reload.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await goto(t, page, '/capabilities?tab=plugins')
+
+    if (attempt === 1) {
+      await page.getByRole('button', { name: 'Rescan' }).click().catch(() => undefined)
+      await page.waitForTimeout(3000)
+    } else if (attempt === 2) {
+      await page.reload()
+    }
+
+    await page.getByPlaceholder('Search plugins').fill('session')
+    // The catalog's own Filters button is the last one on screen (the sidebar has another).
+    await page.getByRole('button', { name: /^Filters/ }).last().click()
+    await page.getByRole('button', { name: 'Installed', exact: true }).click()
+
+    // Grid mode lists the package as a card: open it to reach the per-half switches.
+    if (!(await toggle.waitFor({ timeout: 3000 }).then(() => true, () => false))) {
+      await page.locator('main').getByText('Session Tree', { exact: true }).first().click().catch(() => undefined)
+    }
+
+    if (await toggle.waitFor({ timeout: 10_000 }).then(() => true, () => false)) {
+      break
+    }
+
+    await page.keyboard.press('Escape')
+  }
+
+  await toggle.waitFor({ timeout: 10_000 })
 
   if ((await toggle.getAttribute('aria-checked')) === 'true') {
     return false

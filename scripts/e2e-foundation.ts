@@ -150,7 +150,10 @@ async function main(): Promise<void> {
     })
 
     await check('desktop half is enabled in Capabilities → Plugins (it ships disabled)', async () => {
-      const flipped = await enableDesktopHalf(t, s.page)
+      const flipped = await enableDesktopHalf(t, s.page).catch(async error => {
+        await s.page.screenshot({ path: join(shots, 'enable-desktop-half-failure.png') })
+        throw error
+      })
 
       return { flipped }
     })
