@@ -27,13 +27,13 @@ actions, synced layout and settings arrive in cards 2–7.
 
 ### Backend API
 
-- `GET /health?profile=<name|*>` → `{ ok, plugin, version, profiles }`.
-- `GET /sessions?profile=<name|*>&include_archived=<bool>&limit=<n>` → `{ sessions, profiles,
+- `GET /health?session_profile=<name|*>` → `{ ok, plugin, version, profiles }`.
+- `GET /sessions?session_profile=<name|*>&include_archived=<bool>&limit=<n>` → `{ sessions, profiles,
   limit, truncated, errors }`. Rows are the core session list's (`SessionDB.list_sessions_rich`
   through Hermes's own read-only profile helpers, exactly as `GET /api/profiles/sessions`), with
   `SessionInfo` fields plus `is_internal_child` and `compacted_segments` (the number of earlier
   compression segments folded into the row). `limit` defaults to 500 and is capped at 2000.
-- Every endpoint requires `profile`; a malformed name is a 400, an unknown profile a 404.
+- Every endpoint requires `session_profile`; a malformed name is a 400, an unknown profile a 404. The key is not `profile`: on plugin routes `?profile=` is the gateway's own profile selector (the Webapp sets it to the active profile on every `ctx.rest` call), so it cannot carry the data selection (see `docs/measured-facts.md`, pre-check 5).
 
 ## Development
 

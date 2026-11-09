@@ -128,6 +128,16 @@ forbidden.
   `{"type":"plugin.st-probe.ping","session_id":"","payload":{"n":1},…}`. → Card 4: push layout
   changes with `broadcast_plugin_event` + `host.onEvent`, keep polling as the fallback; do not use
   `ctx.socket`.
+- **`?profile=` is reserved on plugin routes (deviation from the card's `profile=` parameter).**
+  The Webapp transport adds `?profile=<active profile>` to every `ctx.rest` call unless the path
+  already has one (`lib/browser-transport.ts:64`), and the gateway uses it to pick which profile's
+  plugin scope serves the request (`plugin_request_scope`, `web_server_plugin_profiles.py:183`); a
+  request routed to a secondary profile's plugin host gets `profile` stripped
+  (`_GATEWAY_QUERY_KEYS`). Measured: `GET /sessions?profile=scale` from the Webapp answered
+  `404 {"detail":"Plugin not found"}` (session-tree is enabled for `default` only). So the backend's
+  data selector is **`session_profile=<name|*>`**; `profile` stays the gateway's routing key and is
+  left to the transport. A profile without the plugin enabled therefore shows the "backend is off"
+  EmptyState, which is what its text asks for.
 
 ## Pre-check 6 — open in a tab
 

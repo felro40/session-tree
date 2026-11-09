@@ -6,7 +6,11 @@ is the page's session data source.
 
 Rules (Shared requirement 5):
 
-* Every endpoint takes ``profile`` and refuses an unknown one (``*`` means every profile).
+* Every endpoint takes the profile it reads as ``session_profile`` and refuses an unknown one
+  (``*`` means every profile). Not ``profile``: on plugin routes that query key is the gateway's own
+  profile selector (``hermes_cli/web_server_plugin_profiles.py`` ``plugin_request_scope``; the Webapp
+  transport sets ``?profile=<active profile>`` on every ``ctx.rest`` call, and a request forwarded to
+  a secondary profile's plugin host arrives with it stripped), so it cannot carry the data selection.
 * Reads go through Hermes's own listing, the same one ``GET /api/profiles/sessions`` runs:
   ``_profile_targets`` → ``_read_profile_db`` (a read-only ``SessionDB`` open) →
   ``SessionDB.list_sessions_rich`` → ``_tag_rows`` → ``_strip_session_list_rows``.
@@ -53,7 +57,7 @@ def _resolve_profiles(profile: str) -> list[tuple[str, Any]]:
     name, 404 for a well-formed name this Hermes does not have."""
     name = (profile or "").strip()
     if name != ALL_PROFILES and not _PROFILE_RE.fullmatch(name):
-        raise HTTPException(status_code=400, detail="profile must be a profile name or '*'")
+        raise HTTPException(status_code=400, detail="session_profile must be a profile name or '*'")
     targets = _profile_targets()
     if name == ALL_PROFILES:
         return targets
@@ -115,16 +119,24 @@ def _shape(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+#: The data selector's query key (see the module docstring for why it is not ``profile``).
+PROFILE_PARAM = "session_profile"
+
+
+def _profile_query():
+    return Query(..., alias=PROFILE_PARAM, max_length=64)
+
+
 @router.get("/health")
-def health(profile: str = Query(..., max_length=64)) -> dict[str, Any]:
-    """Liveness for the desktop half: 200 means the backend is mounted for *profile*."""
+def health(profile: str = _profile_query()) -> dict[str, Any]:
+    """Liveness for the desktop half: 200 means the backend is mounted and *profile* is known."""
     names = [name for name, _home in _resolve_profiles(profile)]
     return {"ok": True, "plugin": PLUGIN_ID, "version": VERSION, "profiles": names}
 
 
 @router.get("/sessions")
 def sessions(
-    profile: str = Query(..., max_length=64),
+    profile: str = _profile_query(),
     include_archived: bool = False,
     limit: int = Query(DEFAULT_LIMIT, ge=1),
 ) -> dict[str, Any]:

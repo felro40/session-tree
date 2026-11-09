@@ -692,12 +692,13 @@ import { useMemo as useMemo3 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
+var PROFILE_PARAM = "session_profile";
 function fetchHealth(ctx, profile) {
-  return ctx.rest(`/health?profile=${encodeURIComponent(profile)}`, { timeoutMs: 8e3 });
+  return ctx.rest(`/health?${PROFILE_PARAM}=${encodeURIComponent(profile)}`, { timeoutMs: 8e3 });
 }
 function fetchSessions(ctx, { profile, includeArchived = !1 }) {
   let query = new URLSearchParams({
-    profile,
+    [PROFILE_PARAM]: profile,
     include_archived: String(includeArchived),
     limit: String(2e3)
   });

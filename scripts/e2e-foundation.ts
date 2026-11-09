@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     let visible: SessionRow[] = []
 
     await check('backend rows come through the plugin route; raw rows include the machine sources', async () => {
-      const body = await backendRows(s, 'profile=default&include_archived=false&limit=2000')
+      const body = await backendRows(s, 'session_profile=default&include_archived=false&limit=2000')
 
       assert(Array.isArray(body.sessions), `GET /sessions → ${JSON.stringify(body).slice(0, 200)}`)
       rows = body.sessions
@@ -200,7 +200,7 @@ async function main(): Promise<void> {
 
     await check('scale fixture: the backend returns all 500 rows of the scale profile', async () => {
       const started = Date.now()
-      const body = await backendRows(s, 'profile=scale&include_archived=false&limit=2000')
+      const body = await backendRows(s, 'session_profile=scale&include_archived=false&limit=2000')
       const ms = Date.now() - started
 
       assert(body.sessions.length === 500, `${body.sessions.length} rows`)

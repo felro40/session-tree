@@ -41,10 +41,14 @@ export async function signIn(t: TestHermes, page: Page): Promise<void> {
   })
   await page.getByRole('button', { name: 'Sessions', exact: true }).first().waitFor({ timeout: 30_000 }).catch(() => undefined)
 
+  // A fresh test home shows a full-screen first-run provider dialog that mounts a few seconds
+  // after the app; it intercepts every click until dismissed.
   const later = page.getByText("I'll choose a provider later")
 
-  if (await later.isVisible({ timeout: 4000 }).catch(() => false)) {
+  if (await later.waitFor({ timeout: 12_000 }).then(() => true, () => false)) {
     await later.click()
+    await later.waitFor({ state: 'detached', timeout: 15_000 }).catch(() => undefined)
+    await page.locator('[data-glass-opaque]').first().waitFor({ state: 'detached', timeout: 15_000 }).catch(() => undefined)
   }
 }
 

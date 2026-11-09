@@ -43,7 +43,7 @@ def by_id(rows: list[dict]) -> dict[str, dict]:
 # --- /health ---------------------------------------------------------------------------------
 
 def test_health_answers_for_a_known_profile(client):
-    response = get(client, "/health", profile="default")
+    response = get(client, "/health", session_profile="default")
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True and body["plugin"] == "session-tree"
@@ -51,19 +51,19 @@ def test_health_answers_for_a_known_profile(client):
 
 
 def test_health_all_profiles(client):
-    body = get(client, "/health", profile="*").json()
+    body = get(client, "/health", session_profile="*").json()
     assert {"default", "work", "scale"} <= set(body["profiles"])
 
 
 @pytest.mark.parametrize("path", ["/health", "/sessions"])
 def test_unknown_profile_is_refused(client, path):
-    assert get(client, path, profile="nope").status_code == 404
+    assert get(client, path, session_profile="nope").status_code == 404
 
 
 @pytest.mark.parametrize("profile", ["../default", "DEFAULT", "a b", "x" * 65, ""])
 @pytest.mark.parametrize("path", ["/health", "/sessions"])
 def test_malformed_profile_is_refused(client, path, profile):
-    assert get(client, path, profile=profile).status_code in (400, 422)
+    assert get(client, path, session_profile=profile).status_code in (400, 422)
 
 
 @pytest.mark.parametrize("path", ["/health", "/sessions"])
@@ -71,10 +71,18 @@ def test_profile_is_required(client, path):
     assert client.get(f"{PREFIX}{path}").status_code == 422
 
 
+@pytest.mark.parametrize("path", ["/health", "/sessions"])
+def test_gateway_profile_key_is_not_the_data_selector(client, path):
+    # ``?profile=`` is the gateway's plugin-route profile selector (the Webapp sets it on every
+    # ctx.rest call); the backend only reads ``session_profile``.
+    assert get(client, path, profile="default").status_code == 422
+    assert get(client, path, profile="nope", session_profile="default").status_code == 200
+
+
 # --- /sessions: field set and lineage ---------------------------------------------------------
 
 def test_every_row_carries_the_session_info_fields(client):
-    rows = rows_of(client, profile="default")
+    rows = rows_of(client, session_profile="default")
     assert rows
     for row in rows:
         missing = REQUIRED_FIELDS - row.keys()
@@ -83,7 +91,7 @@ def test_every_row_carries_the_session_info_fields(client):
 
 
 def test_branch_reset_and_compression_lineage(client, manifest):
-    rows = by_id(rows_of(client, profile="default"))
+    rows = by_id(rows_of(client, session_profile="default"))
     assert rows["st-sys-comments"]["_branched_from"] == "st-sys-tip"
     assert rows["st-sys-reply"]["_branched_from"] == "st-sys-comments"
     assert rows["st-sys-mcp"]["_branched_from"] == "st-sys-seg2"
@@ -104,14 +112,14 @@ def test_branch_reset_and_compression_lineage(client, manifest):
 
 
 def test_orphaned_branch_child_keeps_its_marker(client, manifest):
-    rows = by_id(rows_of(client, profile="default"))
+    rows = by_id(rows_of(client, session_profile="default"))
     orphan = manifest["orphan"]
     assert manifest["orphan"]["deleted_parent"] not in rows
     assert rows[orphan["child"]]["_branched_from"] == orphan["deleted_parent"]
 
 
 def test_flags_and_raw_machine_sources(client):
-    rows = by_id(rows_of(client, profile="default"))
+    rows = by_id(rows_of(client, session_profile="default"))
     # Raw rows: the graph model (not the backend) hides cron/kanban/tool sessions.
     assert rows["st-hidden-cron"]["source"] == "cron"
     assert rows["st-hidden-kanban"]["source"] == "kanban"
@@ -131,8 +139,8 @@ def test_flags_and_raw_machine_sources(client):
 # --- /sessions: archived, profiles, limit -----------------------------------------------------
 
 def test_archived_hidden_by_default_and_included_on_request(client, manifest):
-    default_ids = set(by_id(rows_of(client, profile="default")))
-    with_archived = by_id(rows_of(client, profile="default", include_archived="true"))
+    default_ids = set(by_id(rows_of(client, session_profile="default")))
+    with_archived = by_id(rows_of(client, session_profile="default", include_archived="true"))
     for sid in manifest["archived"]:
         assert sid not in default_ids
         assert with_archived[sid]["archived"] is True
@@ -140,28 +148,28 @@ def test_archived_hidden_by_default_and_included_on_request(client, manifest):
 
 
 def test_profile_filtering(client):
-    default_rows = rows_of(client, profile="default")
-    work_rows = rows_of(client, profile="work")
-    every = rows_of(client, profile="*")
+    default_rows = rows_of(client, session_profile="default")
+    work_rows = rows_of(client, session_profile="work")
+    every = rows_of(client, session_profile="*")
     assert {row["profile"] for row in default_rows} == {"default"}
     assert {row["profile"] for row in work_rows} == {"work"} and len(work_rows) == 3
     assert {"default", "work", "scale"} <= {row["profile"] for row in every}
-    assert len(every) == len(default_rows) + len(work_rows) + len(rows_of(client, profile="scale"))
+    assert len(every) == len(default_rows) + len(work_rows) + len(rows_of(client, session_profile="scale"))
 
 
 def test_limit_caps_and_reports_truncation(client):
-    response = get(client, "/sessions", profile="default", limit=5)
+    response = get(client, "/sessions", session_profile="default", limit=5)
     body = response.json()
     # A pinned row past the window is back-filled like the core list, so >= 5 before the cut.
     assert len(body["sessions"]) == 5 and body["limit"] == 5 and body["truncated"] is True
-    capped = get(client, "/sessions", profile="*", limit=999999).json()
+    capped = get(client, "/sessions", session_profile="*", limit=999999).json()
     assert capped["limit"] == 2000 and capped["truncated"] is False
-    assert get(client, "/sessions", profile="default", limit=0).status_code == 422
-    assert get(client, "/sessions", profile="default", limit="many").status_code == 422
+    assert get(client, "/sessions", session_profile="default", limit=0).status_code == 422
+    assert get(client, "/sessions", session_profile="default", limit="many").status_code == 422
 
 
 def test_rows_are_most_recent_first(client):
-    rows = rows_of(client, profile="default")
+    rows = rows_of(client, session_profile="default")
     recency = [row["last_active"] or row["started_at"] for row in rows]
     assert recency == sorted(recency, reverse=True)
 
@@ -179,12 +187,12 @@ def _fingerprint(home: Path) -> dict[str, tuple]:
 
 
 def test_reads_never_write_the_session_store(client, hermes_home):
-    rows_of(client, profile="*")  # warm: any one-time open work happens before the baseline
+    rows_of(client, session_profile="*")  # warm: any one-time open work happens before the baseline
     before = _fingerprint(hermes_home)
     assert before
-    for params in ({"profile": "default"}, {"profile": "*", "include_archived": "true"}, {"profile": "work"}):
+    for params in ({"session_profile": "default"}, {"session_profile": "*", "include_archived": "true"}, {"session_profile": "work"}):
         rows_of(client, **params)
-    get(client, "/health", profile="*")
+    get(client, "/health", session_profile="*")
     assert _fingerprint(hermes_home) == before
 
 
