@@ -23,7 +23,7 @@ them); the session actions are shown but disabled (card 3); the other three styl
 |---|---|
 | `src/model/branch-tree.ts` | Port of the desktop's `session-branch-tree.ts` rules (forkParentId nesting, compression collapse); its tests are mirrored in `tests/js/branch-tree.test.ts`. |
 | `src/model/graph.ts` | Rows + `projects.tree` → nodes, edges, families, singles, stand-ins, scope (`buildGraph`). |
-| `src/model/layout.ts`, `layout-memory.ts` | Deterministic tidy-tree layout and the merge that places new sessions without moving placed blocks; in-memory positions per style + profile + scope. |
+| `src/model/layout.ts`, `layout-memory.ts` | Deterministic tidy-tree layout and the merge that places new sessions inside their own project group's band without moving placed blocks; in-memory positions per style + profile + scope. |
 | `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense: `curveRouter`); on-drop detours on a sparse orthogonal grid (A*). |
 | `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
 | `src/styles/` | The style registry (`registry.ts`), the style contract (`types.ts`) and the Dense style (`dense/`). |

@@ -234,8 +234,9 @@ HEAD `e8a04a214e05930d45ed0f8167e09cb3f2feda21`, `git status --short` empty. Car
 
 ## Bundle
 
-- **`desktop/plugin.js`: 467 052 bytes** (48 esbuild inputs), byte-identical over two builds
-  (sha256 `79bf53b4…d32d0cc`). Loader cap 16 MiB; test budget 2 MiB. No new runtime dependency.
+- **`desktop/plugin.js`: 471 726 bytes** (48 esbuild inputs) after fix r1 (was 467 052 at
+  `b52eaf9`), byte-identical over two builds (sha256 `19dc53bd…416e14b`). Loader cap 16 MiB; test
+  budget 2 MiB. No new runtime dependency.
 
 ## `projects.tree` as the scope source
 
@@ -283,6 +284,18 @@ ring (R11). Out-of-scope blocks and stand-ins never open.
   (0.20, 0.10) px; 12 more wheel-ups clamp at 250 %, 20 wheel-downs at 30 %. Middle-drag (140, 90)
   panned exactly (140, 90); Space + left-drag (−110, 60) panned (−110, 60); left-drag on empty
   canvas kept the viewport and cleared the selection.
+- Space + left-drag also pans when it starts on a block (fix r1): while Space is held every block
+  is rendered `draggable: false`, so it has no `nopan` class and d3-zoom takes the drag. Measured:
+  Space + drag (100, 60) from `st-sys-tip` panned (100, 60), the block stayed put. A Space typed in
+  a form field does not count (same rule as React Flow's key handling).
+- The profile `<select>` blurs after a change (and on Escape): a focused form control swallows the
+  Space key, so Space + drag did not pan after choosing a profile. The other toolbar controls never
+  take focus from the mouse (`mousedown` default prevented). Measured: after work → default the
+  active element is `BODY` and Space + drag (80, −50) panned (80, −50).
+- Show archived keeps the canvas mounted (fix r1): the sessions query keeps the previous rows as
+  placeholder data while the same profile refetches, so no "Loading sessions…" state, no remount and
+  no re-fit. Measured: the viewport stayed at (165.5, 119.75, 1.25) through on and off, the selection
+  and inspector stayed, and the loading state never appeared (MutationObserver count 0).
 - Snap: `snapToGrid` with a 16 px grid and a dot `Background` whose pattern pitch is 16 × zoom; a
   drop of (+37, +23) px landed on (480, 48) (multiples of 16); with snap off a (13, 7) flow-px drag
   moved the block by exactly that.
@@ -292,8 +305,12 @@ ring (R11). Out-of-scope blocks and stand-ins never open.
 - While a block is dragged, its links are redrawn live from the blocks' current rectangles (the
   stored route no longer matches the ends, so the plain bezier is drawn). On drop, every link is
   checked against every other block (`routeLinks`); a crossing one gets an orthogonal A* path on a
-  sparse grid around the obstacles inflated by 12 px (6, then 3 px when a block sits next to a
-  port), drawn with corner radius below the clearance, and validated by sampling.
+  sparse grid around the obstacles inflated by 12 px (6, 3, then 1 px when a block sits next to a
+  port), drawn with corner radius below the clearance, and validated by sampling. From its stub the
+  path may turn (only doubling back into the source block is barred), so a port 4 px from a
+  neighbour leaves through the gap; only a neighbour under 2 px away boxes a port in. The
+  randomised unit test drops a block 0–10 px from each port: 400 rounds, 805 close drops, 62 boxed
+  in (counted, bounded ≤ 25 %), every other round with no sampled point inside another block.
 - e2e: the cross-project link stretched to 460 px stays plain; dropping `st-md-redline` onto it
   makes it `data-detoured="true"`; 121 screen-space samples of that path (SVG
   `getPointAtLength` × CTM) and of all 12 links enter no other block.
@@ -304,6 +321,15 @@ ring (R11). Out-of-scope blocks and stand-ins never open.
 visible. A branch seeded with `seed-fixtures.py --branch` while the page was open appeared after
 782 ms; none of the 20 existing blocks (one of them user-dragged) moved.
 
+New blocks go inside their own project group's band, from under its label down to the next group's
+label (fix r1): a new family member next to its relative (parent's next column, nearest free row),
+else in the next column to the right with a free row in the band; a new family or single at the
+first free spot of its band; a family taller than its band under everything, with a continuation
+label of its project; a project with no group yet as a labelled block under everything. Measured on
+the fixture: the live child of `st-hp-root` landed at (444, 276) in the hermes-plugins band
+(220–310), the live child of `st-sys-tip` at (444, 128) in the syscanvas band (26–194), both
+overlapping nothing, in All projects and in the syscanvas scope; no existing block moved.
+
 ## 500-session scale fixture
 
 Profile `scale` with **Show all** (500 blocks laid out: 10 families of 10 + 400 singles):
@@ -313,6 +339,9 @@ Profile `scale` with **Show all** (500 blocks laid out: 10 families of 10 + 400 
   above 150 blocks (335 block elements in the DOM at that zoom).
 - **scripted 2 s middle-drag pan: 123 frames in 2003 ms = 61.4 fps** (requestAnimationFrame count,
   120 real mouse moves).
+- After fix r1 (`ea5cb4d`): first render **313 ms**, pan **123 frames in 2005 ms = 61.3 fps**
+  (reviewer baseline at `b52eaf9`: 314 ms, 60.3 fps). Turning Show all on over the existing
+  `scale` layout places the 400 singles in their bands in about 25 ms (`mergeLayout`, node).
 
 ## Deviations
 
