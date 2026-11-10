@@ -699,3 +699,128 @@ reviewer, lint and unit tests re-checked here): lint 0, build 0 (505 406 B), `np
   the earlier run stay in the home); on a fresh home (as every card's final run) it is 28/28. The
   harness now also moves the layout store aside on setup, so synced state cannot carry over.
 
+## Fix r1 (card 4) — refused-save loop, layout key across compaction, NB1–NB4
+
+Measured 2026-11-10 by the card-4 fix worker on fix base `0342f32`, code commit `a86e4e0`, in the
+isolated homes `c4-coder` (reset first), `c4-coder-actions` and `c4-coder-sync` (ports 19340–19344).
+Baseline at `0342f32` (r1 reviewer, unit and pytest re-checked here): lint 0, build 0 (534 773 B),
+`npm test` 157/157, `test:py` 162, `test:e2e` 95/95.
+
+### B1 — a refused save never loops
+
+- **Classification** (`refusalKind` in `src/model/layout-sync.ts`): no HTTP answer (network,
+  timeout), 5xx, 408, 429 are transient (queue kept, offline banner, backoff 1/2/5/5/10 s, nothing
+  notified); any other 4xx is a refusal; a 409 whose detail contains `newer_schema` is its own kind.
+  The backend's 409 detail now starts `newer_schema: state.json has schema N; …`.
+- **Newer schema:** `GET /state` on a newer-schema file answers `read_only: true, store_schema: N`
+  (epoch `newer`, empty layouts), so the page usually never sends a write at all; a write that
+  meets one (the file changed after the page's fetch) gets the 409 and the page goes read-only
+  then. Read-only: no position, layout or settings write, the flush timer not armed, one banner
+  (`session-tree-read-only`), one notice (`kind: warning`); auto-layout, drags, Re-arrange and
+  settings keep working in that window only. A later full `GET /state` without `read_only` leaves
+  the mode (changes made meanwhile are dropped, as the banner said).
+- **Other refusals:** the op is dropped; refused `if_absent` placements are remembered per layout +
+  key, so `place()` on the next render does not queue them again; one notice per status per page.
+- **Unit (r1 probe form, the page's subscribe → `place()` loop):** 409 newer_schema on a write → 1
+  request over 150 re-renders, then 0 over 150 more re-renders + a drop, settings, forget,
+  Re-arrange + Undo and 150 polls; 1 notice. GET `read_only` → 0 writes over 120 re-renders and a
+  drop, 1 notice; a supported GET → saving resumes (1 `if_absent`). 413 → exactly 1 request per
+  distinct op (2 blocks; then a 3rd block; then a drop: 3 requests over 240 re-renders), 1 notice,
+  never offline.
+- **e2e (sync suite, the r1 repro on a real gateway):** gateway stopped, `state.json` =
+  `{"schema":2,"rev":3,…,"extra":{}}`, restarted, tab signed in again, page opened: **0 writes** in
+  the ≥ 10 s after the banner appeared (r1: 33 PATCH in 10 s), **1 notice** (counted by wrapping the
+  SDK's `host.notify` before the plugin loads; r1: "Show 45 more notifications"), banner text exact,
+  the file byte-identical, no plugin page error; a real drag still moves the block locally and is
+  not sent. Then a valid schema-1 file (no epoch) → after a reload the banner is gone and the
+  auto-layout is saved again (21 entries, a fresh epoch, rev 1).
+
+### B2 — the layout key of a compacted block is its lineage root (+ NB3)
+
+- Where the root comes from: the backend's `/sessions` rows are the core list's
+  (`list_sessions_rich` → `project_compression_tips`), which sets `_lineage_root_id` = the root
+  row's id on the projected tip row (and `None` for a session never compacted). pytest
+  `test_the_listing_names_a_compacted_block_by_its_tip_and_reports_the_lineage_root` reads it back
+  on a real two-segment lineage. The page: `GraphNode.layoutKey` = `_lineage_root_id || id`
+  (profile-qualified only on a clash, like ids); `layoutKeysOf(model)` maps block id ↔ key in
+  `place()`, drops and forget; Re-arrange/Undo already carry keys. Selection, open, actions,
+  focus and the Branch parent still use the tip id.
+- Backend canonicalisation in the same step as prune: `SessionDB.get_compression_lineage(id)` per
+  stored id (`[]` = gone, `[0]` = root), member keys re-keyed to the root, newer `updated_at` wins
+  on a clash, member keys dropped. pytest on the store (tip → root, profile-qualified keys, clash
+  both ways, middle segment + tip piling up → one root entry, root keys kept, gone keys dropped,
+  nothing written when settled) and through the API on real SessionDB rows (migration; a
+  compaction through `seed-fixtures.compact`; a late write under the former tip folded in).
+- **e2e:** (1) migration: the conversation's entry stored the card-4 way (root key forgotten, the
+  tip key written at (354, 289)) → after a reload the block is at (354, 289); on disk only
+  `st-sys-root` at that spot, no `st-sys-tip`. (2) drag the ×3 block to (256.7, 353.9), compact it
+  through SessionDB (`seed-fixtures.py --compact st-sys-tip st-sys-seg5`: lineage
+  root → seg2 → seg3 → tip → seg5), reload → the block is now `st-sys-seg5`, says ×4, sits at
+  (256.7, 353.9) exactly; on disk `st-sys-root` at that spot and neither tip key; no save mentions
+  a tip id; B shows it there too. (r1 P4: the ×4 block jumped to (0, 60).)
+
+### NB1 — windows on one device
+
+- `layoutPending.v2` = `{slots: {<window>: {beat, ops}}}`; a window rewrites only its slot; slots
+  silent for 30 s (or released on `pagehide` / dispose: beat 0) are adopted by the next window that
+  constructs or polls; the card-4 `layoutPending.v1` list is adopted once and cleared.
+  `layoutDrops.v1` records the latest drop time per layout + key on the device, and a queued drop
+  older than that is discarded before sending.
+- **Unit P5** (one storage, two `LayoutSync`s, A's writes blocked): A drops `st-md-katex` at p1; A2
+  opens and does **not** replay it (no PATCH; A's slot still holds 1 op); A2 drops at p2 (stored);
+  A unblocked → nothing sent, the store ends at **p2**, A's queue empty. Also: two windows queueing
+  offline keep both queues (3 ops) and all land; a closed window's slot (31 s silent) and the v1
+  list are adopted and sent; a released slot is adopted at once by the reloaded page.
+
+### NB2 — store epoch
+
+- 16-hex `epoch` minted on every fresh file (first write, after corrupt-file recovery, after a
+  deletion); a file without it loads as `legacy` until its next write; no file is `none`. `GET
+  /state?since_rev=&epoch=` answers unchanged only for the same pair; pushes carry `{epoch, rev}`;
+  the page refreshes on any push of another epoch. pytest: deleted file → same rev 1 under a new
+  epoch, the old pair gets the full state; legacy load + first write persists a real epoch;
+  malformed epochs are corrupt files. Unit: a recreated file at the same rev 3 is picked up by
+  push and by poll (0342f32: the push was ignored, the poll said unchanged).
+
+### NB4 — Branch on the same source
+
+- `createBranchCooldown` also tracks the source: ignored while its request is in flight and for
+  800 ms after it returns (answer or failure); `guardedBranch` is the one path the controller uses.
+- Unit with a held request (a slow refetch: nothing selected the child yet): a click at 300 ms
+  (in flight), at 600 ms and 799 ms after the return → ignored, one request; at 801 ms a new one.
+- **e2e (actions suite):** the page's `/sessions` held 1.5 s per request; real clicks on the
+  inspector's Branch of `st-sys-reply` 604 ms apart, the parent still selected at the second click
+  → exactly **one** child, which is then selected.
+
+### How each new test was shown to fail on `0342f32`
+
+A scratch tree with `0342f32`'s `src/` and `dashboard/` and this commit's `tests/` and `scripts/`:
+- **pytest:** 14 of the new tests fail (canonicalise ×3, epoch ×2, malformed epoch ×4, newer schema
+  read-only ×1 in `test_layout_store.py`; migration, compaction, newer-schema API, epoch poll in
+  `test_state_api.py`); the listing fact check passes (it checks Hermes, not this code).
+- **unit:** the new symbols were shimmed onto the old code (constants; `refusalKind` from the old
+  `isRefusal`; `layoutKeysOf` with no keys; `guardedBranch` = the 0342f32 controller's Branch path).
+  The 409 and 413 loop tests first hung the runner (the refusal loop never yields); with the scratch
+  FakeServer capped at 2000 calls they fail with ~2000 requests. GET read-only, classification
+  (404 was transient), B2 keys (graph and sync), P5, own-slot, orphan, release and epoch fail; both
+  NB4 tests fail (the second click sends or joins a request). The transient-retry test passes on
+  both (a guard for existing behaviour).
+- **e2e:** not re-run on the old build; the same repros are the r1 reviewer's probes P4/P6
+  (`0342f32`: block at (0, 60); 33 PATCH and 45+ notifications in 10 s).
+
+### Simulated or not exercised end to end
+
+- NB1 and NB2 are proven in unit tests (fake storage shared by two `LayoutSync`s; a fake server
+  that recreates its file) and pytest; no e2e drives two windows of one context against a blocked
+  route, nor a deleted `state.json` with a window holding the same rev.
+- Running / needs input stay simulated at `host.state` (cards 2–3).
+
+### Gates, bundle and numbers (code commit `a86e4e0`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 544 571 bytes** (56 inputs; was 534 773), byte-identical over two builds
+  (sha256 `76007674…73a1b577`).
+- lint 0; build 0; `npm test` 171/171 (was 157); `test:py` 177 (was 162); `test:e2e` 99/99 —
+  foundation 19 + core-dense 28 + actions 30 (was 29) + sync 22 (was 19).
+- **500 fixture** (fresh `c4-coder` home, this run): first render **313 ms**, pan 122 frames in
+  2002 ms = **60.9 fps**.
+

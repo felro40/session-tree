@@ -80,9 +80,12 @@ Session actions (card 3; `session_profile` names one profile, `*` is a 400; an u
 - Nothing in the backend writes `state.db` itself.
 
 Synced layout store (card 4; `session_profile` may be `*`, the All profiles view's own layouts; see
-`docs/layout-sync.md`): `GET /state[?since_rev=]`, `PATCH /state/positions`, `PATCH /settings`,
+`docs/layout-sync.md`): `GET /state[?since_rev=&epoch=]`, `PATCH /state/positions`, `PATCH /settings`,
 `DELETE /state/layout?style=&scope=` (Re-arrange), `PUT /state/layout` (Undo), `POST /state/forget`.
-They write only `<HERMES_HOME>/session-tree/state.json` and push `plugin.session-tree.layout.changed`.
+They write only `<HERMES_HOME>/session-tree/state.json` and push `plugin.session-tree.layout.changed`
+(`{epoch, rev, profile, kind}`). Positions are keyed by layout key (a compacted conversation's
+lineage root, so a compaction does not move it); a `state.json` of a newer schema is served
+read-only and never written (409 `newer_schema`).
 
 Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (Pin, Appearance),
 `session.branch_stored` (Branch), `session.workspace.move` (Move to project), `session.title`
