@@ -824,3 +824,129 @@ A scratch tree with `0342f32`'s `src/` and `dashboard/` and this commit's `tests
 - **500 fixture** (fresh `c4-coder` home, this run): first render **313 ms**, pan 122 frames in
   2002 ms = **60.9 fps**.
 
+
+# Measured facts — Session Tree 5/7 (Project swimlanes)
+
+Measured 2026-11-10 by the card-5 coder in the isolated test Hermes `~/.cache/session-tree-e2e/c5-coder/home`
+(ports 19350–19354; the harness default card is now 5) and, for the mutating suites, their own fresh
+homes `c5-coder-actions`, `c5-coder-sync` and `c5-coder-swim` on the same ports. The style is
+described in `docs/swimlanes.md`.
+
+## Step 0
+
+Card start commit `b56708ca991edd4dc142c2bb4519e8965ebaa9d8`, `git status --short` empty. Baseline
+(card-4 reviewer; lint, build and unit tests re-checked here): lint 0, build 0 (544 571 B), `npm test`
+171/171, `test:py` 177, `test:e2e` 99/99 (foundation 19 + core-dense 28 + actions 30 + sync 22);
+500 fixture 316 ms / 61.4 fps.
+
+## How the style plugs in
+
+- A new optional `frame` in the style contract: `compute` (the pure lane layout), `extraNodes` (lane
+  chips), `Under` (bands, earlier zone, day lines, now line, activity bars; flow coordinates) and
+  `Over` (header column, axis, corner, singles popover; screen coordinates, `useViewport()`). The
+  page calls `frame.compute` instead of `LayoutSync.place()`, so Swimlanes never reads or writes the
+  position store; Snap is forced off for a style without dragging; Re-arrange is hidden.
+- The block menu now also opens from a list row that stands for a block (`data-st-node`, the singles
+  popover): `nodeIdAt` looks for it next to `.react-flow__node`.
+- The router got the orthogonal shape (`elbowPoints`, `makeOrthogonalRouter`: elbows with 7 px
+  rounded corners; the existing A* detour on a blocked link). Found on the way: with fractional
+  block coordinates a detour could fail (the A* grid rounds to 0.01 px, so a stub on the boundary
+  of the source's own inflated rectangle read as inside it) and the link fell back to a straight
+  line through a block. Swimlanes therefore floors x to whole pixels (Dense positions are already
+  whole or 0.1-px multiples); the e2e and a unit probe on the default fixture show every link of
+  the fixture clear of every block.
+
+## Time axis (decisions)
+
+- Window: **9 local-day columns** (today + 8 before; the mockup's Nov 2 → Tue 10), 140 px each,
+  piecewise linear inside a day; the page passes `-getTimezoneOffset()` for now (one fixed offset for
+  the window).
+- **Earlier zone:** starts before the window, 420 px left of the first column, ordered by start (x
+  by rank), never on a tick. e2e: `st-archived-0` (300 h old) ends at 645.7 px, the first tick is at
+  658.0 px.
+- **Future `started_at`:** clamped to now (the now marker), reported in `future`. Unit test.
+- **Missing / invalid `started_at`:** `last_active`, else first in the earlier zone. Unit test.
+- e2e: seven unclamped blocks each fall inside their start day's column (offsets 5–71 px of a
+  ~89 px column at the fitted zoom); no root block starts right of the now marker.
+
+## What the e2e measured (`scripts/e2e-swimlanes.ts`, 21 checks)
+
+- **Switching:** Settings → View style → Project swimlanes stored `{style: "swimlanes"}` and the page
+  drew it; the toolbar switcher went Swimlanes → Dense → Swimlanes (synced).
+- **Lanes:** syscanvas, hermes-plugins, mdesign (the `projects.tree` order) and Home last; header
+  counts and tokens equal the backend's `/sessions` rows under the same filters: syscanvas 12 /
+  645 000, hermes-plugins 9 / 135 000, mdesign 11 / 165 000, Home 7 / 105 000. Every block inside its
+  lane's band.
+- **Header column:** a 140 px horizontal middle-drag pan moved a block by 140 px and the headers by
+  0 px; a 60 px vertical pan moved the headers by 60 px and the axis by 0 px; after a wheel zoom
+  (0.637 → 0.420) every header's height / zoom still equals its lane height (304, 160, 232, 112) and
+  the width stayed 168 px.
+- **No dragging, no writes:** a real 160 × 90 px mouse drag left `st-hp-root` at (1118, 320) exactly;
+  zero `/state*` writes in the network log during or after it. Snap: `disabled`, title "Swimlanes has
+  no dragging", no background grid, a click writes nothing; no Re-arrange button.
+- **Navigation:** wheel 0.637 → 0.888 with the point under the cursor fixed (±2 px); middle-drag
+  (−90, 40) and Space + left-drag (70, −30) panned by exactly that; toolbar + zoomed.
+- **Collapse:** hermes-plugins collapsed to a 32 px band (20 px at the zoom) with its activity bar,
+  its blocks gone; still collapsed after a real reload; expanded again, still expanded after a
+  reload (`device.v1.collapsedLanes` in `ctx.storage`).
+- **Scope (mdesign):** the other three lanes collapsed (`data-scope-collapsed`), the view re-fitted
+  (0.637 → 0.435); `st-split-root` drawn as a ghost (opacity 0.45, meta "syscanvas"), left of every
+  other block, linked to `st-split-child`; hover tooltip "Outside this project — switch to All
+  projects to edit"; right-click no menu, click no selection, double-click no tab, drag no move; a
+  header click in the scope changed nothing; back to All every lane open; no position write.
+- **Singles popover:** the syscanvas chip says 6 = the header's singles = the popover's rows; a
+  right-click on a row opened the session menu for it; a double-click opened it in a tab
+  (`focusedStoredSessionId` = `st-single-00`).
+- **Dense → Swimlanes → Dense:** all 20 stored Dense entries unchanged (exact), no new entry, no
+  `swimlanes` layout in `state.json`, zero position / layout / forget writes while Swimlanes was
+  shown (only `PATCH /settings` for the style), Dense draws its stored spots.
+- **Actions from swimlane blocks:** Rename (backend read-back), Move to project (`st-md-katex` →
+  hermes-plugins: the block is now inside the hermes-plugins band, that lane's count +1; the only
+  state write was `POST /state/forget`), Archive (gone; Show archived: greyed, opacity 0.55, menu says
+  Unarchive, which restores it).
+- **Theme:** blocks paint `var(--ui-bg-elevated)` in light and dark; screenshots attached to the card.
+
+## 500-session fixture (final run, fresh homes, HEAD `8184e89`)
+
+- **Swimlanes** (Show all, profile `scale`, 3 lanes of 167 / 167 / 166): first render **602 ms**, pan
+  **124 frames in 2002 ms = 61.9 fps** (earlier runs this card: 563 ms / 61.4 fps, 562 ms / 61.4 fps).
+  First render is measured from the profile switch to the first block, fetch included.
+- **Dense** re-measured in the same run (core-dense): **315 ms, 61.4 fps** (123 frames / 2003 ms).
+- Layout alone (unit test): the 500 fixture lays out well under the test's 2 s bound (the whole
+  swimlanes unit file runs in ~90 ms).
+
+## Card-4 review carry-forwards
+
+1. **Settings read-only note** — done: in read-only mode the settings page shows the page banner's
+   message plus "View style and Snap changes apply in this window only" (`src/settings/notes.ts`,
+   unit-tested; the offline note is unchanged and is not shown together with it).
+2. **401 / 403 are transient** — done: a queued drop stays queued, is retried with the backoff and is
+   saved after the user signs in again; no "could not save" notice. Unit test.
+3. **`refusedPlacements` cleared** — done: on Re-arrange and on every successful replace of that
+   layout (Re-arrange's `DELETE`, Undo's `PUT`). Unit test.
+
+All three new unit tests (and the extended failure classification) fail on `b56708c`'s
+`layout-sync.ts` (checked by swapping that file in and running the suite).
+
+## Deviations
+
+- The e2e-sync suite's switcher helper refocuses the select before every key press: with a third
+  style registered, E2E alt is two options away from Dense and the select blurs after each change
+  (the card-4 behaviour kept for Space). Test-only change, separate commit.
+- Header clicks do nothing while a project scope is active (the scope's collapsing is derived; the
+  user's map is untouched), with a tooltip saying so.
+- The ghost column sits left of the earlier zone, so a scope with a ghost frames wider (lower zoom).
+- A project with no session under the filters gets no lane (unless it is the scope).
+
+## Simulated or not exercised end to end
+
+- Running / needs input as in cards 2–4 (the running fixture uses the backend's activity heuristic;
+  needs input has no SDK source). A future `started_at` and a missing one are unit-tested only (the
+  seeder has no such row).
+
+## Gates, bundle and numbers (code HEAD `8184e89`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 594 924 bytes** (63 esbuild inputs; was 544 571), byte-identical over two
+  builds and to the committed file (sha256 `f843934a…2725154d`). No new dependency.
+- lint 0; build 0; `npm test` 205/205 (was 171); `test:py` 177 (unchanged, no backend change);
+  `test:e2e` 120/120 — foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 21 (new).
