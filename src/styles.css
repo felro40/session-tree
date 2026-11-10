@@ -464,37 +464,53 @@ g.is-dimmed {
   pointer-events: none;
 }
 
-.session-tree__menu {
-  position: absolute;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  min-width: 180px;
-  padding: 3px;
-  border: 1px solid var(--ui-stroke-secondary);
-  border-radius: 6px;
-  background: var(--ui-bg-elevated);
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--ui-text-primary) 22%, transparent);
+/* The menu itself is the SDK's ContextMenu (UI kit styles). Ours: the reason a disabled item
+   gives, the block's ⋯ button, the rename dialog's inline error. */
+.st-menu-note {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
 }
 
-.session-tree__menu button {
-  padding: 4px 9px;
+.st-more {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
   border: 0;
   border-radius: 4px;
-  background: transparent;
-  color: var(--ui-text-tertiary);
-  font: inherit;
-  text-align: left;
+  background: inherit;
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  transform: translateY(-50%);
 }
 
-.session-tree__menu button.is-danger {
-  color: color-mix(in srgb, var(--ui-red) 60%, var(--ui-text-tertiary));
+.session-tree__block:hover .st-more,
+.session-tree__block.is-selected .st-more {
+  display: inline-flex;
 }
 
-.session-tree__menu hr {
-  margin: 3px 2px;
-  border: 0;
-  border-top: 1px solid var(--ui-stroke-tertiary);
+.st-more:hover {
+  color: var(--ui-text-primary);
+}
+
+.st-dialog-error {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--ui-red) 35%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ui-red) 10%, transparent);
+  color: var(--ui-red);
+  font-size: 12px;
+}
+
+.session-tree__canvas:focus {
+  outline: none;
 }
 
 /* --- inspector (Dense) ----------------------------------------------------------------- */

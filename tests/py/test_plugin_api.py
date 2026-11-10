@@ -245,9 +245,191 @@ def test_reads_never_write_the_session_store(client, hermes_home):
     for params in ({"session_profile": "default"}, {"session_profile": "*", "include_archived": "true"}, {"session_profile": "work"}):
         rows_of(client, **params)
     get(client, "/health", session_profile="*")
+    # The session actions' reads: the fence snapshot and the export.
+    get(client, "/sessions/st-sys-tip/mutation-snapshot", session_profile="default")
+    get(client, "/sessions/st-sys-tip/export", session_profile="default")
     assert _fingerprint(hermes_home) == before
 
 
-def test_router_exposes_only_reads(plugin_api):
-    methods = {method for route in plugin_api.router.routes for method in getattr(route, "methods", set())}
-    assert methods <= {"GET", "HEAD"}
+def test_router_mutations_are_only_the_fenced_session_actions(plugin_api):
+    # Card 3: the only writes are rename and read state, both through the core fenced mutation.
+    writes = sorted((route.path, method) for route in plugin_api.router.routes
+                    for method in getattr(route, "methods", set()) if method not in {"GET", "HEAD"})
+    assert writes == [("/sessions/{session_id}/archive", "POST"), ("/sessions/{session_id}/delete", "POST"),
+                      ("/sessions/{session_id}/read", "POST"), ("/sessions/{session_id}/rename", "POST")]
+
+
+# --- session actions: rename, read state, export (card 3) -------------------------------------
+
+def _auth() -> dict[str, str]:
+    """The loopback session token a dashboard / Webapp request carries (the core identity check)."""
+    from hermes_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
+
+    return {_SESSION_HEADER_NAME: _SESSION_TOKEN}
+
+
+def _snapshot(client, sid: str, profile: str = "default"):
+    return client.get(f"{PREFIX}/sessions/{sid}/mutation-snapshot", params={"session_profile": profile}, headers=_auth())
+
+
+def _fence(snapshot: dict) -> dict:
+    import uuid
+
+    return {"request_id": uuid.uuid4().hex, "expected_revision": snapshot["runtime_revision"],
+            "expected_generation": snapshot["runtime_generation"]}
+
+
+def _post(client, sid: str, action: str, body: dict, profile: str = "default"):
+    return client.post(f"{PREFIX}/sessions/{sid}/{action}", params={"session_profile": profile}, json=body, headers=_auth())
+
+
+def _stored(home: Path, sid: str) -> dict:
+    """The row through Hermes's own read path (a read-only SessionDB)."""
+    from hermes_state import SessionDB
+
+    db = SessionDB(db_path=home / "state.db", read_only=True)
+    try:
+        return db.get_session(sid) or {}
+    finally:
+        db.close()
+
+
+def test_rename_reads_back_and_a_stale_snapshot_is_refused(client, hermes_home):
+    first = _snapshot(client, "st-single-05")
+    assert first.status_code == 200, first.text
+    snap = first.json()
+    assert snap["exists"] is True
+    renamed = _post(client, "st-single-05", "rename", {"title": "KaTeX subsetting plan", **_fence(snap)})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["ok"] is True and renamed.json()["title"] == "KaTeX subsetting plan"
+    assert _stored(hermes_home, "st-single-05")["title"] == "KaTeX subsetting plan"
+    assert by_id(rows_of(client, session_profile="default"))["st-single-05"]["title"] == "KaTeX subsetting plan"
+    # The revision moved on: an edit prepared from the old snapshot is refused by the core fence.
+    assert _snapshot(client, "st-single-05").json()["runtime_revision"] > snap["runtime_revision"]
+    stale = _post(client, "st-single-05", "rename", {"title": "Stale write", **_fence(snap)})
+    assert stale.status_code == 409 and "revision_conflict" in stale.text
+    assert _stored(hermes_home, "st-single-05")["title"] == "KaTeX subsetting plan"
+
+
+def test_a_mutation_without_the_fence_is_refused_by_the_core_guard(client, hermes_home):
+    response = _post(client, "st-single-06", "rename", {"title": "No fence"})
+    assert response.status_code == 409
+    assert _stored(hermes_home, "st-single-06")["title"] == "Zsh prompt cleanup"
+
+
+def test_read_state_toggles_and_reads_back(client, hermes_home):
+    from hermes_state import SessionDB
+
+    marked = _post(client, "st-single-07", "read", {"unread": True, **_fence(_snapshot(client, "st-single-07").json())})
+    assert marked.status_code == 200, marked.text
+    assert by_id(rows_of(client, session_profile="default"))["st-single-07"]["unread"] is True
+    db = SessionDB(db_path=hermes_home / "state.db", read_only=True)
+    try:
+        assert db.session_unread(db.get_session("st-single-07")) is True
+    finally:
+        db.close()
+    read = _post(client, "st-single-07", "read", {"unread": False, **_fence(_snapshot(client, "st-single-07").json())})
+    assert read.status_code == 200, read.text
+    assert by_id(rows_of(client, session_profile="default"))["st-single-07"]["unread"] is False
+
+
+def test_archive_unpins_reads_back_and_unarchive_restores(client, hermes_home):
+    archived = _post(client, "st-hp-root", "archive", {"archived": True, **_fence(_snapshot(client, "st-hp-root").json())})
+    assert archived.status_code == 200, archived.text
+    stored = _stored(hermes_home, "st-hp-root")
+    # The app's setSessionArchived: archiving also drops the pin (the auto-archive "keep" flag).
+    assert stored["archived"] and not stored["pinned"]
+    assert "st-hp-root" not in by_id(rows_of(client, session_profile="default"))
+    assert by_id(rows_of(client, session_profile="default", include_archived="true"))["st-hp-root"]["archived"] is True
+    restored = _post(client, "st-hp-root", "archive", {"archived": False, **_fence(_snapshot(client, "st-hp-root").json())})
+    assert restored.status_code == 200, restored.text
+    assert not _stored(hermes_home, "st-hp-root")["archived"]
+    assert by_id(rows_of(client, session_profile="default"))["st-hp-root"]["archived"] is False
+
+
+def test_delete_removes_the_row_keeps_its_branch_children_and_refuses_a_stale_fence(client, hermes_home):
+    snap = _snapshot(client, "st-md-katex").json()
+    # A stale fence first: the revision moves on with an edit, the delete prepared before it is refused.
+    assert _post(client, "st-md-katex", "read", {"unread": True, **_fence(snap)}).status_code == 200
+    stale = _post(client, "st-md-katex", "delete", _fence(snap))
+    assert stale.status_code == 409 and "revision_conflict" in stale.text
+    assert _stored(hermes_home, "st-md-katex")
+    # st-md-tip has branch children (katex, redline) and a /new successor (v2).
+    deleted = _post(client, "st-md-tip", "delete", _fence(_snapshot(client, "st-md-tip").json()))
+    assert deleted.status_code == 200, deleted.text
+    # The block's whole conversation goes (its compression chain), nothing that hangs off it.
+    assert "st-md-tip" in deleted.json()["deleted_ids"]
+    assert set(deleted.json()["deleted_ids"]) <= {"st-md-tip", "st-md-root"}
+    assert _stored(hermes_home, "st-md-tip") == {}
+    rows = by_id(rows_of(client, session_profile="default"))
+    assert "st-md-tip" not in rows
+    for child in ("st-md-katex", "st-md-redline"):
+        assert rows[child]["_branched_from"] == "st-md-tip"  # orphaned, never cascaded
+    assert _post(client, "st-md-tip", "delete", {}).status_code == 404
+
+
+def test_export_bytes_equal_the_core_export_endpoint(client):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from hermes_cli.web_routers.sessions import export_session_endpoint
+
+    core = FastAPI()
+    core.add_api_route("/api/sessions/{session_id}/export", export_session_endpoint, methods=["GET"])
+    with TestClient(core) as core_client:
+        for sid in ("st-sys-tip", "st-md-v2"):
+            ours = client.get(f"{PREFIX}/sessions/{sid}/export", params={"session_profile": "default"})
+            theirs = core_client.get(f"/api/sessions/{sid}/export", params={"profile": "default"})
+            assert ours.status_code == 200 and theirs.status_code == 200
+            assert ours.headers["content-type"].startswith("application/json")
+            assert ours.content == theirs.content
+            body = json.loads(ours.content)
+            assert body["id"] == sid and len(body["messages"]) == body["message_count"]
+
+
+@pytest.mark.parametrize("path,method,body", [
+    ("/sessions/st-nope/mutation-snapshot", "GET", None),
+    ("/sessions/st-nope/rename", "POST", {"title": "x"}),
+    ("/sessions/st-nope/read", "POST", {"unread": True}),
+    ("/sessions/st-nope/archive", "POST", {"archived": True}),
+    ("/sessions/st-nope/delete", "POST", {}),
+    ("/sessions/st-nope/export", "GET", None),
+])
+def test_actions_404_on_an_unknown_session(client, path, method, body):
+    response = client.request(method, f"{PREFIX}{path}", params={"session_profile": "default"}, json=body, headers=_auth())
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("profile,status", [("nope", 404), ("*", 400), ("../default", 400), ("x" * 65, 422)])
+@pytest.mark.parametrize("path,method,body", [
+    ("/sessions/st-single-08/mutation-snapshot", "GET", None),
+    ("/sessions/st-single-08/rename", "POST", {"title": "x"}),
+    ("/sessions/st-single-08/read", "POST", {"unread": True}),
+    ("/sessions/st-single-08/archive", "POST", {"archived": True}),
+    ("/sessions/st-single-08/delete", "POST", {}),
+    ("/sessions/st-single-08/export", "GET", None),
+])
+def test_actions_refuse_an_unknown_or_malformed_profile(client, hermes_home, path, method, body, profile, status):
+    response = client.request(method, f"{PREFIX}{path}", params={"session_profile": profile}, json=body, headers=_auth())
+    assert response.status_code == status
+    assert _stored(hermes_home, "st-single-08")["title"] == "Postgres vacuum tuning"
+
+
+@pytest.mark.parametrize("action,body", [
+    ("rename", {"title": "t" * 401}),
+    ("rename", {"title": 5}),
+    ("rename", {"title": "ok", "extra": 1}),
+    ("rename", {"title": "ok", "expected_revision": -1}),
+    ("rename", {"title": "ok", "request_id": "r" * 129}),
+    ("read", {"unread": "yes"}),
+    ("read", {}),
+    ("archive", {"archived": 1}),
+    ("archive", {}),
+    ("delete", {"expected_generation": "x"}),
+])
+def test_action_input_is_validated(client, action, body):
+    assert _post(client, "st-single-09", action, body).status_code == 422
+
+
+def test_a_malformed_session_id_is_refused(client):
+    assert _snapshot(client, "bad id!").status_code == 400
+    assert client.get(f"{PREFIX}/sessions/{'a' * 201}/export", params={"session_profile": "default"}).status_code == 400

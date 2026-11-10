@@ -30,4 +30,13 @@ export class LayoutMemory {
   reset(key: string): void {
     this.byKey.delete(key)
   }
+
+  /** Forget one block in every layout (moved to another project: placed anew in its band). */
+  forget(id: string): void {
+    for (const [key, positions] of this.byKey) {
+      if (positions.has(id)) {
+        this.byKey.set(key, new Map([...positions].filter(([other]) => other !== id)))
+      }
+    }
+  }
 }

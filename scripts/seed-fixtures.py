@@ -23,9 +23,13 @@ DIRECT SQL is used only on this isolated fixture DB, and only for fields no API 
 
 ``--touch`` renames one fixture through ``set_session_title`` (a real state.db change, used by the
 e2e to provoke ``sessions.changed``). ``--branch NEW_ID PARENT_ID [TITLE]`` adds a ``/branch`` child
-of a seeded session through the same API (the live-refresh check). ``--activate ID`` re-opens a
+of a seeded session through the same API (the live-refresh check); ``--unowned-branch`` does the same
+without the owner stamp (the actions e2e's real ``permission_denied`` refusal). ``--activate ID`` re-opens a
 session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
 so the core list's 300 s ``is_active`` heuristic reports it. Prints a JSON manifest of what it created.
+
+Every row carries the owner stamp a signed-in Webapp tab gives the rows it creates (``user_id`` = the
+host owner's subject, see ``OWNER``), so the core accepts that login's sidebar edits of them.
 """
 
 from __future__ import annotations
@@ -43,6 +47,14 @@ if HOME == (Path.home() / ".hermes").resolve() or "/.hermes" in str(HOME):
 sys.path.insert(0, os.environ.get("HERMES_AGENT_DIR", str(Path.home() / ".hermes" / "hermes-agent")))
 
 from hermes_state import SessionDB  # noqa: E402
+from gateway.owner_identity import host_owner_subject  # noqa: E402
+
+#: The owner stamp a session created from a signed-in Webapp tab carries
+#: (``tui_gateway/session_transports.py`` ``_transport_auth_user_id``: the host owner's OS
+#: subject). The core refuses sidebar edits (rename, archive, pin, read state) of unowned
+#: history from a Webapp login (``gateway/session_local_migration.py`` ``require_history_claim``),
+#: so the fixtures carry it like real rows do.
+OWNER = host_owner_subject()
 
 PROJECTS_DIR = Path(os.environ.get("SESSION_TREE_PROJECTS_DIR", HOME.parent / "projects")).resolve()
 PROJECTS = ("syscanvas", "mdesign", "hermes-plugins")
@@ -86,12 +98,12 @@ class Seeder:
                 messages: int = 6, source: str = "desktop", model: str = "claude-opus-4.1",
                 parent: str | None = None, marker: dict | None = None, tokens: tuple[int, int] = (12000, 3000),
                 cost: float = 0.12, ended: bool = True, end_reason: str = "user_exit", cwd: str | None = None,
-                first_prompt: str | None = None, titled: bool = True) -> str:
+                first_prompt: str | None = None, titled: bool = True, owner: str | None = OWNER) -> str:
         last = NOW - age_h * HOUR
         started = last - span_h * HOUR
         self.db.create_session(sid, source, model=model, model_config=marker or None,
                                parent_session_id=parent, cwd=cwd or project_dir(project),
-                               git_repo_root=project_dir(project))
+                               git_repo_root=project_dir(project), user_id=owner)
         prompt = first_prompt or f"Let's work on: {title}"
         for i in range(messages):
             role = "user" if i % 2 == 0 else "assistant"
@@ -230,8 +242,10 @@ def touch() -> dict:
         db.close()
 
 
-def add_branch(new_id: str, parent: str, title: str) -> dict:
-    """A ``/branch`` child of a seeded session, created now (the e2e's live-refresh probe)."""
+def add_branch(new_id: str, parent: str, title: str, *, owned: bool = True) -> dict:
+    """A ``/branch`` child of a seeded session, created now (the e2e's live-refresh probe). With
+    ``owned=False`` it carries no owner stamp, like a row an older CLI wrote: the core refuses a
+    Webapp login's edits of it (``permission_denied``), the actions e2e's real refusal."""
     db = SessionDB(db_path=HOME / "state.db")
     try:
         if db.get_session(parent) is None:
@@ -240,8 +254,9 @@ def add_branch(new_id: str, parent: str, title: str) -> dict:
             return {"branch": new_id, "parent": parent, "created": False}
         parent_row = db.get_session(parent)
         project = Path(parent_row["git_repo_root"]).name if parent_row.get("git_repo_root") else None
-        Seeder(db, "default").branch(new_id, title, parent, project=project, age_h=0.02, messages=2)
-        return {"branch": new_id, "parent": parent, "created": True}
+        Seeder(db, "default").branch(new_id, title, parent, project=project, age_h=0.02, messages=2,
+                                     owner=OWNER if owned else None)
+        return {"branch": new_id, "parent": parent, "created": True, "owned": owned}
     finally:
         db.close()
 
@@ -266,11 +281,13 @@ def main() -> None:
     if "--touch" in sys.argv:
         print(json.dumps(touch()))
         return
-    if "--branch" in sys.argv:
-        args = sys.argv[sys.argv.index("--branch") + 1:]
+    if "--branch" in sys.argv or "--unowned-branch" in sys.argv:
+        flag = "--branch" if "--branch" in sys.argv else "--unowned-branch"
+        args = sys.argv[sys.argv.index(flag) + 1:]
         if len(args) < 2:
-            sys.exit("usage: --branch NEW_ID PARENT_ID [TITLE]")
-        print(json.dumps(add_branch(args[0], args[1], args[2] if len(args) > 2 else f"Live branch {args[0]}")))
+            sys.exit(f"usage: {flag} NEW_ID PARENT_ID [TITLE]")
+        title = args[2] if len(args) > 2 else f"Live branch {args[0]}"
+        print(json.dumps(add_branch(args[0], args[1], title, owned=flag == "--branch")))
         return
     if "--activate" in sys.argv:
         args = sys.argv[sys.argv.index("--activate") + 1:]

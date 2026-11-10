@@ -1,7 +1,6 @@
 /**
  * The Dense inspector (264 px, right): everything about the selected block, plus the singles
- * list (R8) at its foot, filtered by scope. Action buttons are present but disabled until the
- * session actions land (card 3).
+ * list (R8) at its foot, filtered by scope. Its action buttons run the session actions (R14).
  */
 import { Codicon } from '@hermes/plugin-sdk'
 import { useState } from 'react'
@@ -11,10 +10,10 @@ import { agoLabel, compactNumber, costLabel, dateTimeLabel, shortAge } from '../
 import { singlesInScope } from '../../model/graph.ts'
 import type { GraphModel, GraphNode } from '../../model/graph.ts'
 import type { LiveStatus } from '../../model/status.ts'
+import { useMenuLabels } from '../../page/labels.ts'
+import { useSessionActions } from '../../page/session-actions-context.ts'
 import { ProjectGlyph, projectColor } from '../shared.tsx'
 import type { StylePanelProps } from '../types.ts'
-
-const ACTIONS_LATER = 'Session actions arrive in a later version'
 
 function NodeLink({
   model,
@@ -117,25 +116,48 @@ function StatusTags({ node, status }: { node: GraphNode; status?: LiveStatus }) 
   )
 }
 
-function Actions() {
-  // Card 3 wires these; until then they show what is coming and do nothing.
+/** The inspector's action row (R14): Open, Branch, Rename, Archive / Unarchive, and ⋯ for the
+ *  whole session menu. Same functions as the block menu. */
+function Actions({ node, onOpen }: { node: GraphNode; onOpen: StylePanelProps['onOpen'] }) {
+  const actions = useSessionActions()
+  const labels = useMenuLabels()
+  const available = Boolean(actions?.canAct(node))
+  const archived = Boolean(node.row?.archived)
+
   return (
     <div className="st-acts" data-testid="session-tree-inspector-actions">
-      <button type="button" className="st-act st-act--primary" disabled title={ACTIONS_LATER}>
+      <button type="button" className="st-act st-act--primary" data-action="open" disabled={!available} title="Open in a new tab" onClick={() => onOpen(node)}>
         <Codicon name="link-external" size={12} />
         Open
       </button>
-      <button type="button" className="st-act" disabled title={ACTIONS_LATER}>
-        <Codicon name="git-branch" size={12} />
-        Branch
+      <button type="button" className="st-act" data-action="branch" disabled={!available} title={labels.branch} onClick={() => void actions?.branch(node)}>
+        <Codicon name="repo-forked" size={12} />
+        {labels.branch}
       </button>
-      <button type="button" className="st-act" disabled title={ACTIONS_LATER} aria-label="Rename">
+      <button type="button" className="st-act" data-action="rename" disabled={!available} title={labels.rename} aria-label={labels.rename} onClick={() => actions?.rename(node)}>
         <Codicon name="edit" size={12} />
       </button>
-      <button type="button" className="st-act" disabled title={ACTIONS_LATER} aria-label="Archive">
+      <button
+        type="button"
+        className="st-act"
+        data-action="archive"
+        disabled={!available}
+        title={archived ? labels.unarchive : labels.archive}
+        aria-label={archived ? labels.unarchive : labels.archive}
+        onClick={() => void actions?.toggleArchive(node)}
+      >
         <Codicon name="archive" size={12} />
       </button>
-      <button type="button" className="st-act" disabled title={ACTIONS_LATER} aria-label="More actions">
+      <button
+        type="button"
+        className="st-act"
+        data-action="more"
+        data-testid="session-tree-inspector-more"
+        disabled={!available}
+        title={labels.sessionActions}
+        aria-label={labels.sessionActions}
+        onClick={event => actions?.openMenuFor(node.id, event.currentTarget)}
+      >
         <Codicon name="ellipsis" size={12} />
       </button>
     </div>
@@ -166,7 +188,7 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }: StyleP
         {node.title}
       </div>
       <StatusTags node={node} status={status} />
-      <Actions />
+      <Actions node={node} onOpen={onOpen} />
       <div className="st-sec">
         <div className="st-kv">
           <Stat field="last-used" label="Last used" value={agoLabel(row.last_active || row.started_at, nowMs)} title={dateTimeLabel(row.last_active)} />

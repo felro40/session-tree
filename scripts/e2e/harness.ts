@@ -4,9 +4,9 @@
  *   root  /home/david/.cache/session-tree-e2e/c<card>-<role>/
  *   home  <root>/home            (HERMES_HOME of the isolated gateway)
  *   ports 19300 + 10·card: coder +0..+4, reviewer +5..+9 (the Webapp listens on the first);
- *         card 2 (the default): coder 19320-19324, reviewer 19325-19329
+ *         card 3 (the default): coder 19330-19334, reviewer 19335-19339
  *
- * The card number comes from SESSION_TREE_CARD (default: the current card, 2).
+ * The card number comes from SESSION_TREE_CARD (default: the current card, 3).
  *
  * The user's real Hermes is never touched: no writes under ~/.hermes, no build in the
  * Hermes checkout (`hermes webapp --skip-build` always), and the package is linked
@@ -28,7 +28,7 @@ const NODE_BIN = dirname(process.execPath)
 export type Role = 'coder' | 'reviewer'
 
 /** The card whose test home and port block this run uses (each card of the set has its own). */
-export const CARD = Number(process.env.SESSION_TREE_CARD ?? 2)
+export const CARD = Number(process.env.SESSION_TREE_CARD ?? 3)
 
 if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
   throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)
@@ -49,12 +49,21 @@ export interface TestHermes {
   projectsDir: string
 }
 
-export function testHermes(role: Role = (process.env.SESSION_TREE_ROLE as Role) || 'coder'): TestHermes {
+export function testHermes(
+  role: Role = (process.env.SESSION_TREE_ROLE as Role) || 'coder',
+  { variant }: { variant?: string } = {}
+): TestHermes {
   if (!(role in PORT_BASE)) {
     throw new Error(`role must be coder or reviewer, got ${role}`)
   }
 
-  const root = join(E2E_ROOT, `c${CARD}-${role}`)
+  if (variant !== undefined && !/^[a-z][a-z0-9-]{0,20}$/.test(variant)) {
+    throw new Error(`bad test home variant ${variant}`)
+  }
+
+  // A variant (card 3: `actions`) is a second home of the same role on the same ports, for a
+  // suite that mutates its fixtures; suites run one after the other, never at once.
+  const root = join(E2E_ROOT, `c${CARD}-${role}${variant ? `-${variant}` : ''}`)
   const base = PORT_BASE[role]
 
   return {

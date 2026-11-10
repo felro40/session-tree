@@ -6,6 +6,7 @@
 import { host } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
 
+import type { MutationIdentity, MutationSnapshot } from './model/actions.ts'
 import { mergeProjects, parseProjectsTree } from './model/projects.ts'
 import type { ProjectInfo } from './model/projects.ts'
 import type { SessionsResponse } from './model/sessions.ts'
@@ -68,4 +69,35 @@ export async function fetchProjects(profiles: readonly string[]): Promise<Projec
   }
 
   return mergeProjects(trees)
+}
+
+// --- Session actions (card 3): the backend's fenced rename / read state, and export ----------
+
+const sessionPath = (id: string, tail: string, profile: string) =>
+  `/sessions/${encodeURIComponent(id)}/${tail}?${PROFILE_PARAM}=${encodeURIComponent(profile)}`
+
+/** The core mutation snapshot (the fence an edit sends back). */
+export function fetchMutationSnapshot(ctx: PluginContext, profile: string, id: string): Promise<MutationSnapshot> {
+  return ctx.rest<MutationSnapshot>(sessionPath(id, 'mutation-snapshot', profile), { timeoutMs: 15000 })
+}
+
+export function postRename(ctx: PluginContext, profile: string, id: string, title: string, identity: MutationIdentity): Promise<{ ok: boolean; title?: string }> {
+  return ctx.rest(sessionPath(id, 'rename', profile), { method: 'POST', body: { title, ...identity }, timeoutMs: 20000 })
+}
+
+export function postReadState(ctx: PluginContext, profile: string, id: string, unread: boolean, identity: MutationIdentity): Promise<{ ok: boolean }> {
+  return ctx.rest(sessionPath(id, 'read', profile), { method: 'POST', body: { unread, ...identity }, timeoutMs: 20000 })
+}
+
+export function postArchive(ctx: PluginContext, profile: string, id: string, archived: boolean, identity: MutationIdentity): Promise<{ ok: boolean }> {
+  return ctx.rest(sessionPath(id, 'archive', profile), { method: 'POST', body: { archived, ...identity }, timeoutMs: 20000 })
+}
+
+export function postDelete(ctx: PluginContext, profile: string, id: string, identity: MutationIdentity): Promise<{ ok: boolean; deleted_ids?: string[] }> {
+  return ctx.rest(sessionPath(id, 'delete', profile), { method: 'POST', body: { ...identity }, timeoutMs: 30000 })
+}
+
+/** The session as the core export endpoint streams it (metadata + every message). */
+export function fetchExport(ctx: PluginContext, profile: string, id: string): Promise<unknown> {
+  return ctx.rest<unknown>(sessionPath(id, 'export', profile), { timeoutMs: 120000 })
 }

@@ -12,7 +12,6 @@ import {
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, NodeMouseHandler, OnNodeDrag } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
 
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import { lineageOf } from '../model/graph.ts'
@@ -23,8 +22,8 @@ import type { LiveStatus } from '../model/status.ts'
 import { blockHandles } from '../styles/shared.tsx'
 import type { BlockData, GroupLabelData, LinkData, RoutedLink, StyleDefinition } from '../styles/types.ts'
 import { usePluginCtx } from './plugin-context.ts'
+import { useSessionActions } from './session-actions-context.ts'
 import { SessionMenu } from './session-menu.tsx'
-import type { MenuState } from './session-menu.tsx'
 
 export const MIN_ZOOM = 0.3
 export const MAX_ZOOM = 2.5
@@ -71,7 +70,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const ctx = usePluginCtx()
   const wrapper = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<ReadonlyMap<string, Point>>()
-  const [menu, setMenu] = useState<MenuState>()
+  const actions = useSessionActions()
   const [tooltip, setTooltip] = useState<Tooltip>()
   const spaceDown = useRef(false)
   // R3: while Space is held a left-drag pans from anywhere, also from a block (not a block drag).
@@ -245,7 +244,6 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
   const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(() => {
     hideTooltip()
-    setMenu(undefined)
   }, [hideTooltip])
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
@@ -273,8 +271,6 @@ export function GraphCanvas(props: GraphCanvasProps) {
     (_event, flowNode) => {
       const node = graphNode(flowNode)
 
-      setMenu(undefined)
-
       if (node && !node.readOnly) {
         onSelect(node.id)
       }
@@ -294,26 +290,42 @@ export function GraphCanvas(props: GraphCanvasProps) {
     [graphNode, onOpen]
   )
 
-  const onNodeContextMenu = useCallback<NodeMouseHandler<FlowNode>>(
-    (event, flowNode) => {
-      event.preventDefault()
-      const node = graphNode(flowNode)
+  // The menu itself is the SDK ContextMenu around the canvas (SessionMenu); it decides on the
+  // same event whether a block gets one (R5, R7). Here: just no tooltip over it.
+  const onNodeContextMenu = useCallback<NodeMouseHandler<FlowNode>>(() => hideTooltip(), [hideTooltip])
 
+  const onMenuOpen = useCallback(
+    (node: GraphNode) => {
       hideTooltip()
-
-      if (!node || node.readOnly || !wrapper.current) {
-        setMenu(undefined)
-
-        return
-      }
-
-      const box = wrapper.current.getBoundingClientRect()
-
       onSelect(node.id)
-      setMenu({ nodeId: node.id, x: event.clientX - box.left, y: event.clientY - box.top })
     },
-    [graphNode, hideTooltip, onSelect]
+    [hideTooltip, onSelect]
   )
+
+  // Focus back on the canvas, not on a button: Space must pan, not click (R3). The menu's modal
+  // layer is torn down after it unmounts (a focus attempt made while it is still there is lost),
+  // so try again a few times while nothing else has taken the focus.
+  const restoreFocus = useCallback(() => {
+    const attempt = () => {
+      const active = document.activeElement
+
+      if (!active || active === document.body) {
+        wrapper.current?.focus({ preventScroll: true })
+      }
+    }
+
+    wrapper.current?.focus({ preventScroll: true })
+
+    for (const ms of [0, 50, 150, 400]) {
+      ctx.setTimeout(attempt, ms)
+    }
+  }, [ctx])
+
+  useEffect(() => {
+    actions?.setMenuHost(wrapper.current)
+
+    return () => actions?.setMenuHost(null)
+  }, [actions])
 
   const onNodeMouseEnter = useCallback<NodeMouseHandler<FlowNode>>(
     (event, flowNode) => {
@@ -356,6 +368,20 @@ export function GraphCanvas(props: GraphCanvasProps) {
       }
     }
 
+    // Card-2 r2 NB5: a toolbar <select> that closed without a change (Escape, a second click,
+    // the same profile again) keeps the focus and swallows Space; give the keyboard back.
+    const releaseSelect = (target: EventTarget | null = document.activeElement) => {
+      const element = target as HTMLElement | null
+
+      if (element instanceof HTMLSelectElement && element.closest('[data-testid="session-tree-toolbar"]')) {
+        element.blur()
+
+        return true
+      }
+
+      return false
+    }
+
     const offs = [
       ctx.addEventListener(element, 'mousedown', middle, true),
       ctx.addEventListener(element, 'mouseup', middle, true),
@@ -367,25 +393,44 @@ export function GraphCanvas(props: GraphCanvasProps) {
           const pointer = event as PointerEvent
           const target = pointer.target as Element | null
 
+          releaseSelect()
+
           if (pointer.button !== 0 || spaceDown.current || !target) {
             return
           }
 
           if (target.closest('.react-flow__pane') && !target.closest('.react-flow__node')) {
             onSelect(null)
-            setMenu(undefined)
           }
         },
         true
       ),
-      ctx.addEventListener(window, 'keydown', event => {
-        // Typing a space in a text field (or on a focused control) is not the pan key, as in
-        // React Flow's own key handling.
-        if ((event as KeyboardEvent).code === 'Space' && !isTypingTarget(event.target)) {
+      ctx.addEventListener(
+        window,
+        'keydown',
+        event => {
+          if ((event as KeyboardEvent).code !== 'Space') {
+            return
+          }
+
+          // Space aimed at the toolbar's select: the pan key, not "open the list". React Flow
+          // ignores a key whose target is a form control, so hand it the same key from the body.
+          if (releaseSelect(event.target)) {
+            event.preventDefault()
+            event.stopPropagation()
+            document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true }))
+
+            return
+          } else if (isTypingTarget(event.target)) {
+            // Typing a space in a text field is not the pan key (React Flow's own rule).
+            return
+          }
+
           spaceDown.current = true
           setSpaceHeld(true)
-        }
-      }),
+        },
+        true
+      ),
       ctx.addEventListener(window, 'keyup', event => {
         if ((event as KeyboardEvent).code === 'Space') {
           spaceDown.current = false
@@ -403,73 +448,68 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
   useEffect(() => () => tooltipTimer.current?.(), [])
 
-  const closeMenu = useCallback(() => setMenu(undefined), [])
-
   return (
-    <div
-      ref={wrapper}
-      className={`session-tree__canvas${snap ? ' has-grid' : ''}`}
-      data-testid="session-tree-canvas"
-      data-style={style.id}
-      data-snap={snap ? 'on' : 'off'}
-      data-grid={style.grid}
-      onContextMenu={(event: ReactMouseEvent) => {
-        // Inside the canvas the browser menu never opens; blocks get ours (or none: R5).
-        event.preventDefault()
-      }}
-    >
-      <ReactFlow<FlowNode, FlowEdge>
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onNodeDragStart={onNodeDragStart}
-        onNodeDragStop={onNodeDragStop}
-        onNodeClick={onNodeClick}
-        onNodeDoubleClick={onNodeDoubleClick}
-        onNodeContextMenu={onNodeContextMenu}
-        onNodeMouseEnter={onNodeMouseEnter}
-        onNodeMouseLeave={hideTooltip}
-        onMoveStart={hideTooltip}
-        onPaneContextMenu={closeMenu}
-        panOnDrag={[1]}
-        panActivationKeyCode="Space"
-        zoomOnScroll
-        panOnScroll={false}
-        zoomOnDoubleClick={false}
-        zoomOnPinch
-        selectionOnDrag={false}
-        selectionKeyCode={null}
-        multiSelectionKeyCode={null}
-        deleteKeyCode={null}
-        nodesConnectable={false}
-        nodesFocusable={false}
-        edgesFocusable={false}
-        elevateNodesOnSelect={false}
-        snapToGrid={snap}
-        snapGrid={[style.grid, style.grid]}
-        minZoom={MIN_ZOOM}
-        maxZoom={MAX_ZOOM}
-        onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
-        fitView
-        fitViewOptions={{ padding: 0.08, maxZoom: 1.25 }}
-        proOptions={{ hideAttribution: true }}
+    <SessionMenu model={model} onOpenFor={onMenuOpen} onRestoreFocus={restoreFocus}>
+      <div
+        ref={wrapper}
+        tabIndex={-1}
+        className={`session-tree__canvas${snap ? ' has-grid' : ''}`}
+        data-testid="session-tree-canvas"
+        data-style={style.id}
+        data-snap={snap ? 'on' : 'off'}
+        data-grid={style.grid}
       >
-        {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}
-      </ReactFlow>
-      {tooltip && (
-        <div
-          className="session-tree__tooltip"
-          role="tooltip"
-          data-testid="session-tree-tooltip"
-          data-node-id={tooltip.nodeId}
-          style={{ left: tooltip.x, top: tooltip.y }}
+        <ReactFlow<FlowNode, FlowEdge>
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
+          onNodeClick={onNodeClick}
+          onNodeDoubleClick={onNodeDoubleClick}
+          onNodeContextMenu={onNodeContextMenu}
+          onNodeMouseEnter={onNodeMouseEnter}
+          onNodeMouseLeave={hideTooltip}
+          onMoveStart={hideTooltip}
+          panOnDrag={[1]}
+          panActivationKeyCode="Space"
+          zoomOnScroll
+          panOnScroll={false}
+          zoomOnDoubleClick={false}
+          zoomOnPinch
+          selectionOnDrag={false}
+          selectionKeyCode={null}
+          multiSelectionKeyCode={null}
+          deleteKeyCode={null}
+          nodesConnectable={false}
+          nodesFocusable={false}
+          edgesFocusable={false}
+          elevateNodesOnSelect={false}
+          snapToGrid={snap}
+          snapGrid={[style.grid, style.grid]}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
+          fitView
+          fitViewOptions={{ padding: 0.08, maxZoom: 1.25 }}
+          proOptions={{ hideAttribution: true }}
         >
-          {tooltip.text}
-        </div>
-      )}
-      {menu && <SessionMenu menu={menu} onClose={closeMenu} />}
-    </div>
+          {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}
+        </ReactFlow>
+        {tooltip && (
+          <div
+            className="session-tree__tooltip"
+            role="tooltip"
+            data-testid="session-tree-tooltip"
+            data-node-id={tooltip.nodeId}
+            style={{ left: tooltip.x, top: tooltip.y }}
+          >
+            {tooltip.text}
+          </div>
+        )}
+      </div>
+    </SessionMenu>
   )
 }

@@ -66,9 +66,9 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState5 = React2.useState, useEffect6 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState7 = React2.useState, useEffect6 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
-      var value2 = getSnapshot(), _useState = useState5({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
+      var value2 = getSnapshot(), _useState = useState7({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
       return useLayoutEffect2(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
@@ -119,14 +119,14 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React2.useRef, useEffect6 = React2.useEffect, useMemo4 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React2.useRef, useEffect6 = React2.useEffect, useMemo6 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
       var instRef = useRef5(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
       } else inst = instRef.current;
-      instRef = useMemo4(
+      instRef = useMemo6(
         function() {
           function memoizedSelector(nextSnapshot) {
             if (!hasMemo) {
@@ -175,7 +175,7 @@ var require_with_selector = __commonJS({
 
 // src/plugin.tsx
 init_define_import_meta_env();
-import { host as host3, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
+import { host as host4, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/base.css
 var base_default = `/* this will be exported as base.css and can be used for a basic styling */
@@ -687,7 +687,7 @@ svg.react-flow__connectionline {
 
 // src/page/session-tree-page.tsx
 init_define_import_meta_env();
-import { EmptyState, host as host2, useQuery, useValue } from "@hermes/plugin-sdk";
+import { EmptyState, host as host3, useQuery, useValue } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
@@ -7362,7 +7362,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback3, useEffect as useEffect5, useMemo as useMemo3, useState as useState4 } from "react";
+import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo5, useState as useState6 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -7461,6 +7461,125 @@ async function fetchProjects(profiles) {
   if (trees.length === 0 && results.length > 0)
     throw results[0].reason;
   return mergeProjects(trees);
+}
+var sessionPath = (id2, tail, profile) => `/sessions/${encodeURIComponent(id2)}/${tail}?${PROFILE_PARAM}=${encodeURIComponent(profile)}`;
+function fetchMutationSnapshot(ctx, profile, id2) {
+  return ctx.rest(sessionPath(id2, "mutation-snapshot", profile), { timeoutMs: 15e3 });
+}
+function postRename(ctx, profile, id2, title, identity4) {
+  return ctx.rest(sessionPath(id2, "rename", profile), { method: "POST", body: { title, ...identity4 }, timeoutMs: 2e4 });
+}
+function postReadState(ctx, profile, id2, unread, identity4) {
+  return ctx.rest(sessionPath(id2, "read", profile), { method: "POST", body: { unread, ...identity4 }, timeoutMs: 2e4 });
+}
+function postArchive(ctx, profile, id2, archived, identity4) {
+  return ctx.rest(sessionPath(id2, "archive", profile), { method: "POST", body: { archived, ...identity4 }, timeoutMs: 2e4 });
+}
+function postDelete(ctx, profile, id2, identity4) {
+  return ctx.rest(sessionPath(id2, "delete", profile), { method: "POST", body: { ...identity4 }, timeoutMs: 3e4 });
+}
+function fetchExport(ctx, profile, id2) {
+  return ctx.rest(sessionPath(id2, "export", profile), { timeoutMs: 12e4 });
+}
+
+// src/model/actions.ts
+init_define_import_meta_env();
+function isActionable(node) {
+  return !!(node && node.kind === "session" && node.row && !node.readOnly);
+}
+function sanitizeFilenamePart(value2) {
+  return value2.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+}
+function exportFilename(sessionId, title) {
+  let titlePart = title ? sanitizeFilenamePart(title) : "", idPart = sanitizeFilenamePart(sessionId).slice(0, 8) || "session";
+  return `${titlePart || "session"}-${idPart}.json`;
+}
+function projectRootCwd(project) {
+  return (project?.path || project?.repoPaths.find(Boolean) || "").trim();
+}
+function moveTargets(projects, currentProjectId) {
+  return projects.filter((project) => project.id !== currentProjectId && !project.isNoProject && projectRootCwd(project));
+}
+var DELETE_RUNNING_REASON = "Running — wait for it to finish";
+function deleteBlockedReason(status) {
+  return status?.running ? DELETE_RUNNING_REASON : void 0;
+}
+function branchNote(branches) {
+  return branches <= 0 ? "" : branches === 1 ? "Its 1 branch stays as a separate session." : `Its ${branches} branches stay as separate sessions.`;
+}
+function renameRoute(row, host5, title) {
+  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]);
+  return title.trim() && host5.focusedSessionId && host5.focusedStoredSessionId && ids.has(host5.focusedStoredSessionId) ? { kind: "rpc", runtimeId: host5.focusedSessionId } : { kind: "backend" };
+}
+var DEFINITIVE = /revision_conflict|stale_generation|permission_denied|profile_mismatch|invalid_params|admission_conflict|session_busy|retained_receipts|runtime_coordination_required|unknown_execution|not_found|mutation_identity_required|client_upgrade_required|Session not found/;
+function createFencedMutation(mintId) {
+  let pending = /* @__PURE__ */ new Map();
+  return async function(key, read, send) {
+    let prepared = pending.get(key);
+    prepared || (prepared = read().then((snapshot) => {
+      if (typeof snapshot?.exists != "boolean" || !snapshot.exists || !Number.isSafeInteger(snapshot.runtime_revision) || snapshot.runtime_revision < 0 || !Number.isSafeInteger(snapshot.runtime_generation) || snapshot.runtime_generation < 0)
+        throw new Error("Session mutation snapshot unavailable; refresh before trying again");
+      return { request_id: mintId(), expected_revision: snapshot.runtime_revision, expected_generation: snapshot.runtime_generation };
+    }), pending.set(key, prepared));
+    let identity4;
+    try {
+      identity4 = await prepared;
+    } catch (error) {
+      throw pending.delete(key), error;
+    }
+    try {
+      let result = await send(identity4);
+      return pending.delete(key), result;
+    } catch (error) {
+      throw DEFINITIVE.test(String(error instanceof Error ? error.message : error)) && pending.delete(key), error;
+    }
+  };
+}
+function restErrorText(error) {
+  let message = error instanceof Error ? error.message : String(error ?? "Unknown error"), match = /^(\d{3}): (.*)$/s.exec(message), detail = match ? match[2] : message;
+  if (match)
+    try {
+      let body = JSON.parse(match[2]);
+      detail = typeof body.detail == "string" ? body.detail : JSON.stringify(body.detail ?? body);
+    } catch {
+    }
+  let reasons = {
+    session_busy: "The session is running; try again when it is idle",
+    revision_conflict: "The session changed elsewhere; refresh and try again",
+    stale_generation: "The session changed elsewhere; refresh and try again",
+    permission_denied: "Hermes refused: this window may not edit that session",
+    not_found: "Session not found"
+  };
+  return reasons[detail] ? `${reasons[detail]} (${detail})` : detail;
+}
+function applyOverrides(rows, overrides) {
+  if (overrides.size === 0)
+    return rows;
+  let out = [];
+  for (let row of rows) {
+    let override = overrides.get(row.id);
+    if (!override)
+      out.push(row);
+    else if (!override.removed) {
+      let fields = { ...override };
+      delete fields.removed, out.push({ ...row, ...fields });
+    }
+  }
+  return out;
+}
+function settleOverrides(rows, overrides) {
+  let byId = new Map(rows.map((row) => [row.id, row])), next = /* @__PURE__ */ new Map();
+  for (let [id2, override] of overrides) {
+    let row = byId.get(id2);
+    if (override.removed) {
+      row && next.set(id2, override);
+      continue;
+    }
+    if (!row)
+      continue;
+    Object.keys(override).every((key) => key === "removed" || (row[key] ?? void 0) === (override[key] ?? void 0)) || next.set(id2, override);
+  }
+  return next;
 }
 
 // src/model/graph.ts
@@ -7793,7 +7912,7 @@ function labelGroup(id2) {
 function mergeLayout(previous, model, spec) {
   if (!previous || previous.size === 0)
     return layoutGraph(model, spec);
-  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => shown.has(id2)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels2) => {
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels2) => {
     let next = labels2.find(([, point]) => point.y > labelY);
     return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : 1 / 0 };
   }, bandOf = (key, anchorY) => {
@@ -7804,8 +7923,8 @@ function mergeLayout(previous, model, spec) {
       let above = labels2.filter(([, point]) => point.y <= anchorY).pop();
       return above ? bandUnder(above[1].y, labels2) : { top: -1 / 0, bottom: labels2[0] ? labels2[0][1].y - spec.rowGap : 1 / 0 };
     }
-    let pick = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0];
-    return bandUnder(pick[1].y, labels2);
+    let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0];
+    return bandUnder(pick2[1].y, labels2);
   }, findSpot = (shape, height, band, x0, rowsFor) => {
     let all = occupied(), lowest = band.bottom === 1 / 0 ? Math.max(band.top, bottomOf(all)) + step + height : band.bottom, top = band.top === -1 / 0 ? Math.min(0, ...all.map((rect) => rect.y)) : band.top, maxTop = lowest - height;
     if (maxTop < top)
@@ -7928,12 +8047,17 @@ var LayoutMemory = class {
   reset(key) {
     this.byKey.delete(key);
   }
+  /** Forget one block in every layout (moved to another project: placed anew in its band). */
+  forget(id2) {
+    for (let [key, positions] of this.byKey)
+      positions.has(id2) && this.byKey.set(key, new Map([...positions].filter(([other]) => other !== id2)));
+  }
 };
 
 // src/model/status.ts
 init_define_import_meta_env();
-function liveStatus(row, host4) {
-  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host4.focusedStoredSessionId && ids.has(host4.focusedStoredSessionId)), focusedBusy = open && (host4.busy || !!(host4.focusedSessionId && host4.busyBySession[host4.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host4.busyBySession[row.id], needsInput = [...ids].some((id2) => host4.needsInput.has(id2)), unread = !!row.unread;
+function liveStatus(row, host5) {
+  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host5.focusedStoredSessionId && ids.has(host5.focusedStoredSessionId)), focusedBusy = open && (host5.busy || !!(host5.focusedSessionId && host5.busyBySession[host5.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host5.busyBySession[row.id], needsInput = [...ids].some((id2) => host5.needsInput.has(id2)), unread = !!row.unread;
   return {
     running,
     needsInput,
@@ -8253,6 +8377,14 @@ function costLabel(actual, estimated) {
   return typeof value2 == "number" && Number.isFinite(value2) ? `$${value2.toFixed(2)}` : "—";
 }
 
+// src/page/session-actions-context.ts
+init_define_import_meta_env();
+import { createContext as createContext2, useContext as useContext2 } from "react";
+var SessionActionsCtx = createContext2(null);
+function useSessionActions() {
+  return useContext2(SessionActionsCtx);
+}
+
 // src/styles/dense/spec.ts
 init_define_import_meta_env();
 function denseLayoutSpec({ showAll }) {
@@ -8295,7 +8427,7 @@ function blockClass(data, selected2, extra = "") {
   ].filter(Boolean).join(" ");
 }
 var DenseBlock = memo3(function({ data, selected: selected2 }) {
-  let { node, status, project } = data, row = node.row, tone = status?.tone ?? "idle";
+  let { node, status, project } = data, actions = useSessionActions(), row = node.row, tone = status?.tone ?? "idle";
   return /* @__PURE__ */ jsxs3(
     "div",
     {
@@ -8320,7 +8452,24 @@ var DenseBlock = memo3(function({ data, selected: selected2 }) {
           "×",
           node.compacted
         ] }),
-        /* @__PURE__ */ jsx3("span", { className: "st-age", children: shortAge(row.last_active || row.started_at, data.nowMs) })
+        /* @__PURE__ */ jsx3("span", { className: "st-age", children: shortAge(row.last_active || row.started_at, data.nowMs) }),
+        actions?.canAct(node) && // R14: the session menu from the block itself (on hover or while selected).
+        /* @__PURE__ */ jsx3(
+          "button",
+          {
+            type: "button",
+            className: "st-more nodrag nopan",
+            "data-testid": "session-tree-block-more",
+            "aria-label": "Session actions",
+            title: "Session actions",
+            onMouseDown: (event) => event.stopPropagation(),
+            onDoubleClick: (event) => event.stopPropagation(),
+            onClick: (event) => {
+              event.stopPropagation(), actions.openMenuFor(node.id, event.currentTarget);
+            },
+            children: /* @__PURE__ */ jsx3(Codicon2, { name: "ellipsis", size: 12 })
+          }
+        )
       ]
     }
   );
@@ -8403,8 +8552,75 @@ function DenseLink({ id: id2, source, target, data }) {
 init_define_import_meta_env();
 import { Codicon as Codicon3 } from "@hermes/plugin-sdk";
 import { useState as useState2 } from "react";
+
+// src/page/labels.ts
+init_define_import_meta_env();
+import { useI18n } from "@hermes/plugin-sdk";
+import { useMemo as useMemo2 } from "react";
+function pick(tree, path) {
+  let value2 = tree;
+  for (let key of path.split("."))
+    value2 = value2?.[key];
+  return value2;
+}
+function labelsFrom(t) {
+  let text = (path, fallback) => {
+    let value2 = pick(t, path);
+    return typeof value2 == "string" && value2 ? value2 : fallback;
+  }, format = (path, fallback) => (arg) => {
+    let value2 = pick(t, path);
+    if (typeof value2 == "function")
+      try {
+        let out = value2(arg);
+        if (typeof out == "string" && out)
+          return out;
+      } catch {
+      }
+    return fallback(arg);
+  };
+  return {
+    rename: text("sidebar.row.rename", "Rename…"),
+    pin: text("sidebar.row.pin", "Pin"),
+    unpin: text("sidebar.row.unpin", "Unpin"),
+    markRead: text("sidebar.row.markRead", "Mark as read"),
+    markUnread: text("sidebar.row.markUnread", "Mark as unread"),
+    appearance: text("sidebar.projects.menuAppearance", "Appearance"),
+    noColor: text("sidebar.projects.noColor", "No color"),
+    copyId: text("sidebar.row.copyId", "Copy ID"),
+    copyIdFailed: text("sidebar.row.copyIdFailed", "Could not copy session ID"),
+    copied: text("common.copied", "Copied"),
+    branch: text("sidebar.row.branchFrom", "Branch"),
+    export: text("sidebar.row.export", "Export"),
+    moveToProject: text("sidebar.projects.moveToProject", "Move to project"),
+    moveNoProjects: text("sidebar.projects.moveNoProjects", "No other projects"),
+    movedTo: format("sidebar.projects.movedTo", (name) => `Moved to ${name}`),
+    moveFailed: text("sidebar.projects.moveFailed", "Could not move session"),
+    archive: text("sidebar.row.archive", "Archive"),
+    unarchive: text("sidebar.row.unarchive", "Unarchive"),
+    delete: text("common.delete", "Delete"),
+    deleteTitle: text("sidebar.row.deleteTitle", "Delete session?"),
+    deleteDesc: format("sidebar.row.deleteDesc", (title) => `This will permanently delete “${title}”. This cannot be undone.`),
+    deleting: text("sidebar.row.deleting", "Deleting…"),
+    deleted: text("sidebar.row.deleted", "Session deleted"),
+    renameTitle: text("sidebar.row.renameTitle", "Rename session"),
+    untitledPlaceholder: text("sidebar.row.untitledPlaceholder", "Untitled session"),
+    renamed: text("sidebar.row.renamed", "Renamed"),
+    renameFailed: text("sidebar.row.renameFailed", "Rename failed"),
+    unreadFailed: text("sidebar.row.unreadFailed", "Could not update unread state"),
+    sessionActions: text("sidebar.row.sessionActions", "Session actions"),
+    cancel: text("common.cancel", "Cancel"),
+    save: text("common.save", "Save"),
+    exported: text("desktop.sessionExported", "Session exported"),
+    exportFailed: text("desktop.sessionExportFailed", "Could not export session")
+  };
+}
+function useMenuLabels() {
+  let { t } = useI18n();
+  return useMemo2(() => labelsFrom(t), [t]);
+}
+
+// src/styles/dense/inspector.tsx
 import { Fragment as Fragment3, jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
-var ACTIONS_LATER = "Session actions arrive in a later version";
 function NodeLink({
   model,
   id: id2,
@@ -8449,19 +8665,49 @@ function StatusTags({ node, status }) {
   let tags = [];
   return status?.open && tags.push({ key: "open", label: "● open in app", tone: "acc" }), status?.running && tags.push({ key: "running", label: "running", tone: "run" }), status?.needsInput && tags.push({ key: "needs-input", label: "needs input", tone: "ask" }), status?.unread && tags.push({ key: "unread", label: "unread", tone: "acc" }), status?.pinned && tags.push({ key: "pinned", label: "pinned" }), node.archived && tags.push({ key: "archived", label: "archived" }), node.compacted > 0 && tags.push({ key: "compacted", label: `compacted ×${node.compacted}`, tone: "acc" }), node.outOfScope && tags.push({ key: "out-of-scope", label: "outside this project" }), /* @__PURE__ */ jsx4("div", { className: "st-tags", "data-testid": "session-tree-inspector-tags", children: tags.map((tag) => /* @__PURE__ */ jsx4("span", { className: `st-tag${tag.tone ? ` st-tag--${tag.tone}` : ""}`, "data-tag": tag.key, children: tag.label }, tag.key)) });
 }
-function Actions() {
+function Actions({ node, onOpen }) {
+  let actions = useSessionActions(), labels = useMenuLabels(), available = !!actions?.canAct(node), archived = !!node.row?.archived;
   return /* @__PURE__ */ jsxs4("div", { className: "st-acts", "data-testid": "session-tree-inspector-actions", children: [
-    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act st-act--primary", disabled: !0, title: ACTIONS_LATER, children: [
+    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act st-act--primary", "data-action": "open", disabled: !available, title: "Open in a new tab", onClick: () => onOpen(node), children: [
       /* @__PURE__ */ jsx4(Codicon3, { name: "link-external", size: 12 }),
       "Open"
     ] }),
-    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, children: [
-      /* @__PURE__ */ jsx4(Codicon3, { name: "git-branch", size: 12 }),
-      "Branch"
+    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act", "data-action": "branch", disabled: !available, title: labels.branch, onClick: () => {
+      actions?.branch(node);
+    }, children: [
+      /* @__PURE__ */ jsx4(Codicon3, { name: "repo-forked", size: 12 }),
+      labels.branch
     ] }),
-    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, "aria-label": "Rename", children: /* @__PURE__ */ jsx4(Codicon3, { name: "edit", size: 12 }) }),
-    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, "aria-label": "Archive", children: /* @__PURE__ */ jsx4(Codicon3, { name: "archive", size: 12 }) }),
-    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", disabled: !0, title: ACTIONS_LATER, "aria-label": "More actions", children: /* @__PURE__ */ jsx4(Codicon3, { name: "ellipsis", size: 12 }) })
+    /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", "data-action": "rename", disabled: !available, title: labels.rename, "aria-label": labels.rename, onClick: () => actions?.rename(node), children: /* @__PURE__ */ jsx4(Codicon3, { name: "edit", size: 12 }) }),
+    /* @__PURE__ */ jsx4(
+      "button",
+      {
+        type: "button",
+        className: "st-act",
+        "data-action": "archive",
+        disabled: !available,
+        title: archived ? labels.unarchive : labels.archive,
+        "aria-label": archived ? labels.unarchive : labels.archive,
+        onClick: () => {
+          actions?.toggleArchive(node);
+        },
+        children: /* @__PURE__ */ jsx4(Codicon3, { name: "archive", size: 12 })
+      }
+    ),
+    /* @__PURE__ */ jsx4(
+      "button",
+      {
+        type: "button",
+        className: "st-act",
+        "data-action": "more",
+        "data-testid": "session-tree-inspector-more",
+        disabled: !available,
+        title: labels.sessionActions,
+        "aria-label": labels.sessionActions,
+        onClick: (event) => actions?.openMenuFor(node.id, event.currentTarget),
+        children: /* @__PURE__ */ jsx4(Codicon3, { name: "ellipsis", size: 12 })
+      }
+    )
   ] });
 }
 function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }) {
@@ -8475,7 +8721,7 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }) {
     ] }),
     /* @__PURE__ */ jsx4("div", { className: "st-it", "data-field": "title", children: node.title }),
     /* @__PURE__ */ jsx4(StatusTags, { node, status }),
-    /* @__PURE__ */ jsx4(Actions, {}),
+    /* @__PURE__ */ jsx4(Actions, { node, onOpen }),
     /* @__PURE__ */ jsx4("div", { className: "st-sec", children: /* @__PURE__ */ jsxs4("div", { className: "st-kv", children: [
       /* @__PURE__ */ jsx4(Stat, { field: "last-used", label: "Last used", value: agoLabel(row.last_active || row.started_at, nowMs), title: dateTimeLabel(row.last_active) }),
       /* @__PURE__ */ jsx4(Stat, { field: "started", label: "Started", value: dateTimeLabel(row.started_at) }),
@@ -8576,14 +8822,14 @@ function getStyle(id2) {
 
 // src/page/graph-canvas.tsx
 init_define_import_meta_env();
-import { useCallback as useCallback2, useEffect as useEffect3, useMemo as useMemo2, useRef as useRef3, useState as useState3 } from "react";
+import { useCallback as useCallback3, useEffect as useEffect2, useMemo as useMemo3, useRef as useRef2, useState as useState4 } from "react";
 
 // src/page/plugin-context.ts
 init_define_import_meta_env();
-import { createContext as createContext2, useContext as useContext2 } from "react";
-var PluginCtx = createContext2(null);
+import { createContext as createContext3, useContext as useContext3 } from "react";
+var PluginCtx = createContext3(null);
 function usePluginCtx() {
-  let ctx = useContext2(PluginCtx);
+  let ctx = useContext3(PluginCtx);
   if (!ctx)
     throw new Error("Session Tree component rendered outside its plugin context");
   return ctx;
@@ -8591,86 +8837,181 @@ function usePluginCtx() {
 
 // src/page/session-menu.tsx
 init_define_import_meta_env();
-import { useEffect as useEffect2, useRef as useRef2 } from "react";
-import { jsx as jsx5 } from "react/jsx-runtime";
-var ITEMS = [
-  "Appearance ▸",
-  "Pin",
-  "Rename…",
-  "Move to project ▸",
-  "Copy ID",
-  null,
-  "Branch",
-  "Export",
-  "Mark as read",
-  null,
-  "Archive",
-  "Delete"
-];
-function SessionMenu({ menu, onClose }) {
-  let ctx = usePluginCtx(), ref = useRef2(null);
-  return useEffect2(() => {
-    let offDown = ctx.addEventListener(
-      document,
-      "pointerdown",
-      (event) => {
-        ref.current?.contains(event.target) || onClose();
-      },
-      !0
-    ), offKey = ctx.addEventListener(document, "keydown", (event) => {
-      event.key === "Escape" && onClose();
-    });
-    return () => {
-      offDown(), offKey();
-    };
-  }, [ctx, onClose]), /* @__PURE__ */ jsx5(
-    "div",
-    {
-      ref,
-      className: "session-tree__menu",
-      role: "menu",
-      "data-testid": "session-tree-menu",
-      "data-node-id": menu.nodeId,
-      style: { left: menu.x, top: menu.y },
-      onContextMenu: (event) => event.preventDefault(),
-      children: ITEMS.map(
-        (item, index2) => item === null ? /* @__PURE__ */ jsx5("hr", {}, `sep-${index2}`) : /* @__PURE__ */ jsx5(
-          "button",
-          {
-            type: "button",
-            role: "menuitem",
-            disabled: !0,
-            className: item === "Delete" ? "is-danger" : void 0,
-            title: "Session actions arrive in a later version",
-            children: item
-          },
-          item
-        )
-      )
-    }
+import {
+  Codicon as Codicon4,
+  ColorSwatches,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+  CopyButton,
+  icons,
+  PROFILE_SWATCHES
+} from "@hermes/plugin-sdk";
+import { useCallback as useCallback2, useState as useState3 } from "react";
+import { Fragment as Fragment4, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
+function nodeIdAt(target) {
+  return target?.closest?.(".react-flow__node")?.getAttribute("data-id") ?? null;
+}
+var ICON = 14;
+function MenuItems({ node, actions, labels }) {
+  let row = node.row, status = actions.statusOf(node), unread = !!row.unread, blocked = deleteBlockedReason(status), targets = actions.moveTargets(node), ArchiveOff = icons.ArchiveOff;
+  return /* @__PURE__ */ jsxs5(Fragment4, { children: [
+    /* @__PURE__ */ jsxs5(
+      ContextMenuItem,
+      {
+        "data-action": "rename",
+        onSelect: () => {
+          actions.noteDialogFromMenu(), actions.rename(node);
+        },
+        children: [
+          /* @__PURE__ */ jsx5(Codicon4, { name: "edit", size: ICON }),
+          /* @__PURE__ */ jsx5("span", { children: labels.rename })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxs5(ContextMenuItem, { "data-action": "pin", "data-pinned": row.pinned ? "true" : "false", onSelect: () => actions.togglePin(node), children: [
+      /* @__PURE__ */ jsx5(Codicon4, { name: "pin", size: ICON }),
+      /* @__PURE__ */ jsx5("span", { children: row.pinned ? labels.unpin : labels.pin })
+    ] }),
+    /* @__PURE__ */ jsxs5(ContextMenuItem, { "data-action": "read", "data-unread": unread ? "true" : "false", onSelect: () => {
+      actions.toggleUnread(node);
+    }, children: [
+      /* @__PURE__ */ jsx5(Codicon4, { name: unread ? "mail-read" : "mail", size: ICON }),
+      /* @__PURE__ */ jsx5("span", { children: unread ? labels.markRead : labels.markUnread })
+    ] }),
+    /* @__PURE__ */ jsxs5(ContextMenuSub, { children: [
+      /* @__PURE__ */ jsxs5(ContextMenuSubTrigger, { "data-action": "appearance", children: [
+        /* @__PURE__ */ jsx5(Codicon4, { name: "symbol-color", size: ICON }),
+        /* @__PURE__ */ jsx5("span", { children: labels.appearance })
+      ] }),
+      /* @__PURE__ */ jsx5(ContextMenuSubContent, { className: "p-2", "data-testid": "session-tree-menu-appearance", children: /* @__PURE__ */ jsx5(
+        ColorSwatches,
+        {
+          clearIcon: "circle-slash",
+          clearLabel: labels.noColor,
+          swatches: PROFILE_SWATCHES,
+          value: actions.colorOf(node),
+          onChange: (color2) => actions.setColor(node, color2)
+        }
+      ) })
+    ] }),
+    /* @__PURE__ */ jsx5(
+      CopyButton,
+      {
+        appearance: "context-menu-item",
+        errorMessage: labels.copyIdFailed,
+        iconClassName: "size-3.5 text-current",
+        label: labels.copyId,
+        text: row.id,
+        onCopied: () => actions.copied(node),
+        onCopyError: (error) => actions.copyFailed(error)
+      }
+    ),
+    /* @__PURE__ */ jsx5(ContextMenuSeparator, {}),
+    /* @__PURE__ */ jsxs5(ContextMenuItem, { "data-action": "branch", onSelect: () => {
+      actions.branch(node);
+    }, children: [
+      /* @__PURE__ */ jsx5(Codicon4, { name: "repo-forked", size: ICON }),
+      /* @__PURE__ */ jsx5("span", { children: labels.branch })
+    ] }),
+    /* @__PURE__ */ jsxs5(ContextMenuItem, { "data-action": "export", onSelect: () => {
+      actions.exportSession(node);
+    }, children: [
+      /* @__PURE__ */ jsx5(Codicon4, { name: "cloud-download", size: ICON }),
+      /* @__PURE__ */ jsx5("span", { children: labels.export })
+    ] }),
+    /* @__PURE__ */ jsxs5(ContextMenuSub, { children: [
+      /* @__PURE__ */ jsxs5(ContextMenuSubTrigger, { "data-action": "move", children: [
+        /* @__PURE__ */ jsx5(Codicon4, { name: "folder", size: ICON }),
+        /* @__PURE__ */ jsx5("span", { children: labels.moveToProject })
+      ] }),
+      /* @__PURE__ */ jsx5(ContextMenuSubContent, { "data-testid": "session-tree-menu-move", children: targets.length === 0 ? /* @__PURE__ */ jsx5(ContextMenuItem, { disabled: !0, children: labels.moveNoProjects }) : targets.map((project) => /* @__PURE__ */ jsx5(ContextMenuItem, { "data-action": "move-to", "data-project-id": project.id, onSelect: () => {
+        actions.moveTo(node, project);
+      }, children: project.label }, project.id)) })
+    ] }),
+    /* @__PURE__ */ jsx5(ContextMenuSeparator, {}),
+    /* @__PURE__ */ jsxs5(ContextMenuItem, { "data-action": "archive", "data-archived": row.archived ? "true" : "false", onSelect: () => {
+      actions.toggleArchive(node);
+    }, children: [
+      row.archived && ArchiveOff ? /* @__PURE__ */ jsx5(ArchiveOff, { className: "size-3.5" }) : /* @__PURE__ */ jsx5(Codicon4, { name: "archive", size: ICON }),
+      /* @__PURE__ */ jsx5("span", { children: row.archived ? labels.unarchive : labels.archive })
+    ] }),
+    /* @__PURE__ */ jsxs5(
+      ContextMenuItem,
+      {
+        variant: "destructive",
+        className: "text-destructive focus:text-destructive",
+        "data-action": "delete",
+        "data-blocked-reason": blocked,
+        disabled: !!blocked,
+        title: blocked,
+        onSelect: () => {
+          actions.noteDialogFromMenu(), actions.remove(node);
+        },
+        children: [
+          /* @__PURE__ */ jsx5(Codicon4, { name: "trash", size: ICON }),
+          /* @__PURE__ */ jsx5("span", { children: labels.delete }),
+          blocked && /* @__PURE__ */ jsx5("span", { className: "st-menu-note", children: blocked })
+        ]
+      }
+    )
+  ] });
+}
+function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) {
+  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState3(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback2(
+    (event) => {
+      let id2 = actions?.takeRequestedMenuNode() ?? null ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
+      if (!actions || !actions.canAct(target)) {
+        event.preventDefault();
+        return;
+      }
+      setNodeId(target.id), onOpenFor(target);
+    },
+    [actions, model, onOpenFor]
   );
+  return /* @__PURE__ */ jsxs5(ContextMenu, { children: [
+    /* @__PURE__ */ jsx5(ContextMenuTrigger, { asChild: !0, onContextMenu, children: children2 }),
+    actions && node && actions.canAct(node) && /* @__PURE__ */ jsx5(
+      ContextMenuContent,
+      {
+        className: "w-40",
+        "aria-label": labels.sessionActions,
+        "data-testid": "session-tree-menu",
+        "data-node-id": node.id,
+        onCloseAutoFocus: (event) => {
+          event.preventDefault(), actions.dialogOpening() || onRestoreFocus();
+        },
+        children: /* @__PURE__ */ jsx5(MenuItems, { node, actions, labels })
+      }
+    )
+  ] });
 }
 
 // src/page/graph-canvas.tsx
-import { jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
+import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350;
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onOpen, statusOf, snap, nowMs } = props, ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState3(), [menu, setMenu] = useState3(), [tooltip, setTooltip] = useState3(), spaceDown = useRef3(!1), [spaceHeld, setSpaceHeld] = useState3(!1), tooltipTimer = useRef3(void 0), shown = useMemo2(() => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)), [model, spec]), lineage = useMemo2(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo2(() => {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onOpen, statusOf, snap, nowMs } = props, ctx = usePluginCtx(), wrapper = useRef2(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef2(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef2(void 0), shown = useMemo3(() => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)), [model, spec]), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo3(() => {
     let out = /* @__PURE__ */ new Map();
     for (let id2 of shown) {
       let point = positions.get(id2);
       point && out.set(id2, rectOf(id2, point, spec));
     }
     return out;
-  }, [shown, positions, spec]), routes = useMemo2(() => {
+  }, [shown, positions, spec]), routes = useMemo3(() => {
     let ends = model.edges.filter((edge) => rects.has(edge.source) && rects.has(edge.target)).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, ...style2.ports(edge.kind, rects.get(edge.source), rects.get(edge.target)) })), routed = routeLinks(ends, rects, style2.router), out = /* @__PURE__ */ new Map();
     for (let end of ends)
       out.set(end.id, { from: end.from, to: end.to, route: routed.get(end.id) });
     return out;
-  }, [model, rects, style2]), baseNodes = useMemo2(() => {
+  }, [model, rects, style2]), baseNodes = useMemo3(() => {
     let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -8718,10 +9059,10 @@ function GraphCanvas(props) {
       });
     }
     return nodes2;
-  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs]), nodes = useMemo2(() => {
+  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs]), nodes = useMemo3(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
     return spaceHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
-  }, [baseNodes, drag2, spaceHeld]), edges = useMemo2(
+  }, [baseNodes, drag2, spaceHeld]), edges = useMemo3(
     () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
       let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
       return {
@@ -8742,9 +9083,9 @@ function GraphCanvas(props) {
       };
     }),
     [model, shown, style2, lineage, routes]
-  ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback2(() => {
+  ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback3(() => {
     tooltipTimer.current?.(), tooltipTimer.current = void 0, setTooltip(void 0);
-  }, []), onNodesChange = useCallback2((changes) => {
+  }, []), onNodesChange = useCallback3((changes) => {
     let moves = changes.filter(
       (change) => change.type === "position" && !!change.position && change.dragging === !0
     );
@@ -8754,9 +9095,9 @@ function GraphCanvas(props) {
         next.set(move.id, move.position);
       return next;
     });
-  }, []), onNodeDragStart = useCallback2(() => {
-    hideTooltip(), setMenu(void 0);
-  }, [hideTooltip]), onNodeDragStop = useCallback2(
+  }, []), onNodeDragStart = useCallback3(() => {
+    hideTooltip();
+  }, [hideTooltip]), onNodeDragStop = useCallback3(
     (_event, _node, dragged) => {
       let moves = /* @__PURE__ */ new Map();
       for (let item of dragged)
@@ -8764,31 +9105,34 @@ function GraphCanvas(props) {
       setDrag(void 0), moves.size > 0 && onMove(moves);
     },
     [onMove]
-  ), graphNode = useCallback2((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback2(
+  ), graphNode = useCallback3((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback3(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
-      setMenu(void 0), node && !node.readOnly && onSelect(node.id);
+      node && !node.readOnly && onSelect(node.id);
     },
     [graphNode, onSelect]
-  ), onNodeDoubleClick = useCallback2(
+  ), onNodeDoubleClick = useCallback3(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
       node && !node.readOnly && node.kind === "session" && onOpen(node);
     },
     [graphNode, onOpen]
-  ), onNodeContextMenu = useCallback2(
-    (event, flowNode) => {
-      event.preventDefault();
-      let node = graphNode(flowNode);
-      if (hideTooltip(), !node || node.readOnly || !wrapper.current) {
-        setMenu(void 0);
-        return;
-      }
-      let box = wrapper.current.getBoundingClientRect();
-      onSelect(node.id), setMenu({ nodeId: node.id, x: event.clientX - box.left, y: event.clientY - box.top });
+  ), onNodeContextMenu = useCallback3(() => hideTooltip(), [hideTooltip]), onMenuOpen = useCallback3(
+    (node) => {
+      hideTooltip(), onSelect(node.id);
     },
-    [graphNode, hideTooltip, onSelect]
-  ), onNodeMouseEnter = useCallback2(
+    [hideTooltip, onSelect]
+  ), restoreFocus = useCallback3(() => {
+    let attempt = () => {
+      let active = document.activeElement;
+      (!active || active === document.body) && wrapper.current?.focus({ preventScroll: !0 });
+    };
+    wrapper.current?.focus({ preventScroll: !0 });
+    for (let ms of [0, 50, 150, 400])
+      ctx.setTimeout(attempt, ms);
+  }, [ctx]);
+  useEffect2(() => (actions?.setMenuHost(wrapper.current), () => actions?.setMenuHost(null)), [actions]);
+  let onNodeMouseEnter = useCallback3(
     (event, flowNode) => {
       let node = graphNode(flowNode), target = event.currentTarget;
       !node || !wrapper.current || (tooltipTimer.current?.(), tooltipTimer.current = ctx.setTimeout(() => {
@@ -8800,12 +9144,15 @@ function GraphCanvas(props) {
     },
     [ctx, graphNode]
   );
-  useEffect3(() => {
+  return useEffect2(() => {
     let element = wrapper.current;
     if (!element)
       return;
     let middle = (event) => {
       event.button === 1 && event.preventDefault();
+    }, releaseSelect = (target = document.activeElement) => {
+      let element2 = target;
+      return element2 instanceof HTMLSelectElement && element2.closest('[data-testid="session-tree-toolbar"]') ? (element2.blur(), !0) : !1;
     }, offs = [
       ctx.addEventListener(element, "mousedown", middle, !0),
       ctx.addEventListener(element, "mouseup", middle, !0),
@@ -8815,13 +9162,25 @@ function GraphCanvas(props) {
         "pointerdown",
         (event) => {
           let pointer2 = event, target = pointer2.target;
-          pointer2.button !== 0 || spaceDown.current || !target || target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && (onSelect(null), setMenu(void 0));
+          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && onSelect(null);
         },
         !0
       ),
-      ctx.addEventListener(window, "keydown", (event) => {
-        event.code === "Space" && !isTypingTarget(event.target) && (spaceDown.current = !0, setSpaceHeld(!0));
-      }),
+      ctx.addEventListener(
+        window,
+        "keydown",
+        (event) => {
+          if (event.code === "Space") {
+            if (releaseSelect(event.target)) {
+              event.preventDefault(), event.stopPropagation(), document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: !0 }));
+              return;
+            } else if (isTypingTarget(event.target))
+              return;
+            spaceDown.current = !0, setSpaceHeld(!0);
+          }
+        },
+        !0
+      ),
       ctx.addEventListener(window, "keyup", (event) => {
         event.code === "Space" && (spaceDown.current = !1, setSpaceHeld(!1));
       }),
@@ -8830,20 +9189,16 @@ function GraphCanvas(props) {
       })
     ];
     return () => offs.forEach((off) => off());
-  }, [ctx, onSelect]), useEffect3(() => () => tooltipTimer.current?.(), []);
-  let closeMenu = useCallback2(() => setMenu(void 0), []);
-  return /* @__PURE__ */ jsxs5(
+  }, [ctx, onSelect]), useEffect2(() => () => tooltipTimer.current?.(), []), /* @__PURE__ */ jsx6(SessionMenu, { model, onOpenFor: onMenuOpen, onRestoreFocus: restoreFocus, children: /* @__PURE__ */ jsxs6(
     "div",
     {
       ref: wrapper,
+      tabIndex: -1,
       className: `session-tree__canvas${snap ? " has-grid" : ""}`,
       "data-testid": "session-tree-canvas",
       "data-style": style2.id,
       "data-snap": snap ? "on" : "off",
       "data-grid": style2.grid,
-      onContextMenu: (event) => {
-        event.preventDefault();
-      },
       children: [
         /* @__PURE__ */ jsx6(
           index,
@@ -8861,7 +9216,6 @@ function GraphCanvas(props) {
             onNodeMouseEnter,
             onNodeMouseLeave: hideTooltip,
             onMoveStart: hideTooltip,
-            onPaneContextMenu: closeMenu,
             panOnDrag: [1],
             panActivationKeyCode: "Space",
             zoomOnScroll: !0,
@@ -8897,17 +9251,299 @@ function GraphCanvas(props) {
             style: { left: tooltip.x, top: tooltip.y },
             children: tooltip.text
           }
-        ),
-        menu && /* @__PURE__ */ jsx6(SessionMenu, { menu, onClose: closeMenu })
+        )
       ]
+    }
+  ) });
+}
+
+// src/page/session-actions.tsx
+init_define_import_meta_env();
+import {
+  Button,
+  ConfirmDialog,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  host as host2,
+  Input,
+  isSubmitEnter,
+  randomUuid
+} from "@hermes/plugin-sdk";
+import { useEffect as useEffect3, useMemo as useMemo4, useRef as useRef3, useState as useState5 } from "react";
+import { Fragment as Fragment5, jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
+var errorText = (error) => restErrorText(error), rpcReason = (error) => error?.data?.reason;
+function useRowOverrides(serverRows) {
+  let [overrides, setOverrides] = useState5(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState5(serverRows);
+  return settledFor !== serverRows && (setSettledFor(serverRows), overrides.size > 0 && setOverrides(settleOverrides(serverRows, overrides))), [overrides, setOverrides];
+}
+function useSessionActionsController(options) {
+  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState5(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState5(), [deleting, setDeleting] = useState5(), [mutate] = useState5(() => createFencedMutation(randomUuid)), latest = useRef3({ options, labels, colors }), menuHost = useRef3(null), requestedMenuNode = useRef3(null), dialogFromMenu = useRef3(!1);
+  useEffect3(() => {
+    latest.current = { options, labels, colors };
+  });
+  let actions = useMemo4(() => {
+    let patch = (id2, override) => setOverrides((previous) => new Map(previous).set(id2, { ...previous.get(id2), ...override })), unpatch = (id2) => setOverrides((previous) => {
+      if (!previous.has(id2))
+        return previous;
+      let next = new Map(previous);
+      return next.delete(id2), next;
+    }), rowOf = (node) => {
+      if (!isActionable(node))
+        throw new Error("Not available on this block");
+      return node.row;
+    }, notifyError = (error, fallback) => host2.notify({ kind: "error", title: fallback, message: errorText(error) });
+    return {
+      canAct: (node) => isActionable(node),
+      statusOf: (node) => latest.current.options.statusOf(node),
+      branchCount: (node) => latest.current.options.model.childrenOf.get(node.id)?.length ?? 0,
+      moveTargets: (node) => moveTargets(latest.current.options.model.projects, node.projectId),
+      colorOf: (node) => latest.current.colors.get(node.row?.id ?? node.id) ?? null,
+      rename(node) {
+        isActionable(node) && setRenaming(node);
+      },
+      togglePin(node) {
+        let row = rowOf(node), pinned = !row.pinned;
+        host2.sessions.pin(row.id, pinned), patch(row.id, { pinned });
+      },
+      async toggleUnread(node) {
+        let row = rowOf(node), unread = !row.unread;
+        patch(row.id, { unread });
+        try {
+          await mutate(
+            JSON.stringify(["read", node.profile, row.id, unread]),
+            () => fetchMutationSnapshot(latest.current.options.ctx, node.profile, row.id),
+            (identity4) => postReadState(latest.current.options.ctx, node.profile, row.id, unread, identity4)
+          ), latest.current.options.refreshSessions();
+        } catch (error) {
+          unpatch(row.id), notifyError(error, latest.current.labels.unreadFailed);
+        }
+      },
+      setColor(node, color2) {
+        let row = rowOf(node);
+        host2.sessions.setColor(row.id, color2), setColors((previous) => new Map(previous).set(row.id, color2));
+      },
+      copied() {
+        host2.notify({ kind: "success", message: "Session ID copied", durationMs: 2e3 });
+      },
+      copyFailed(error) {
+        notifyError(error, latest.current.labels.copyIdFailed);
+      },
+      async branch(node) {
+        let row = rowOf(node);
+        try {
+          let result = await host2.request("session.branch_stored", {
+            parent_session_id: row.id,
+            // Stable per attempt: a lost-response retry returns the SAME child (#65410).
+            idempotency_key: randomUuid(),
+            source: "desktop",
+            ...row.cwd ? { cwd: row.cwd } : {},
+            profile: node.profile
+          }), child = result?.stored_session_id;
+          if (!child)
+            throw new Error("The gateway returned no branch id");
+          result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
+          }), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
+        } catch (error) {
+          notifyError(error, "Could not branch session");
+        }
+      },
+      async exportSession(node) {
+        let row = rowOf(node);
+        try {
+          let data = await fetchExport(latest.current.options.ctx, node.profile, row.id), url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" })), anchor = document.createElement("a");
+          anchor.href = url, anchor.download = exportFilename(row.id, node.title), anchor.click(), latest.current.options.ctx.setTimeout(() => URL.revokeObjectURL(url), 1e3), host2.notify({ kind: "success", message: latest.current.labels.exported, durationMs: 2e3 });
+        } catch (error) {
+          notifyError(error, latest.current.labels.exportFailed);
+        }
+      },
+      async moveTo(node, project) {
+        let row = rowOf(node), cwd = projectRootCwd(project);
+        try {
+          if (!cwd)
+            throw new Error("That project has no folder");
+          await host2.request("session.workspace.move", { session_key: row.id, cwd, profile: node.profile }).catch((error) => {
+            throw rpcReason(error) === "session_busy" ? new Error("The session is running; move it when it is idle") : error;
+          }), latest.current.options.onMoved(node.id), latest.current.options.refreshSessions(), latest.current.options.refreshProjects(), host2.notify({ kind: "success", message: latest.current.labels.movedTo(project.label), durationMs: 2e3 });
+        } catch (error) {
+          notifyError(error, latest.current.labels.moveFailed);
+        }
+      },
+      async toggleArchive(node) {
+        let row = rowOf(node), archived = !row.archived;
+        patch(row.id, archived ? { archived, pinned: !1 } : { archived });
+        try {
+          await mutate(
+            JSON.stringify(["archive", node.profile, row.id, archived]),
+            () => fetchMutationSnapshot(latest.current.options.ctx, node.profile, row.id),
+            (identity4) => postArchive(latest.current.options.ctx, node.profile, row.id, archived, identity4)
+          ), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: archived ? `Archived “${node.title}”` : `Unarchived “${node.title}”`, durationMs: 2e3 });
+        } catch (error) {
+          unpatch(row.id), notifyError(error, archived ? "Could not archive session" : "Could not unarchive session");
+        }
+      },
+      remove(node) {
+        isActionable(node) && setDeleting(node);
+      },
+      openMenuFor(nodeId, anchor) {
+        let target = menuHost.current;
+        if (!target)
+          return;
+        let rect = anchor.getBoundingClientRect();
+        requestedMenuNode.current = nodeId, target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: !0, cancelable: !0, button: 2, clientX: rect.left, clientY: rect.bottom + 2 }));
+      },
+      setMenuHost(element) {
+        menuHost.current = element;
+      },
+      takeRequestedMenuNode() {
+        let id2 = requestedMenuNode.current;
+        return requestedMenuNode.current = null, id2;
+      },
+      dialogOpening() {
+        let opening = dialogFromMenu.current;
+        return dialogFromMenu.current = !1, opening;
+      },
+      noteDialogFromMenu() {
+        dialogFromMenu.current = !0;
+      }
+    };
+  }, [mutate, setOverrides]), backendRename = async (node, title) => {
+    let row = node.row, { ctx } = latest.current.options;
+    return (await mutate(
+      JSON.stringify(["rename", node.profile, row.id, title]),
+      () => fetchMutationSnapshot(ctx, node.profile, row.id),
+      (identity4) => postRename(ctx, node.profile, row.id, title, identity4)
+    ))?.title;
+  }, dialogs = /* @__PURE__ */ jsxs7(Fragment5, { children: [
+    /* @__PURE__ */ jsx7(
+      RenameDialog,
+      {
+        node: renaming,
+        labels,
+        onClose: () => setRenaming(void 0),
+        onSubmit: async (node, title) => {
+          let row = node.row, route = renameRoute(row, latest.current.options.runtime, title), finalTitle = title;
+          if (route.kind === "rpc")
+            try {
+              finalTitle = (await host2.request("session.title", { session_id: route.runtimeId, title }))?.title ?? title;
+            } catch {
+              finalTitle = await backendRename(node, title) ?? title;
+            }
+          else
+            finalTitle = await backendRename(node, title) ?? title;
+          setOverrides((previous) => new Map(previous).set(row.id, { ...previous.get(row.id), title: finalTitle || null })), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: labels.renamed, durationMs: 2e3 });
+        }
+      },
+      renaming?.id ?? "none"
+    ),
+    /* @__PURE__ */ jsx7(
+      DeleteDialog,
+      {
+        node: deleting,
+        labels,
+        branches: deleting ? options.model.childrenOf.get(deleting.id)?.length ?? 0 : 0,
+        blocked: deleting ? deleteBlockedReason(options.statusOf(deleting)) : void 0,
+        onClose: () => setDeleting(void 0),
+        onConfirm: async (node) => {
+          let row = node.row, blocked = deleteBlockedReason(latest.current.options.statusOf(node));
+          if (blocked)
+            throw new Error(blocked);
+          await mutate(
+            JSON.stringify(["delete", node.profile, row.id]),
+            () => fetchMutationSnapshot(latest.current.options.ctx, node.profile, row.id),
+            (identity4) => postDelete(latest.current.options.ctx, node.profile, row.id, identity4)
+          ).catch((error) => {
+            throw new Error(errorText(error));
+          }), setOverrides((previous) => new Map(previous).set(row.id, { removed: !0 })), latest.current.options.onRemoved(node.id), latest.current.options.refreshSessions();
+        }
+      }
+    )
+  ] });
+  return { actions, dialogs };
+}
+function RenameDialog({
+  node,
+  labels,
+  onClose,
+  onSubmit
+}) {
+  let current = node?.row?.title ?? "", [value2, setValue] = useState5(current), [busy, setBusy] = useState5(!1), [error, setError] = useState5(null), submit = async () => {
+    if (!node || busy)
+      return;
+    let next = value2.trim();
+    if (next === current.trim()) {
+      onClose();
+      return;
+    }
+    setBusy(!0), setError(null);
+    try {
+      await onSubmit(node, next), onClose();
+    } catch (err) {
+      setError(errorText(err)), host2.notify({ kind: "error", title: labels.renameFailed, message: errorText(err) });
+    } finally {
+      setBusy(!1);
+    }
+  };
+  return /* @__PURE__ */ jsx7(Dialog, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs7(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
+    /* @__PURE__ */ jsx7(DialogHeader, { children: /* @__PURE__ */ jsx7(DialogTitle, { children: labels.renameTitle }) }),
+    /* @__PURE__ */ jsx7(
+      Input,
+      {
+        autoFocus: !0,
+        "aria-label": labels.renameTitle,
+        "data-testid": "session-tree-rename-input",
+        disabled: busy,
+        maxLength: 100,
+        placeholder: labels.untitledPlaceholder,
+        value: value2,
+        onChange: (event) => setValue(event.target.value),
+        onKeyDown: (event) => {
+          isSubmitEnter(event) && (event.preventDefault(), submit());
+        }
+      }
+    ),
+    error && /* @__PURE__ */ jsx7("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
+    /* @__PURE__ */ jsxs7(DialogFooter, { children: [
+      /* @__PURE__ */ jsx7(Button, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
+      /* @__PURE__ */ jsx7(Button, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
+        submit();
+      }, children: labels.save })
+    ] })
+  ] }) });
+}
+function DeleteDialog({
+  node,
+  labels,
+  branches,
+  blocked,
+  onClose,
+  onConfirm
+}) {
+  let note = branchNote(branches), description = node ? [labels.deleteDesc(node.title), note, blocked ?? ""].filter(Boolean).join(`
+`) : "";
+  return /* @__PURE__ */ jsx7(
+    ConfirmDialog,
+    {
+      open: !!node,
+      title: labels.deleteTitle,
+      description: /* @__PURE__ */ jsx7("span", { "data-testid": "session-tree-delete-text", children: description }),
+      confirmLabel: labels.delete,
+      busyLabel: labels.deleting,
+      doneLabel: labels.deleted,
+      cancelLabel: labels.cancel,
+      destructive: !0,
+      onClose,
+      onConfirm: () => node ? onConfirm(node) : void 0
     }
   );
 }
 
 // src/page/toolbar.tsx
 init_define_import_meta_env();
-import { Codicon as Codicon4 } from "@hermes/plugin-sdk";
-import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
+import { Codicon as Codicon5 } from "@hermes/plugin-sdk";
+import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 var noFocus = (event) => event.preventDefault();
 function ToolButton({
   testId,
@@ -8917,7 +9553,7 @@ function ToolButton({
   children: children2,
   className
 }) {
-  return /* @__PURE__ */ jsx7(
+  return /* @__PURE__ */ jsx8(
     "button",
     {
       type: "button",
@@ -8935,13 +9571,13 @@ function ToolButton({
 var ZOOM_STEP = 1.2;
 function Toolbar(props) {
   let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope);
-  return /* @__PURE__ */ jsxs6("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
-    /* @__PURE__ */ jsxs6("span", { className: "st-brand", children: [
-      /* @__PURE__ */ jsx7(Codicon4, { name: "type-hierarchy", size: 14 }),
+  return /* @__PURE__ */ jsxs8("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
+    /* @__PURE__ */ jsxs8("span", { className: "st-brand", children: [
+      /* @__PURE__ */ jsx8(Codicon5, { name: "type-hierarchy", size: 14 }),
       "Session tree"
     ] }),
-    /* @__PURE__ */ jsxs6("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
-      /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsxs8("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
+      /* @__PURE__ */ jsx8(
         "button",
         {
           type: "button",
@@ -8955,7 +9591,7 @@ function Toolbar(props) {
           children: "All"
         }
       ),
-      scoped.map((project) => /* @__PURE__ */ jsxs6(
+      scoped.map((project) => /* @__PURE__ */ jsxs8(
         "button",
         {
           type: "button",
@@ -8967,16 +9603,16 @@ function Toolbar(props) {
           onMouseDown: noFocus,
           onClick: () => props.onScope(project.id),
           children: [
-            /* @__PURE__ */ jsx7(ProjectGlyph, { project, size: 11 }),
+            /* @__PURE__ */ jsx8(ProjectGlyph, { project, size: 11 }),
             project.label
           ]
         },
         project.id
       ))
     ] }),
-    /* @__PURE__ */ jsxs6("label", { className: "st-profile", title: "Profile", children: [
-      /* @__PURE__ */ jsx7(Codicon4, { name: "account", size: 12 }),
-      /* @__PURE__ */ jsxs6(
+    /* @__PURE__ */ jsxs8("label", { className: "st-profile", title: "Profile", children: [
+      /* @__PURE__ */ jsx8(Codicon5, { name: "account", size: 12 }),
+      /* @__PURE__ */ jsxs8(
         "select",
         {
           "data-testid": "session-tree-profile",
@@ -8989,14 +9625,14 @@ function Toolbar(props) {
             event.key === "Escape" && event.currentTarget.blur();
           },
           children: [
-            props.profiles.map((name) => /* @__PURE__ */ jsx7("option", { value: name, children: name }, name)),
-            /* @__PURE__ */ jsx7("option", { value: ALL_PROFILES, children: "All profiles" })
+            props.profiles.map((name) => /* @__PURE__ */ jsx8("option", { value: name, children: name }, name)),
+            /* @__PURE__ */ jsx8("option", { value: ALL_PROFILES, children: "All profiles" })
           ]
         }
       )
     ] }),
-    /* @__PURE__ */ jsx7("span", { className: "st-spacer" }),
-    /* @__PURE__ */ jsxs6(
+    /* @__PURE__ */ jsx8("span", { className: "st-spacer" }),
+    /* @__PURE__ */ jsxs8(
       ToolButton,
       {
         testId: "session-tree-show-all",
@@ -9004,12 +9640,12 @@ function Toolbar(props) {
         pressed: props.showAll,
         onClick: () => props.onShowAll(!props.showAll),
         children: [
-          /* @__PURE__ */ jsx7(Codicon4, { name: "list-flat", size: 13 }),
+          /* @__PURE__ */ jsx8(Codicon5, { name: "list-flat", size: 13 }),
           "Show all"
         ]
       }
     ),
-    /* @__PURE__ */ jsxs6(
+    /* @__PURE__ */ jsxs8(
       ToolButton,
       {
         testId: "session-tree-show-archived",
@@ -9017,14 +9653,14 @@ function Toolbar(props) {
         pressed: props.showArchived,
         onClick: () => props.onShowArchived(!props.showArchived),
         children: [
-          /* @__PURE__ */ jsx7(Codicon4, { name: "archive", size: 13 }),
+          /* @__PURE__ */ jsx8(Codicon5, { name: "archive", size: 13 }),
           "Archived"
         ]
       }
     ),
-    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx7(Codicon4, { name: "refresh", size: 13 }) }),
-    /* @__PURE__ */ jsx7("span", { className: "st-sep" }),
-    /* @__PURE__ */ jsxs6(
+    /* @__PURE__ */ jsx8(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx8(Codicon5, { name: "refresh", size: 13 }) }),
+    /* @__PURE__ */ jsx8("span", { className: "st-sep" }),
+    /* @__PURE__ */ jsxs8(
       ToolButton,
       {
         testId: "session-tree-snap",
@@ -9032,26 +9668,26 @@ function Toolbar(props) {
         pressed: props.snap,
         onClick: () => props.onSnap(!props.snap),
         children: [
-          /* @__PURE__ */ jsx7(Codicon4, { name: "symbol-numeric", size: 13 }),
+          /* @__PURE__ */ jsx8(Codicon5, { name: "symbol-numeric", size: 13 }),
           "Snap"
         ]
       }
     ),
-    /* @__PURE__ */ jsx7("span", { className: "st-sep" }),
-    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+    /* @__PURE__ */ jsx8("span", { className: "st-sep" }),
+    /* @__PURE__ */ jsx8(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
       zoomTo(clamp2(getZoom() / ZOOM_STEP));
     }, children: "−" }),
-    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+    /* @__PURE__ */ jsx8(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
       zoomTo(1);
-    }, className: "st-zoom", children: /* @__PURE__ */ jsxs6("span", { "data-testid": "session-tree-zoom", children: [
+    }, className: "st-zoom", children: /* @__PURE__ */ jsxs8("span", { "data-testid": "session-tree-zoom", children: [
       Math.round(zoom3 * 100),
       "%"
     ] }) }),
-    /* @__PURE__ */ jsx7(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+    /* @__PURE__ */ jsx8(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
       zoomTo(clamp2(getZoom() * ZOOM_STEP));
     }, children: "+" }),
-    /* @__PURE__ */ jsxs6(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-      /* @__PURE__ */ jsx7(Codicon4, { name: "screen-full", size: 13 }),
+    /* @__PURE__ */ jsxs8(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+      /* @__PURE__ */ jsx8(Codicon5, { name: "screen-full", size: 13 }),
       "Fit"
     ] })
   ] });
@@ -9078,13 +9714,13 @@ function useLiveRefresh(ctx, refresh) {
 }
 
 // src/page/session-tree-page.tsx
-import { Fragment as Fragment4, jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx }) {
-  return /* @__PURE__ */ jsx8(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx8(ReactFlowProvider, { children: /* @__PURE__ */ jsx8(PageBody, { ctx }) }) });
+  return /* @__PURE__ */ jsx9(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx9(ReactFlowProvider, { children: /* @__PURE__ */ jsx9(PageBody, { ctx }) }) });
 }
 function PageBody({ ctx }) {
-  let activeProfile = useValue(host2.state.profile) || "default", [profileChoice, setProfileChoice] = useState4(null), profile = profileChoice ?? activeProfile, [scopeChoice, setScope] = useState4(ALL_PROJECTS), [showAll, setShowAll] = useState4(!1), [showArchived, setShowArchived] = useState4(!1), [snap, setSnap] = useState4(!1), [selectedChoice, setSelectedId] = useState4(null), [memory] = useState4(() => new LayoutMemory()), [layoutVersion, setLayoutVersion] = useState4(0), [fitRequest, setFitRequest] = useState4(0), [nowMs, setNowMs] = useState4(() => Date.now()), style2 = getStyle(DEFAULT_STYLE_ID), flow = useReactFlow(), health = useQuery({
+  let activeProfile = useValue(host3.state.profile) || "default", [profileChoice, setProfileChoice] = useState6(null), profile = profileChoice ?? activeProfile, [scopeChoice, setScope] = useState6(ALL_PROJECTS), [showAll, setShowAll] = useState6(!1), [showArchived, setShowArchived] = useState6(!1), [snap, setSnap] = useState6(!1), [selectedChoice, setSelectedId] = useState6(null), [memory] = useState6(() => new LayoutMemory()), [layoutVersion, setLayoutVersion] = useState6(0), [fitRequest, setFitRequest] = useState6(0), [nowMs, setNowMs] = useState6(() => Date.now()), style2 = getStyle(DEFAULT_STYLE_ID), flow = useReactFlow(), health = useQuery({
     queryKey: ["session-tree", "health", activeProfile],
     queryFn: () => fetchHealth(ctx, activeProfile),
     retry: !1,
@@ -9102,7 +9738,7 @@ function PageBody({ ctx }) {
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === profile ? previous : void 0,
     retry: !1,
     refetchOnWindowFocus: !1
-  }), profileNames = useMemo3(() => {
+  }), profileNames = useMemo5(() => {
     let names = new Set(profiles.data?.profiles ?? []);
     return names.add(activeProfile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
   }, [profiles.data, activeProfile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
@@ -9121,15 +9757,15 @@ function PageBody({ ctx }) {
       projects.refetch();
     }
   }), useEffect5(() => ctx.setInterval(() => setNowMs(Date.now()), 6e4), [ctx]);
-  let projectList = useMemo3(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, rows = useMemo3(() => sessions.data?.sessions ?? [], [sessions.data]), model = useMemo3(
+  let projectList = useMemo5(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo5(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo5(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo5(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo3(() => style2.layoutSpec({ showAll }), [style2, showAll]), layoutKey = `${style2.id}|${profile}|${scope}`, ready = !!sessions.data && !projects.isPending, layout = useMemo3(
+  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), layoutKey = `${style2.id}|${profile}|${scope}`, ready = !!sessions.data && !projects.isPending, layout = useMemo5(
     () => ready ? memory.place(layoutKey, (previous) => style2.layout(model, previous, spec)) : EMPTY_LAYOUT,
     // `layoutVersion` re-runs the merge after a drop or a Re-arrange changed the memory.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the memory's change signal
     [ready, memory, layoutKey, style2, model, spec, layoutVersion]
-  ), busy = useValue(host2.state.busy), busyBySession = useValue(host2.state.busyBySession), focusedSessionId = useValue(host2.state.focusedSessionId), focusedStoredSessionId = useValue(host2.state.focusedStoredSessionId), hostStatus = useMemo3(
+  ), busy = useValue(host3.state.busy), busyBySession = useValue(host3.state.busyBySession), focusedSessionId = useValue(host3.state.focusedSessionId), focusedStoredSessionId = useValue(host3.state.focusedStoredSessionId), hostStatus = useMemo5(
     () => ({
       busy: !!busy,
       busyBySession: busyBySession ?? {},
@@ -9138,44 +9774,69 @@ function PageBody({ ctx }) {
       needsInput: NO_NEEDS_INPUT
     }),
     [busy, busyBySession, focusedSessionId, focusedStoredSessionId]
-  ), statusOf = useCallback3((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback3(() => {
+  ), statusOf = useCallback4((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback4(() => {
     let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
     flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : void 0 });
   }, [flow, model, spec, scope]);
   useEffect5(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback3(() => setFitRequest((count) => count + 1), []), onSelect = useCallback3(
-    (id2, reveal = !1) => {
+  let requestFit = useCallback4(() => setFitRequest((count) => count + 1), []), onSelect = useCallback4(
+    (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;
       if (id2 && (!node || node.readOnly))
         return;
       setSelectedId(id2);
       let point = id2 ? layout.positions.get(id2) : void 0;
-      if (reveal && point) {
+      if (reveal2 && point) {
         let { zoom: zoom3 } = flow.getViewport();
         flow.setCenter(point.x + style2.nodeSize.width / 2, point.y + style2.nodeSize.height / 2, { zoom: zoom3, duration: 0 });
       }
     },
     [model, layout, flow, style2]
-  ), onMove = useCallback3(
+  ), onMove = useCallback4(
     (moves) => {
       memory.move(layoutKey, moves), setLayoutVersion((version) => version + 1);
     },
     [memory, layoutKey]
-  ), onRearrange = useCallback3(() => {
+  ), onRearrange = useCallback4(() => {
     memory.reset(layoutKey), setLayoutVersion((version) => version + 1), requestFit();
-  }, [memory, layoutKey, requestFit]), onOpen = useCallback3(
+  }, [memory, layoutKey, requestFit]), onOpen = useCallback4(
     (node) => {
-      !node.row || node.readOnly || host2.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
+      !node.row || node.readOnly || host3.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
     },
     [activeProfile]
-  ), visibleCount = useMemo3(() => visibleRows(rows).length, [rows]), onCanvas = useMemo3(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec]), Panel2 = style2.Panel;
+  ), [pendingSelect, setPendingSelect] = useState6(null), [reveal, setReveal] = useState6(null);
+  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelectedId(pendingSelect), setReveal({ id: pendingSelect })), useEffect5(() => {
+    let point = reveal ? layout.positions.get(reveal.id) : void 0;
+    if (point) {
+      let { zoom: zoom3 } = flow.getViewport();
+      flow.setCenter(point.x + style2.nodeSize.width / 2, point.y + style2.nodeSize.height / 2, { zoom: zoom3, duration: 0 });
+    }
+  }, [reveal]);
+  let { actions, dialogs } = useSessionActionsController({
+    ctx,
+    model,
+    setOverrides,
+    statusOf,
+    runtime: { focusedStoredSessionId: focusedStoredSessionId ?? null, focusedSessionId: focusedSessionId ?? null },
+    refreshSessions: () => {
+      sessions.refetch();
+    },
+    refreshProjects: () => {
+      projects.refetch();
+    },
+    onBranched: (id2) => setPendingSelect(id2),
+    onMoved: (id2) => {
+      memory.forget(id2), setLayoutVersion((version) => version + 1);
+    },
+    onRemoved: (id2) => setSelectedId((current) => current === id2 ? null : current)
+  }), visibleCount = useMemo5(() => visibleRows(rows).length, [rows]), onCanvas = useMemo5(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec]), Panel2 = style2.Panel;
   if (health.isError)
-    return /* @__PURE__ */ jsx8("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx8(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
+    return /* @__PURE__ */ jsx9("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx9(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
   let body;
-  return sessions.isError ? body = /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-error", children: /* @__PURE__ */ jsx8(EmptyState, { title: "Could not load sessions", description: errorText(sessions.error) }) }) : health.isPending || sessions.isPending || projects.isPending ? body = /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx8(EmptyState, { title: "Loading sessions…" }) }) : model.nodes.length === 0 ? body = /* @__PURE__ */ jsx8("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx8(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) }) : body = /* @__PURE__ */ jsxs7(Fragment4, { children: [
-    /* @__PURE__ */ jsx8(
+  return sessions.isError ? body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-error", children: /* @__PURE__ */ jsx9(EmptyState, { title: "Could not load sessions", description: errorText2(sessions.error) }) }) : health.isPending || sessions.isPending || projects.isPending ? body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx9(EmptyState, { title: "Loading sessions…" }) }) : model.nodes.length === 0 ? body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx9(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) }) : body = /* @__PURE__ */ jsxs9(Fragment6, { children: [
+    /* @__PURE__ */ jsx9(
       GraphCanvas,
       {
         style: style2,
@@ -9192,8 +9853,8 @@ function PageBody({ ctx }) {
         nowMs
       }
     ),
-    onCanvas === 0 && /* @__PURE__ */ jsx8("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: "No branched sessions here — the sessions without branches are listed on the right." })
-  ] }), /* @__PURE__ */ jsxs7(
+    onCanvas === 0 && /* @__PURE__ */ jsx9("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: "No branched sessions here — the sessions without branches are listed on the right." })
+  ] }), /* @__PURE__ */ jsx9(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs9(
     "div",
     {
       className: "session-tree",
@@ -9205,9 +9866,9 @@ function PageBody({ ctx }) {
       "data-node-count": sessions.data ? model.nodes.length : void 0,
       "data-canvas-count": sessions.data ? onCanvas : void 0,
       "data-projects": projects.isError ? "error" : projects.data ? String(projectList.length) : "loading",
-      title: projects.isError ? `projects.tree: ${errorText(projects.error)}` : void 0,
+      title: projects.isError ? `projects.tree: ${errorText2(projects.error)}` : void 0,
       children: [
-        /* @__PURE__ */ jsx8(
+        /* @__PURE__ */ jsx9(
           Toolbar,
           {
             projects: projectList,
@@ -9235,31 +9896,32 @@ function PageBody({ ctx }) {
             singlesCount: model.singles.length
           }
         ),
-        /* @__PURE__ */ jsxs7("div", { className: "session-tree__main", children: [
-          /* @__PURE__ */ jsx8("div", { className: "session-tree__stage", children: body }),
-          Panel2 && sessions.data && /* @__PURE__ */ jsx8(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
-        ] })
+        /* @__PURE__ */ jsxs9("div", { className: "session-tree__main", children: [
+          /* @__PURE__ */ jsx9("div", { className: "session-tree__stage", children: body }),
+          Panel2 && sessions.data && /* @__PURE__ */ jsx9(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+        ] }),
+        dialogs
       ]
     }
-  );
+  ) });
 }
-function errorText(error) {
+function errorText2(error) {
   return error instanceof Error ? error.message : String(error ?? "Unknown error");
 }
 
 // src/settings/settings-page.tsx
 init_define_import_meta_env();
 import { ListRow, SegmentedControl } from "@hermes/plugin-sdk";
-import { jsx as jsx9 } from "react/jsx-runtime";
+import { jsx as jsx10 } from "react/jsx-runtime";
 var STYLE_OPTIONS = [{ id: "dense", label: "Dense + inspector" }];
 function SettingsPage() {
-  return /* @__PURE__ */ jsx9("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", children: /* @__PURE__ */ jsx9(
+  return /* @__PURE__ */ jsx10("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", children: /* @__PURE__ */ jsx10(
     ListRow,
     {
       id: "session-tree-view-style",
       title: "View style",
       description: "How the session graph is drawn. More styles arrive in later versions.",
-      action: /* @__PURE__ */ jsx9(SegmentedControl, { options: STYLE_OPTIONS, value: "dense", onChange: () => {
+      action: /* @__PURE__ */ jsx10(SegmentedControl, { options: STYLE_OPTIONS, value: "dense", onChange: () => {
       } })
     }
   ) });
@@ -9732,37 +10394,53 @@ g.is-dimmed {
   pointer-events: none;
 }
 
-.session-tree__menu {
-  position: absolute;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  min-width: 180px;
-  padding: 3px;
-  border: 1px solid var(--ui-stroke-secondary);
-  border-radius: 6px;
-  background: var(--ui-bg-elevated);
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--ui-text-primary) 22%, transparent);
+/* The menu itself is the SDK's ContextMenu (UI kit styles). Ours: the reason a disabled item
+   gives, the block's ⋯ button, the rename dialog's inline error. */
+.st-menu-note {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
 }
 
-.session-tree__menu button {
-  padding: 4px 9px;
+.st-more {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
   border: 0;
   border-radius: 4px;
-  background: transparent;
-  color: var(--ui-text-tertiary);
-  font: inherit;
-  text-align: left;
+  background: inherit;
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  transform: translateY(-50%);
 }
 
-.session-tree__menu button.is-danger {
-  color: color-mix(in srgb, var(--ui-red) 60%, var(--ui-text-tertiary));
+.session-tree__block:hover .st-more,
+.session-tree__block.is-selected .st-more {
+  display: inline-flex;
 }
 
-.session-tree__menu hr {
-  margin: 3px 2px;
-  border: 0;
-  border-top: 1px solid var(--ui-stroke-tertiary);
+.st-more:hover {
+  color: var(--ui-text-primary);
+}
+
+.st-dialog-error {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--ui-red) 35%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ui-red) 10%, transparent);
+  color: var(--ui-red);
+  font-size: 12px;
+}
+
+.session-tree__canvas:focus {
+  outline: none;
 }
 
 /* --- inspector (Dense) ----------------------------------------------------------------- */
@@ -10084,7 +10762,7 @@ g.is-dimmed {
 `;
 
 // src/plugin.tsx
-import { jsx as jsx10 } from "react/jsx-runtime";
+import { jsx as jsx11 } from "react/jsx-runtime";
 var PLUGIN_ID = "session-tree", ROUTE_PATH = "/session-tree";
 function injectStyles(ctx) {
   let style2 = document.createElement("style");
@@ -10101,7 +10779,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx10(SessionTreePage, { ctx })
+        render: () => /* @__PURE__ */ jsx11(SessionTreePage, { ctx })
       },
       {
         id: "nav",
@@ -10115,14 +10793,14 @@ var plugin = {
           id: "session-tree.open",
           label: "Open Session Tree",
           keywords: ["session", "tree", "graph", "branches"],
-          run: () => host3.navigate(ROUTE_PATH)
+          run: () => host4.navigate(ROUTE_PATH)
         }
       }
     ]), ctx.registerSettingsPage?.({
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx10(SettingsPage, {})
+      render: () => /* @__PURE__ */ jsx11(SettingsPage, {})
     });
   }
 }, plugin_default = plugin;

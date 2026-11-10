@@ -12,6 +12,7 @@ import { shortAge } from '../../model/format.ts'
 import type { Rect } from '../../model/layout.ts'
 import { curveRouter } from '../../model/route.ts'
 import type { Port } from '../../model/route.ts'
+import { useSessionActions } from '../../page/session-actions-context.ts'
 import { BlockHandles, projectColor } from '../shared.tsx'
 import type { BlockData, LinkData } from '../types.ts'
 import { DENSE_HEIGHT, DENSE_RESET_X, DENSE_WIDTH, densePorts } from './spec.ts'
@@ -40,6 +41,7 @@ function blockClass(data: BlockData, selected: boolean, extra = ''): string {
 
 export const DenseBlock = memo(function DenseBlock({ data, selected }: NodeProps<DenseBlockNode>) {
   const { node, status, project } = data
+  const actions = useSessionActions()
   const row = node.row!
   const tone = status?.tone ?? 'idle'
 
@@ -67,6 +69,24 @@ export const DenseBlock = memo(function DenseBlock({ data, selected }: NodeProps
         </span>
       )}
       <span className="st-age">{shortAge(row.last_active || row.started_at, data.nowMs)}</span>
+      {actions?.canAct(node) && (
+        // R14: the session menu from the block itself (on hover or while selected).
+        <button
+          type="button"
+          className="st-more nodrag nopan"
+          data-testid="session-tree-block-more"
+          aria-label="Session actions"
+          title="Session actions"
+          onMouseDown={event => event.stopPropagation()}
+          onDoubleClick={event => event.stopPropagation()}
+          onClick={event => {
+            event.stopPropagation()
+            actions.openMenuFor(node.id, event.currentTarget)
+          }}
+        >
+          <Codicon name="ellipsis" size={12} />
+        </button>
+      )}
     </div>
   )
 })

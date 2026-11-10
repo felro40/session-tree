@@ -11,6 +11,7 @@ import { ReactFlowProvider, useReactFlow } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { fetchHealth, fetchProfiles, fetchProjects, fetchSessions } from '../api.ts'
+import { applyOverrides } from '../model/actions.ts'
 import { ALL_PROFILES, ALL_PROJECTS, buildGraph } from '../model/graph.ts'
 import type { GraphNode } from '../model/graph.ts'
 import { laidOutFamilies } from '../model/layout.ts'
@@ -22,6 +23,8 @@ import type { HostStatusSnapshot } from '../model/status.ts'
 import { DEFAULT_STYLE_ID, getStyle } from '../styles/registry.ts'
 import { GraphCanvas, MAX_ZOOM, MIN_ZOOM } from './graph-canvas.tsx'
 import { PluginCtx } from './plugin-context.ts'
+import { useRowOverrides, useSessionActionsController } from './session-actions.tsx'
+import { SessionActionsCtx } from './session-actions-context.ts'
 import { Toolbar } from './toolbar.tsx'
 import { useLiveRefresh } from './use-live-refresh.ts'
 
@@ -111,7 +114,10 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
 
   const projectList = useMemo(() => projects.data ?? [], [projects.data])
   const scope = scopeChoice === ALL_PROJECTS || projectList.some(project => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS
-  const rows = useMemo(() => sessions.data?.sessions ?? [], [sessions.data])
+  const serverRows = useMemo(() => sessions.data?.sessions ?? [], [sessions.data])
+  // Session actions patch rows optimistically until the server rows agree (card 3).
+  const [overrides, setOverrides] = useRowOverrides(serverRows)
+  const rows = useMemo(() => applyOverrides(serverRows, overrides), [serverRows, overrides])
 
   const model = useMemo(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
@@ -218,6 +224,45 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
     [activeProfile]
   )
 
+  // R14: after Branch the page stays, then places (mergeLayout) and selects the new child. The
+  // selection is adjusted during render once the child is laid out; the effect only moves the
+  // viewport to it (an external system).
+  const [pendingSelect, setPendingSelect] = useState<null | string>(null)
+  const [reveal, setReveal] = useState<null | { id: string }>(null)
+
+  if (pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === false && layout.positions.has(pendingSelect)) {
+    setPendingSelect(null)
+    setSelectedId(pendingSelect)
+    setReveal({ id: pendingSelect })
+  }
+
+  useEffect(() => {
+    const point = reveal ? layout.positions.get(reveal.id) : undefined
+
+    if (point) {
+      const { zoom } = flow.getViewport()
+
+      void flow.setCenter(point.x + style.nodeSize.width / 2, point.y + style.nodeSize.height / 2, { zoom, duration: 0 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per reveal request
+  }, [reveal])
+
+  const { actions, dialogs } = useSessionActionsController({
+    ctx,
+    model,
+    setOverrides,
+    statusOf,
+    runtime: { focusedStoredSessionId: focusedStoredSessionId ?? null, focusedSessionId: focusedSessionId ?? null },
+    refreshSessions: () => void sessions.refetch(),
+    refreshProjects: () => void projects.refetch(),
+    onBranched: id => setPendingSelect(id),
+    onMoved: id => {
+      memory.forget(id)
+      setLayoutVersion(version => version + 1)
+    },
+    onRemoved: id => setSelectedId(current => (current === id ? null : current))
+  })
+
   const visibleCount = useMemo(() => visibleRows(rows).length, [rows])
   const onCanvas = useMemo(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec])
   const Panel = style.Panel
@@ -279,55 +324,58 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
   }
 
   return (
-    <div
-      className="session-tree"
-      data-testid="session-tree-page"
-      data-profile={profile}
-      data-scope={scope}
-      data-style={style.id}
-      data-row-count={sessions.data ? visibleCount : undefined}
-      data-node-count={sessions.data ? model.nodes.length : undefined}
-      data-canvas-count={sessions.data ? onCanvas : undefined}
-      data-projects={projects.isError ? 'error' : projects.data ? String(projectList.length) : 'loading'}
-      title={projects.isError ? `projects.tree: ${errorText(projects.error)}` : undefined}
-    >
-      <Toolbar
-        projects={projectList}
-        scope={scope}
-        onScope={next => {
-          setScope(next)
-          requestFit()
-        }}
-        profiles={profileNames}
-        profile={profile}
-        onProfile={next => {
-          setProfileChoice(next)
-          setScope(ALL_PROJECTS)
-          setSelectedId(null)
-          requestFit()
-        }}
-        showAll={showAll}
-        onShowAll={on => {
-          setShowAll(on)
-          requestFit()
-        }}
-        showArchived={showArchived}
-        onShowArchived={setShowArchived}
-        snap={snap}
-        onSnap={setSnap}
-        minZoom={MIN_ZOOM}
-        maxZoom={MAX_ZOOM}
-        onFit={fit}
-        onRearrange={onRearrange}
-        singlesCount={model.singles.length}
-      />
-      <div className="session-tree__main">
-        <div className="session-tree__stage">{body}</div>
-        {Panel && sessions.data && (
-          <Panel model={model} selectedId={selectedId} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
-        )}
+    <SessionActionsCtx.Provider value={actions}>
+      <div
+        className="session-tree"
+        data-testid="session-tree-page"
+        data-profile={profile}
+        data-scope={scope}
+        data-style={style.id}
+        data-row-count={sessions.data ? visibleCount : undefined}
+        data-node-count={sessions.data ? model.nodes.length : undefined}
+        data-canvas-count={sessions.data ? onCanvas : undefined}
+        data-projects={projects.isError ? 'error' : projects.data ? String(projectList.length) : 'loading'}
+        title={projects.isError ? `projects.tree: ${errorText(projects.error)}` : undefined}
+      >
+        <Toolbar
+          projects={projectList}
+          scope={scope}
+          onScope={next => {
+            setScope(next)
+            requestFit()
+          }}
+          profiles={profileNames}
+          profile={profile}
+          onProfile={next => {
+            setProfileChoice(next)
+            setScope(ALL_PROJECTS)
+            setSelectedId(null)
+            requestFit()
+          }}
+          showAll={showAll}
+          onShowAll={on => {
+            setShowAll(on)
+            requestFit()
+          }}
+          showArchived={showArchived}
+          onShowArchived={setShowArchived}
+          snap={snap}
+          onSnap={setSnap}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          onFit={fit}
+          onRearrange={onRearrange}
+          singlesCount={model.singles.length}
+        />
+        <div className="session-tree__main">
+          <div className="session-tree__stage">{body}</div>
+          {Panel && sessions.data && (
+            <Panel model={model} selectedId={selectedId} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
+          )}
+        </div>
+        {dialogs}
       </div>
-    </div>
+    </SessionActionsCtx.Provider>
   )
 }
 

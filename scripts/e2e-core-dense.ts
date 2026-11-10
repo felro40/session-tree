@@ -670,9 +670,10 @@ async function main(): Promise<void> {
       const segments = await inspector.locator('.st-seglist .st-mono').allInnerTexts()
 
       assert(JSON.stringify(segments) === JSON.stringify(row._lineage_ids), `segments ${segments}`)
-      const disabled = await inspector.locator('[data-testid="session-tree-inspector-actions"] button').evaluateAll(els => els.every(e => (e as HTMLButtonElement).disabled))
+      const enabled = await inspector.locator('[data-testid="session-tree-inspector-actions"] button').evaluateAll(els => els.every(e => !(e as HTMLButtonElement).disabled))
 
-      assert(disabled, 'action buttons are enabled before card 3')
+      // Card 3 wired the actions (scripts/e2e-actions.ts exercises them).
+      assert(enabled, 'action buttons are disabled on an in-scope session')
 
       return { id: row.id, messages: row.message_count, tokensIn: row.input_tokens, cost: row.estimated_cost_usd, segments }
     })
@@ -711,23 +712,8 @@ async function main(): Promise<void> {
       return { singles: singles.length, canvasWithAll: count }
     })
 
-    await check('R9: Show archived adds the archived sessions greyed out; off hides them again', async () => {
-      await clickToolbar(page, 'session-tree-show-archived')
-      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-archived-0"]').waitFor({ timeout: 15_000 })
-      await clickToolbar(page, 'session-tree-show-all')
-      const archived = page.locator(BLOCK('st-archived-0'))
-
-      await archived.waitFor({ timeout: 5000 })
-      const look = await archived.evaluate(el => ({ archived: el.getAttribute('data-archived'), opacity: getComputedStyle(el).opacity, border: getComputedStyle(el).borderStyle }))
-
-      assert(look.archived === 'true' && Number(look.opacity) < 1 && look.border === 'dashed', `archived look ${JSON.stringify(look)}`)
-      await clickToolbar(page, 'session-tree-show-all')
-      await clickToolbar(page, 'session-tree-show-archived')
-      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-archived-0"]').waitFor({ state: 'detached', timeout: 15_000 })
-
-      return look
-    })
-
+    // Card-2 r2 carry-forward 3: this check runs before any other Show archived toggle, so the
+    // archived query is not cached yet (a cached query would hide a remount and a re-fit).
     await check('R9: toggling Show archived keeps the canvas mounted — viewport, selection and inspector persist, no "Loading sessions…" (NB4)', async () => {
       await page.locator(BLOCK('st-sys-tip')).click()
       await page.locator('[data-testid="session-tree-inspector"][data-selected-id="st-sys-tip"]').waitFor({ timeout: 5000 })
@@ -778,6 +764,23 @@ async function main(): Promise<void> {
       return { viewport: before, after, loadingSeen: seen, selected }
     })
 
+    await check('R9: Show archived adds the archived sessions greyed out; off hides them again', async () => {
+      await clickToolbar(page, 'session-tree-show-archived')
+      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-archived-0"]').waitFor({ timeout: 15_000 })
+      await clickToolbar(page, 'session-tree-show-all')
+      const archived = page.locator(BLOCK('st-archived-0'))
+
+      await archived.waitFor({ timeout: 5000 })
+      const look = await archived.evaluate(el => ({ archived: el.getAttribute('data-archived'), opacity: getComputedStyle(el).opacity, border: getComputedStyle(el).borderStyle }))
+
+      assert(look.archived === 'true' && Number(look.opacity) < 1 && look.border === 'dashed', `archived look ${JSON.stringify(look)}`)
+      await clickToolbar(page, 'session-tree-show-all')
+      await clickToolbar(page, 'session-tree-show-archived')
+      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-archived-0"]').waitFor({ state: 'detached', timeout: 15_000 })
+
+      return look
+    })
+
     await check('R10: the profile filter switches to another profile and to All profiles', async () => {
       await setProfile(page, 'work')
       await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-work-0000"]').waitFor({ timeout: 20_000 })
@@ -796,29 +799,61 @@ async function main(): Promise<void> {
       return { work, all: both.length }
     })
 
-    await check('R3: after choosing a profile, Space + left-drag on empty canvas pans (the select gives the keyboard back, NB5)', async () => {
-      await setProfile(page, 'work')
-      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-work-0000"]').waitFor({ timeout: 20_000 })
-      await setProfile(page, 'default')
-      await page.locator(BLOCK('st-sys-tip')).waitFor({ timeout: 20_000 })
-      await page.waitForTimeout(300)
-      const focused = await page.evaluate(() => document.activeElement?.tagName ?? '')
-      const spot = await emptySpot(page)
-      const before = await viewport(page)
+    // Card-2 r2 carry-forward 2/3: real input only (a real click on the select, then the keyboard);
+    // `selectOption` never focuses the select, so it could not catch the bug.
+    await check('R3: the profile select gives Space back — closed with Escape (no change) and after a keyboard change, Space + left-drag pans (NB5)', async () => {
+      const select = page.locator('[data-testid="session-tree-profile"]')
+      const active = () => page.evaluate(() => document.activeElement?.tagName ?? '')
 
-      await page.mouse.move(spot.x, spot.y)
-      await page.keyboard.down('Space')
-      await page.waitForTimeout(100)
-      await drag(page, spot, { x: 80, y: -50 })
-      await page.keyboard.up('Space')
-      await page.waitForTimeout(300)
-      const after = await viewport(page)
+      const spacePan = async (by: { x: number; y: number }) => {
+        const spot = await emptySpot(page)
+        const before = await viewport(page)
 
-      assert(focused !== 'SELECT', 'the profile select kept the focus')
-      assert(near(after.x - before.x, 80, 3) && near(after.y - before.y, -50, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+        await page.mouse.move(spot.x, spot.y)
+        await page.keyboard.down('Space')
+        await page.waitForTimeout(100)
+        await drag(page, spot, by)
+        await page.keyboard.up('Space')
+        await page.waitForTimeout(300)
+        const after = await viewport(page)
+
+        return { x: after.x - before.x, y: after.y - before.y }
+      }
+
+      // 1. A real click opens the list; Escape closes it with no change: the select keeps the focus.
+      await select.click()
+      await page.waitForTimeout(300)
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+      const afterEscape = await active()
+      const unchanged = await select.inputValue()
+      const pan1 = await spacePan({ x: 80, y: -50 })
+
+      assert(unchanged === 'default', `Escape changed the profile to ${unchanged}`)
+      assert(near(pan1.x, 80, 3) && near(pan1.y, -50, 3), `after Escape (focus ${afterEscape}): pan ${pan1.x},${pan1.y}`)
       await clickToolbar(page, 'session-tree-fit')
 
-      return { focused, pan: { x: after.x - before.x, y: after.y - before.y } }
+      // 2. A keyboard change on the focused select (click, Escape, then type "w" → work), and back.
+      await select.click()
+      await page.waitForTimeout(300)
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('w')
+      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-work-0000"]').waitFor({ timeout: 20_000 })
+      const afterChange = await active()
+
+      await select.click()
+      await page.waitForTimeout(300)
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('d')
+      await page.locator(BLOCK('st-sys-tip')).waitFor({ timeout: 20_000 })
+      await page.waitForTimeout(300)
+      const pan2 = await spacePan({ x: -60, y: 40 })
+
+      assert(afterChange !== 'SELECT', 'the select kept the focus after a change')
+      assert(near(pan2.x, -60, 3) && near(pan2.y, 40, 3), `after a keyboard change: pan ${pan2.x},${pan2.y}`)
+      await clickToolbar(page, 'session-tree-fit')
+
+      return { afterEscape, pan1, afterChange, pan2 }
     })
 
     await check('R5: in a project scope other projects are dimmed and read-only (no drag, menu, select, open) with the tooltip', async () => {

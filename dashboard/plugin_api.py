@@ -16,6 +16,8 @@ Rules (Shared requirement 5):
   ``SessionDB.list_sessions_rich`` → ``_tag_rows`` → ``_strip_session_list_rows``.
   Nothing here opens ``state.db`` with raw SQL.
 * Inputs are untrusted: profile names are pattern- and length-checked, ``limit`` is capped.
+* Writes (card 3: rename, read state, archive, delete) never touch ``state.db`` themselves: each
+  calls the core endpoint's own mutation path with its guards (see "session actions" below).
 
 Each endpoint is shaped so a future SDK verb could replace it: ``/sessions`` returns
 ``SessionInfo`` rows like the core list does, plus the lineage facts the graph needs.
@@ -26,9 +28,10 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 logger = logging.getLogger(__name__)
 
@@ -172,3 +175,160 @@ def sessions(
         "truncated": truncated,
         "errors": errors,
     }
+
+
+# --- session actions (card 3, R14/R15) ------------------------------------------------------
+#
+# What the desktop SDK has no verb for: rename (for a session with no live runtime here), the
+# read-state watermark, archive, delete and the export download. Each endpoint is the core
+# endpoint's own code path, reached in-process, with the core guards:
+#
+# * rename / read / archive: ``hermes_cli.web_server_sessions._mutate_session_request`` (what
+#   ``PATCH /api/sessions/{id}`` runs): the caller's identity, the live gateway owner when one
+#   serves the home (else the offline store under its exclusive-maintenance lock), and the
+#   mutation-snapshot fence: ``request_id`` + ``expected_revision`` (+ ``expected_generation``)
+#   from ``GET .../mutation-snapshot``; a stale revision is refused (409), a running turn answers
+#   ``session_busy`` (409). Nothing here writes ``state.db`` itself.
+# * delete: the core ``DELETE /api/sessions/{id}`` handler itself (the same fenced mutation).
+# * export: ``GET /api/sessions/{id}/export``'s own streaming handler, so the bytes are the
+#   core's.
+#
+# Shaped so a future SDK verb can replace each one: the payloads are the core ones.
+
+#: Stored session ids (``SessionDB`` ids: timestamps, hex, fixture slugs). Untrusted input.
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
+#: ``SessionDB.MAX_TITLE_LENGTH`` is 100; anything far past it is refused before Hermes sees it.
+MAX_TITLE_INPUT = 400
+MAX_REQUEST_ID = 128
+
+
+def _one_profile(profile: str) -> tuple[str, Any]:
+    """A single named profile for a mutation (``*`` is a read-only selector)."""
+    if (profile or "").strip() == ALL_PROFILES:
+        raise HTTPException(status_code=400, detail="session_profile must name one profile for a session action")
+    return _resolve_profiles(profile)[0]
+
+
+def _checked_session_id(session_id: str) -> str:
+    if not _SESSION_ID_RE.fullmatch(session_id or ""):
+        raise HTTPException(status_code=400, detail="malformed session id")
+    return session_id
+
+
+def _require_session(name: str, home: Any, session_id: str) -> None:
+    """404 unless *session_id* is a stored row of profile *name* (read-only open)."""
+    from hermes_cli.web_routers.profiles import _read_profile_db
+
+    errors: list[dict[str, str]] = []
+    row = _read_profile_db(name, home, errors, lambda db: db.get_session(session_id))
+    if errors:
+        raise HTTPException(status_code=503, detail=errors[0]["error"])
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+
+class _Fence(BaseModel):
+    """The core mutation identity (``hermes_cli.web_models.SessionRename``'s fence fields).
+
+    Optional on purpose: a request without them reaches the core guard, which refuses it
+    (409 ``mutation_identity_required``), exactly as ``PATCH /api/sessions/{id}`` does."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: Optional[str] = Field(None, min_length=1, max_length=MAX_REQUEST_ID)
+    expected_revision: Optional[StrictInt] = Field(None, ge=0)
+    expected_generation: Optional[StrictInt] = Field(None, ge=0)
+
+
+class RenameBody(_Fence):
+    #: Empty clears the title (the core PATCH semantics); Hermes trims and caps it at 100.
+    title: StrictStr = Field(..., max_length=MAX_TITLE_INPUT)
+
+
+class ReadBody(_Fence):
+    #: True: mark as unread (arms the read-state watermark); False: mark as read now.
+    unread: StrictBool
+
+
+class ArchiveBody(_Fence):
+    #: True archives (and unpins, as the app's ``setSessionArchived`` does); False restores.
+    archived: StrictBool
+
+
+class DeleteBody(_Fence):
+    """Only the fence: the session id is the path's."""
+
+
+async def _mutate(request: Request, profile: str, session_id: str, body: _Fence, payload: dict[str, Any]) -> dict[str, Any]:
+    from fastapi.concurrency import run_in_threadpool
+    from hermes_cli.web_server_sessions import _mutate_session_request
+
+    name, home = _one_profile(profile)
+    sid = _checked_session_id(session_id)
+    await run_in_threadpool(_require_session, name, home, sid)
+    return await _mutate_session_request(
+        request, name, sid, request_id=body.request_id, expected_revision=body.expected_revision,
+        expected_generation=body.expected_generation, operation="sidebar", payload=payload)
+
+
+@router.get("/sessions/{session_id}/mutation-snapshot")
+async def mutation_snapshot(session_id: str, request: Request, profile: str = _profile_query()) -> dict[str, Any]:
+    """The fence for one edit: the core ``GET /api/sessions/{id}/mutation-snapshot``."""
+    from fastapi.concurrency import run_in_threadpool
+    from hermes_cli.web_routers.sessions import get_session_mutation_snapshot
+
+    name, home = _one_profile(profile)
+    sid = _checked_session_id(session_id)
+    await run_in_threadpool(_require_session, name, home, sid)
+    return await get_session_mutation_snapshot(sid, request, name)
+
+
+@router.post("/sessions/{session_id}/rename")
+async def rename(session_id: str, body: RenameBody, request: Request, profile: str = _profile_query()) -> dict[str, Any]:
+    """Rename a stored session (the page uses the ``session.title`` RPC instead when the session
+    has a live runtime it knows, as the app does)."""
+    return await _mutate(request, profile, session_id, body, {"title": body.title})
+
+
+@router.post("/sessions/{session_id}/read")
+async def read_state(session_id: str, body: ReadBody, request: Request, profile: str = _profile_query()) -> dict[str, Any]:
+    """Mark as read / unread: the core read-state watermark (``SessionDB.set_session_read``)."""
+    return await _mutate(request, profile, session_id, body, {"unread": body.unread})
+
+
+@router.post("/sessions/{session_id}/archive")
+async def archive(session_id: str, body: ArchiveBody, request: Request, profile: str = _profile_query()) -> dict[str, Any]:
+    """Archive / Unarchive, as the app does it (``api/sessions.ts`` ``setSessionArchived``: the
+    fenced ``PATCH {archived}``, plus ``pinned: false`` when archiving). Not the ``session.archive``
+    RPC: from a Webapp window the desktop client only sends it for a session whose revision it
+    holds (an open one), so a stored row the window never opened is refused client-side."""
+    payload: dict[str, Any] = {"archived": body.archived, **({"pinned": False} if body.archived else {})}
+    return await _mutate(request, profile, session_id, body, payload)
+
+
+@router.post("/sessions/{session_id}/delete")
+async def delete(session_id: str, body: DeleteBody, request: Request, profile: str = _profile_query()) -> dict[str, Any]:
+    """Delete, as the app does it: the core ``DELETE /api/sessions/{id}`` handler itself (the
+    fenced ``delete`` mutation, the owner's running-session refusal, the on-disk scrub). The
+    ``session.delete`` RPC is not served to a Webapp window (unknown method)."""
+    from fastapi.concurrency import run_in_threadpool
+    from hermes_cli.web_routers.sessions import delete_session_endpoint
+
+    name, home = _one_profile(profile)
+    sid = _checked_session_id(session_id)
+    await run_in_threadpool(_require_session, name, home, sid)
+    return await delete_session_endpoint(sid, request, profile=name, request_id=body.request_id,
+                                         expected_revision=body.expected_revision,
+                                         expected_generation=body.expected_generation)
+
+
+@router.get("/sessions/{session_id}/export")
+async def export(session_id: str, profile: str = _profile_query()):
+    """The session (metadata + every message) as JSON, streamed by the core export handler."""
+    from fastapi.concurrency import run_in_threadpool
+    from hermes_cli.web_routers.sessions import export_session_endpoint
+
+    name, home = _one_profile(profile)
+    sid = _checked_session_id(session_id)
+    await run_in_threadpool(_require_session, name, home, sid)
+    return await export_session_endpoint(sid, profile=name)

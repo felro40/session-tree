@@ -322,6 +322,30 @@ describe('mergeLayout on the default fixture (live refresh stays in its project 
 
     assert.deepEqual([...mergeLayout(placed, first, spec(true)).positions], [...merged.positions])
   })
+
+  it('Show all on → off → a new child → on: the child never lands on a remembered (hidden) single (card-2 r2 NB1)', () => {
+    // The page keeps one memory per layout key across Show all toggles (LayoutMemory.place).
+    const memory = new LayoutMemory()
+    const key = 'dense|default|all'
+    const place = (model: GraphModel, showAll: boolean) => memory.place(key, previous => mergeLayout(previous, model, spec(showAll))).positions
+
+    place(first, false)
+    place(first, true) // Show all on: every single gets a remembered spot
+    place(first, false) // off again: the singles are hidden, their spots stay remembered
+    const child = childOf('st-sys-tip')
+    const next = buildGraph([...fixture.rows, child], fixture.projects, options)
+    const withChild = place(next, false)
+    const childRect = rectOf(child.id, withChild.get(child.id)!, spec())
+    const onTop = [...withChild]
+      .filter(([id]) => id !== child.id && !id.startsWith(GROUP_PREFIX))
+      .filter(([id, point]) => overlaps(rectOf(id, point, spec()), childRect))
+      .map(([id]) => id)
+
+    assert.deepEqual(onTop, [], `the new child overlaps remembered blocks ${onTop.join(', ')}`)
+    assertInBand(withChild, child.id, projectOf('syscanvas'))
+    // Show all on again: everything (the child and every single) is clear of everything.
+    assertNoOverlap(next, place(next, true), spec(true))
+  })
 })
 
 describe('LayoutMemory', () => {
@@ -336,5 +360,15 @@ describe('LayoutMemory', () => {
     assert.deepEqual(place().positions.get('k'), { x: 999, y: 999 })
     memory.reset('dense|default|all')
     assert.deepEqual(place().positions.get('k'), first.positions.get('k'))
+  })
+
+  it('forget drops one block from every layout (a session moved to another project is placed anew)', () => {
+    const memory = new LayoutMemory()
+
+    memory.move('dense|default|all', new Map([['a', { x: 1, y: 1 }], ['b', { x: 2, y: 2 }]]))
+    memory.move('dense|default|p1', new Map([['a', { x: 3, y: 3 }]]))
+    memory.forget('a')
+    assert.deepEqual([...memory.get('dense|default|all')!.keys()], ['b'])
+    assert.deepEqual([...memory.get('dense|default|p1')!.keys()], [])
   })
 })

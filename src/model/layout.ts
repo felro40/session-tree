@@ -288,9 +288,11 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
   const clearX = spec.columnGap / 2
   const clearY = spec.rowGap / 2
 
+  // Every remembered block is an obstacle, also one not shown now (a single that Show all placed
+  // earlier, an archived row): it comes back to that spot when it is shown again (card-2 r2 NB1).
   const blockRects = (): Rect[] =>
     [...positions]
-      .filter(([id]) => shown.has(id))
+      .filter(([id]) => !id.startsWith(GROUP_PREFIX))
       .map(([id, point]) => rectOf(id, point, spec))
       .map(rect => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY }))
 
