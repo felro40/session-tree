@@ -66,6 +66,9 @@ const MENU = '[data-testid="session-tree-menu"]'
 const ITEM = (action: string) => `${MENU} [data-action="${action}"]`
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+/** The fixed lane order the user ruled (2026-11-09), written out independently of `orderLanes`. */
+const alphabetical = (labels: readonly string[]) => [...labels].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'accent' }))
+
 async function api<T>(s: Session, path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   return s.page.evaluate(
     async ([p, i]) => {
@@ -550,7 +553,7 @@ async function main(): Promise<void> {
       return { style: await pageStyle(page) }
     })
 
-    await check('one lane per project in projects.tree order, plus the no-project lane (Home) last; header counts and tokens equal the backend\'s rows', async () => {
+    await check('one lane per project in the fixed alphabetical order (user ruling 2026-11-09; the toolbar keeps projects.tree\'s order), plus the no-project lane (Home) last; header counts and tokens equal the backend\'s rows', async () => {
       const shown = await headers(page)
       const scopeLabels = await page.$$eval('[data-testid="session-tree-scope"] button[data-scope]', buttons =>
         buttons.filter(button => button.getAttribute('data-scope') !== 'all').map(button => (button as HTMLElement).innerText.trim())
@@ -558,7 +561,9 @@ async function main(): Promise<void> {
       const expected = expectedLanes(rows)
       const projectLabels = scopeLabels.filter(label => label !== 'Home')
 
-      assert(JSON.stringify(shown.map(lane => lane.label)) === JSON.stringify([...projectLabels, 'Home']), `lanes ${JSON.stringify(shown.map(lane => lane.label))} vs toolbar ${JSON.stringify(scopeLabels)}`)
+      assert(JSON.stringify(shown.map(lane => lane.label)) === JSON.stringify([...alphabetical(projectLabels), 'Home']), `lanes ${JSON.stringify(shown.map(lane => lane.label))} vs toolbar ${JSON.stringify(scopeLabels)}`)
+      // The toolbar's scope picker is not re-sorted: it still lists projects.tree's order.
+      assert(JSON.stringify(projectLabels) !== JSON.stringify(alphabetical(projectLabels)), `the fixture's projects.tree order is already alphabetical (${JSON.stringify(projectLabels)}): the check proves nothing`)
 
       for (const lane of shown) {
         assert(expected[lane.label], `no backend rows for ${lane.label}`)
@@ -1318,6 +1323,139 @@ async function main(): Promise<void> {
       }
 
       return runs
+    })
+
+    await check('B1-r3: one chat turn in a branched child that is NOT the newest row (st-scale-0003, Show all off; st-scale-0007, Show all on) on the 500-session fixture: the backend moves its row to the front, the block\'s count updates, and no long task ≥ 200 ms (no re-route)', async () => {
+      await setProfile(page, 'scale')
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
+      const runs: Record<string, unknown> = {}
+
+      for (const [showAll, id] of [[false, 'st-scale-0003'], [true, 'st-scale-0007']] as const) {
+        if (showAll) {
+          await clickToolbar(page, 'session-tree-show-all')
+          await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"]')?.getAttribute('data-canvas-count') === '500', undefined, { timeout: 60_000 })
+        }
+
+        // Proof the case is the r3 repro: a branched child, and not the newest row of the
+        // backend's answer (so the turn moves its row, and its edge, to the front).
+        const backend = await rowsOf(s, false, 'scale')
+        const index = backend.findIndex(row => row.id === id)
+        const row = backend[index]
+
+        assert(row && row._branched_from, `${id} is not a branched child: ${JSON.stringify(row && { id: row.id, _branched_from: row._branched_from })}`)
+        assert(index > 0, `${id} is already the newest row (index ${index})`)
+
+        // Let the first render (and its routing) settle before watching.
+        await sleep(3000)
+        const field = `${BLOCK(id)} [data-field="messages"]`
+
+        assert((await page.locator(field).count()) === 1, `${id} is not drawn at the default view`)
+        const shownBefore = await page.locator(field).textContent()
+        const before = Number(/^(\d+)/.exec(shownBefore ?? '')?.[1])
+
+        assert(Number.isFinite(before), `no message count on ${id}: ${shownBefore}`)
+        await page.evaluate(() => {
+          const w = window as unknown as { __stTurn: { start: number; duration: number }[]; __stTurnObs: PerformanceObserver }
+
+          w.__stTurn = []
+          w.__stTurnObs = new PerformanceObserver(list => {
+            for (const entry of list.getEntries()) {
+              w.__stTurn.push({ start: Math.round(entry.startTime), duration: Math.round(entry.duration) })
+            }
+          })
+          w.__stTurnObs.observe({ type: 'longtask' })
+        })
+        const t0 = Date.now()
+        const appended = seedFixtures(t, ['--append', id, 'scale']) as { before?: number; after?: number }
+
+        assert(appended.after === (appended.before ?? 0) + 2, `append: ${JSON.stringify(appended)}`)
+        await page.waitForFunction(([selector, want]) => document.querySelector(selector)?.textContent === want, [field, `${before + 2} msgs`] as const, { timeout: 25_000 })
+        const refetchMs = Date.now() - t0
+
+        // Anything the refetch set off (layout, routes, React commit) has finished by now.
+        await sleep(2000)
+        const longTasks = await page.evaluate(() => {
+          const w = window as unknown as { __stTurn: { start: number; duration: number }[]; __stTurnObs: PerformanceObserver }
+
+          w.__stTurnObs.disconnect()
+
+          return w.__stTurn
+        })
+        const after = await rowsOf(s, false, 'scale')
+
+        runs[showAll ? 'showAll' : 'default'] = { id, rowIndexBefore: index, rowIndexAfter: after.findIndex(each => each.id === id), messages: [before, before + 2], refetchMs, longTasks, maxMs: Math.max(0, ...longTasks.map(task => task.duration)) }
+      }
+
+      await setProfile(page, 'default')
+      await clickToolbar(page, 'session-tree-show-all')
+      facts.branchedTurn = runs
+
+      for (const [name, run] of Object.entries(runs) as [string, { rowIndexAfter: number; longTasks: { duration: number }[] }][]) {
+        assert(run.rowIndexAfter === 0, `${name}: the turn did not make the row the newest (index ${run.rowIndexAfter})`)
+        assert(run.longTasks.every(task => task.duration < 200), `${name}: long tasks ${JSON.stringify(run.longTasks)}`)
+      }
+
+      return runs
+    })
+
+    await check('lane order (user ruling 2026-11-09): a chat turn in a project that is not first in projects.tree\'s recency order (500-session fixture) leaves the lane headers in the same, alphabetical order, and no long task ≥ 200 ms', async () => {
+      await setProfile(page, 'scale')
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
+      await sleep(3000)
+      const toolbarOrder = () =>
+        page.$$eval('[data-testid="session-tree-scope"] button[data-scope]', buttons =>
+          buttons.filter(button => button.getAttribute('data-scope') !== 'all').map(button => (button as HTMLElement).innerText.trim()).filter(label => label !== 'Home')
+        )
+      const laneOrder = async () => (await headers(page)).sort((a, b) => a.top - b.top).map(lane => lane.label)
+      const treeBefore = await toolbarOrder()
+      const lanesBefore = await laneOrder()
+
+      assert(treeBefore.length >= 2, `only ${treeBefore.length} projects on the scale profile`)
+      // A root session (no branch: the row reorder alone is B1-r3's case) of the project
+      // projects.tree lists last, i.e. not first: its turn makes that project the most recent.
+      const label = treeBefore.at(-1)!
+      const backend = await rowsOf(s, false, 'scale')
+      const row = backend.find(each => !each._branched_from && !each.parent_session_id && (each.git_repo_root ?? '').split('/').filter(Boolean).pop() === label)
+
+      assert(row, `no root session in ${label}`)
+      await page.evaluate(() => {
+        const w = window as unknown as { __stTurn: { start: number; duration: number }[]; __stTurnObs: PerformanceObserver }
+
+        w.__stTurn = []
+        w.__stTurnObs = new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) {
+            w.__stTurn.push({ start: Math.round(entry.startTime), duration: Math.round(entry.duration) })
+          }
+        })
+        w.__stTurnObs.observe({ type: 'longtask' })
+      })
+      const t0 = Date.now()
+      const appended = seedFixtures(t, ['--append', row.id, 'scale']) as { before?: number; after?: number }
+
+      assert(appended.after === (appended.before ?? 0) + 2, `append: ${JSON.stringify(appended)}`)
+      // The page refetches projects.tree too: the toolbar (still in its order) shows the project first.
+      const treeAfter = await waitFor('projects.tree lists the turned project first', toolbarOrder, order => order[0] === label, 25_000)
+      const refetchMs = Date.now() - t0
+
+      await sleep(3000)
+      const longTasks = await page.evaluate(() => {
+        const w = window as unknown as { __stTurn: { start: number; duration: number }[]; __stTurnObs: PerformanceObserver }
+
+        w.__stTurnObs.disconnect()
+
+        return w.__stTurn
+      })
+      const lanesAfter = await laneOrder()
+      const projectLanes = lanesBefore.filter(each => each !== 'Home')
+
+      await setProfile(page, 'default')
+      facts.laneOrderTurn = { session: row.id, project: label, treeBefore, treeAfter, lanesBefore, lanesAfter, refetchMs, longTasks }
+
+      assert(JSON.stringify(lanesAfter) === JSON.stringify(lanesBefore), `the lanes moved: ${JSON.stringify(lanesBefore)} → ${JSON.stringify(lanesAfter)}`)
+      assert(JSON.stringify(projectLanes) === JSON.stringify(alphabetical(treeBefore)), `lanes ${JSON.stringify(lanesBefore)} are not alphabetical`)
+      assert(longTasks.every(task => task.duration < 200), `long tasks ${JSON.stringify(longTasks)}`)
+
+      return facts.laneOrderTurn
     })
 
     await check('no page errors from the plugin; no position write from Swimlanes over the whole run except the Move\'s forget', () => {

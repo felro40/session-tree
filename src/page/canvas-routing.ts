@@ -7,14 +7,17 @@
  *
  * - `shown`: a framed style's shown set as given (the frame cache keeps it stable), else the
  *   laid-out families' blocks from the model; an equal set keeps the previous one.
- * - `rects`: from `shown`, the positions and the spec; equal rectangles keep the previous map.
+ * - `rects`: from `shown`, the positions and the spec, built in block-id order; equal
+ *   rectangles keep the previous map.
  * - `links`: per link whose two blocks have a rectangle, its edge id, source, target and kind
- *   (all the router and the style's ports read from the model); an equal list keeps the
- *   previous array.
+ *   (all the router and the style's ports read from the model), sorted by edge id; the same set
+ *   keeps the previous array, in whatever order the model lists its edges (B1-r3).
  * - `routes`: `routeLinks` over `links` and `rects` with the style's ports and router. It never
- *   keys on the model, so a refetch that only changes block content (message count, tokens,
- *   last used, title, status) does not re-route. A real structural change (a block added,
- *   removed or moved, a new link) re-routes once.
+ *   keys on the model, and both its inputs are in id order, never row order. So a refetch that
+ *   only changes block content (message count, tokens, last used, title, status) does not
+ *   re-route, also when the backend's `last_active` sort moves the changed row (and its edge) to
+ *   the front, and a reorder of the rows alone re-routes nothing. A real structural change (a
+ *   block added, removed or moved, a new link) re-routes once.
  *
  * Pure (no React): node:test drives the same object the canvas uses.
  */
@@ -76,6 +79,10 @@ function sameRects(a: ReadonlyMap<string, Rect>, b: ReadonlyMap<string, Rect>): 
   return true
 }
 
+/** Plain code-unit order (the same in Node and every browser). */
+const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+/** Both lists come sorted by id (the links stage), so in-order equality is set equality. */
 const sameLinks = (a: readonly LinkEnd[], b: readonly LinkEnd[]) =>
   a.length === b.length && a.every((end, i) => end.id === b[i].id && end.source === b[i].source && end.target === b[i].target && end.kind === b[i].kind)
 
@@ -118,7 +125,9 @@ export function createCanvasRouting(): CanvasRouting {
       const rects = rectsStage([shown, positions, spec], () => {
         const out = new Map<string, Rect>()
 
-        for (const id of shown) {
+        // By id (B1-r3): the router's obstacle list follows this map's order, so the same blocks
+        // in any order give the same routes.
+        for (const id of [...shown].sort(byId)) {
           const point = positions.get(id)
 
           if (point) {
@@ -129,10 +138,14 @@ export function createCanvasRouting(): CanvasRouting {
         return out
       })
 
+      // Sorted by edge id (B1-r3): `model.edges` follows the row order, which the backend sorts
+      // by `last_active`, so a chat turn in a branched session moves its edge to the front. The
+      // same set in another order is then the same list, and keeps the previous array.
       const links = linksStage([model, rects], () =>
         model.edges
           .filter(edge => rects.has(edge.source) && rects.has(edge.target))
           .map(edge => ({ id: edge.id, source: edge.source, target: edge.target, kind: edge.kind }))
+          .sort((a, b) => byId(a.id, b.id))
       )
 
       // R13 on drop: every link against every other block, from the committed positions. While a

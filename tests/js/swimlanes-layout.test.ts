@@ -6,7 +6,7 @@ import type { GraphModel } from '../../src/model/graph.ts'
 import { NO_PROJECT_ID } from '../../src/model/projects.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 import { browserOffsetAt } from '../../src/page/frame-cache.ts'
-import { fitSwimlanes, layoutSwimlanes, localCalendar, localDay, swimNowX } from '../../src/styles/swimlanes/layout.ts'
+import { fitSwimlanes, layoutSwimlanes, localCalendar, localDay, orderLanes, swimNowX } from '../../src/styles/swimlanes/layout.ts'
 import type { SwimInput, SwimLayout } from '../../src/styles/swimlanes/layout.ts'
 import {
   CHILD_GAP,
@@ -146,15 +146,28 @@ describe('Swimlanes layout on the fixtures', () => {
     assert.equal(plain(a), plain(c))
   })
 
-  it('one lane per project in projects.tree order, the no-project lane last, named like the core bucket (Home)', () => {
+  it('one lane per project in the fixed alphabetical order (not projects.tree\'s recency order), the no-project lane last, named like the core bucket (Home)', () => {
     const out = layout(model, { nowMs })
     const labels = out.lanes.map(lane => lane.label)
 
     const treeOrder = fixture.projects.filter(each => !each.isNoProject).map(each => each.label)
 
     assert.deepEqual(treeOrder, ['syscanvas', 'hermes-plugins', 'mdesign'])
-    assert.deepEqual(labels, [...treeOrder, 'Home'])
+    assert.deepEqual(labels, ['hermes-plugins', 'mdesign', 'syscanvas', 'Home'])
     assert.equal(out.lanes.at(-1)!.key, NO_PROJECT_ID)
+
+    // The same projects in another (recency) order: the same lanes, the same layout.
+    const reordered = buildGraph(fixture.rows, [...fixture.projects].reverse(), options())
+    const again = layout(reordered, { nowMs })
+
+    assert.deepEqual(again.lanes.map(lane => lane.key), out.lanes.map(lane => lane.key))
+    assert.deepEqual([...again.positions], [...out.positions])
+
+    // A project scope collapses the others in the same order.
+    const mdesign = fixture.projects.find(each => each.label === 'mdesign')!
+    const scoped = layout(buildGraph(fixture.rows, fixture.projects, options(mdesign.id)), { nowMs })
+
+    assert.deepEqual(scoped.lanes.map(lane => lane.label), labels)
   })
 
   it('header counts and tokens: every session of the lane under the filters, singles included', () => {
@@ -588,5 +601,65 @@ describe('Swimlanes singles popover placement (NB5, card-5 review)', () => {
 
     // A short list that fits below stays below, even low in the canvas.
     assert.equal(popoverPlacement({ y: 600, height: 24 }, 800, 1).above, false)
+  })
+})
+
+describe('Swimlanes lane order (orderLanes, user ruling 2026-11-09: fixed alphabetical order)', () => {
+  const entry = (id: string, label: string, isNoProject = false) => ({ id, label, isNoProject })
+  const ids = (list: readonly { id: string }[]) => list.map(each => each.id)
+
+  it('sorts project lanes by label, case-insensitively', () => {
+    const out = orderLanes([entry('p-zeta', 'zeta'), entry('p-alpha', 'Alpha'), entry('p-beta', 'beta'), entry('p-gamma', 'Gamma')])
+
+    assert.deepEqual(ids(out), ['p-alpha', 'p-beta', 'p-gamma', 'p-zeta'])
+  })
+
+  it('breaks a label tie (compare result 0, e.g. "Foo" and "foo") by project id, in code-unit order', () => {
+    const out = orderLanes([entry('/repos/b', 'foo'), entry('/repos/a', 'Foo'), entry('/repos/C', 'FOO')])
+
+    // "/repos/C" < "/repos/a" < "/repos/b" in code units (uppercase first).
+    assert.deepEqual(ids(out), ['/repos/C', '/repos/a', '/repos/b'])
+  })
+
+  it('puts the no-project lane last, given in the middle and with a label that would sort first', () => {
+    const out = orderLanes([entry('p-m', 'mdesign'), entry(NO_PROJECT_ID, 'AAA Home', true), entry('p-h', 'hermes-plugins'), entry('p-s', 'syscanvas')])
+
+    assert.deepEqual(ids(out), ['p-h', 'p-m', 'p-s', NO_PROJECT_ID])
+  })
+
+  it('gives the same output for every permutation of its input (and leaves the input alone)', () => {
+    const base = [entry('p-s', 'syscanvas'), entry(NO_PROJECT_ID, 'Home', true), entry('p-m', 'mdesign'), entry('p-x', 'Mdesign'), entry('p-h', 'hermes-plugins')]
+    const expected = ['p-h', 'p-m', 'p-x', 'p-s', NO_PROJECT_ID]
+    const permutations = (list: typeof base): (typeof base)[] =>
+      list.length <= 1 ? [list] : list.flatMap((each, i) => permutations([...list.slice(0, i), ...list.slice(i + 1)]).map(rest => [each, ...rest]))
+    let seen = 0
+
+    for (const order of permutations(base)) {
+      const copy = [...order]
+
+      assert.deepEqual(ids(orderLanes(order)), expected, ids(order).join(','))
+      assert.deepEqual(order, copy)
+      seen += 1
+    }
+
+    assert.equal(seen, 120)
+  })
+
+  it('a turn that makes another project the most recent (projects.tree reorders) leaves the lanes and every position unchanged', () => {
+    const projects = [project('/repos/zeta', ['z1', 'z2'], { label: 'zeta' }), project('/repos/alpha', ['a1', 'a2'], { label: 'alpha' }), project('/repos/mid', ['m1', 'm2'], { label: 'Mid' })]
+    const rows = [
+      row('z1', { git_repo_root: '/repos/zeta', started_at: 1_799_990_000, last_active: 1_799_990_500 }),
+      row('z2', { git_repo_root: '/repos/zeta', _branched_from: 'z1', parent_session_id: 'z1', started_at: 1_799_990_600, last_active: 1_799_991_000 }),
+      row('a1', { git_repo_root: '/repos/alpha', started_at: 1_799_980_000, last_active: 1_799_980_500 }),
+      row('a2', { git_repo_root: '/repos/alpha', _branched_from: 'a1', parent_session_id: 'a1', started_at: 1_799_980_600, last_active: 1_799_981_000 }),
+      row('m1', { git_repo_root: '/repos/mid', started_at: 1_799_970_000, last_active: 1_799_970_500 }),
+      row('m2', { git_repo_root: '/repos/mid', _branched_from: 'm1', parent_session_id: 'm1', started_at: 1_799_970_600, last_active: 1_799_971_000 })
+    ]
+    const first = layout(buildGraph(rows, projects, options()))
+    const turned = layout(buildGraph(rows, [projects[2], projects[0], projects[1]], options()))
+
+    assert.deepEqual(first.lanes.map(lane => lane.label), ['alpha', 'Mid', 'zeta'])
+    assert.deepEqual(turned.lanes.map(lane => lane.label), ['alpha', 'Mid', 'zeta'])
+    assert.deepEqual([...turned.positions], [...first.positions])
   })
 })

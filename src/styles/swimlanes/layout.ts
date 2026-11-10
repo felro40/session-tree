@@ -3,9 +3,10 @@
  * positions and nothing it returns is ever saved (R12: no dragging, no saved positions); "now"
  * and the time-zone offset are inputs, so the same inputs always give the same output.
  *
- * - **Lanes.** One horizontal lane per project, in `projects.tree` order; sessions with no
- *   project go in a last lane named like the core's bucket (`Home`). A project with no session
- *   under the current filters gets no lane (unless it is the scope).
+ * - **Lanes.** One horizontal lane per project, in a fixed order (`orderLanes`: by label,
+ *   case-insensitive, ties by project id), never `projects.tree`'s recency order; sessions with
+ *   no project go in a last lane named like the core's bucket (`Home`). A project with no
+ *   session under the current filters gets no lane (unless it is the scope).
  * - **Time axis.** Local days (the browser's zone, injected as an offset function `offsetAt(ms)`,
  *   so each timestamp's day uses the offset in force at that instant: DST-safe). A piecewise
  *   linear scale: day column `d` of the window spans `[d·DAY_WIDTH, (d+1)·DAY_WIDTH)` and a
@@ -198,6 +199,30 @@ export function laneKeyOf(node: GraphNode, projectById: ReadonlyMap<string, Proj
   return project?.isNoProject ? NO_PROJECT_ID : node.projectId
 }
 
+/** What `orderLanes` reads of a lane: its key (project id), header label and no-project flag. */
+export interface LaneEntry {
+  id: string
+  label: string
+  isNoProject: boolean
+}
+
+/**
+ * The fixed lane order (user ruling, 2026-11-09; replaces `projects.tree`'s order, which follows
+ * session recency): project lanes by label, case-insensitive in a fixed locale (`en`, accent
+ * sensitive, so Node and every browser agree), ties by project id in code-unit order; the
+ * no-project lane last whatever its label. Independent of the input order: a chat turn in
+ * another project, or a `projects.tree` answer in another order, never moves a lane.
+ */
+export function orderLanes<T extends LaneEntry>(lanes: readonly T[]): T[] {
+  return [...lanes].sort((a, b) => {
+    if (a.isNoProject !== b.isNoProject) {
+      return a.isNoProject ? 1 : -1
+    }
+
+    return a.label.localeCompare(b.label, 'en', { sensitivity: 'accent' }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  })
+}
+
 const tokensOf = (node: GraphNode) => Math.max(0, Number(node.row?.input_tokens) || 0) + Math.max(0, Number(node.row?.output_tokens) || 0)
 
 /** The session's tokens as the block and the lane header count them (in + out). */
@@ -385,25 +410,36 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
     }
   }
 
-  const laneKeys: string[] = []
-
-  for (const project of model.projects) {
-    if (!project.isNoProject && (sessionsByLane.has(project.id) || project.id === scope) && !laneKeys.includes(project.id)) {
-      laneKeys.push(project.id)
+  // Lanes: every project with a session under the filters (or the scope), any project id the
+  // tree does not list, then the no-project lane; in the fixed order of `orderLanes`.
+  const noProject = model.projects.find(project => project.isNoProject)
+  const laneLabel = (key: string) => (key === NO_PROJECT_ID ? noProject : projectById.get(key))?.label ?? (key === NO_PROJECT_ID ? 'Home' : key)
+  const laneEntries: LaneEntry[] = []
+  const laneSeen = new Set<string>()
+  const addLane = (key: string) => {
+    if (!laneSeen.has(key)) {
+      laneSeen.add(key)
+      laneEntries.push({ id: key, label: laneLabel(key), isNoProject: key === NO_PROJECT_ID })
     }
   }
 
-  for (const key of [...sessionsByLane.keys()].sort()) {
-    if (key !== NO_PROJECT_ID && !laneKeys.includes(key)) {
-      laneKeys.push(key)
+  for (const project of model.projects) {
+    if (!project.isNoProject && (sessionsByLane.has(project.id) || project.id === scope)) {
+      addLane(project.id)
+    }
+  }
+
+  for (const key of sessionsByLane.keys()) {
+    if (key !== NO_PROJECT_ID) {
+      addLane(key)
     }
   }
 
   if (sessionsByLane.has(NO_PROJECT_ID) || scope === NO_PROJECT_ID) {
-    laneKeys.push(NO_PROJECT_ID)
+    addLane(NO_PROJECT_ID)
   }
 
-  const noProject = model.projects.find(project => project.isNoProject)
+  const laneKeys = orderLanes(laneEntries).map(entry => entry.id)
 
   // Family order: by the start of its first root, then id.
   const familyStart = new Map<string, number>()
@@ -522,7 +558,7 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
     const lane: SwimLane = {
       key,
       project,
-      label: project?.label ?? (key === NO_PROJECT_ID ? 'Home' : key),
+      label: laneLabel(key),
       top,
       height,
       collapsed: isCollapsed,

@@ -7396,13 +7396,13 @@ function parseProjectsTree(payload) {
   return out;
 }
 function mergeProjects(lists) {
-  let byId = /* @__PURE__ */ new Map();
+  let byId2 = /* @__PURE__ */ new Map();
   for (let list of lists)
     for (let project of list) {
-      let known = byId.get(project.id);
-      known ? (known.sessionIds = [.../* @__PURE__ */ new Set([...known.sessionIds, ...project.sessionIds])], known.repoPaths = [.../* @__PURE__ */ new Set([...known.repoPaths, ...project.repoPaths])], known.color ??= project.color, known.icon ??= project.icon) : byId.set(project.id, { ...project, sessionIds: [...project.sessionIds], repoPaths: [...project.repoPaths] });
+      let known = byId2.get(project.id);
+      known ? (known.sessionIds = [.../* @__PURE__ */ new Set([...known.sessionIds, ...project.sessionIds])], known.repoPaths = [.../* @__PURE__ */ new Set([...known.repoPaths, ...project.repoPaths])], known.color ??= project.color, known.icon ??= project.icon) : byId2.set(project.id, { ...project, sessionIds: [...project.sessionIds], repoPaths: [...project.repoPaths] });
     }
-  return [...byId.values()];
+  return [...byId2.values()];
 }
 var trimSlash = (path) => path.replace(/[/\\]+$/, "");
 function under(path, root2) {
@@ -7678,9 +7678,9 @@ function applyOverrides(rows, overrides) {
   return out;
 }
 function settleOverrides(rows, overrides) {
-  let byId = new Map(rows.map((row) => [row.id, row])), next = /* @__PURE__ */ new Map();
+  let byId2 = new Map(rows.map((row) => [row.id, row])), next = /* @__PURE__ */ new Map();
   for (let [id2, override] of overrides) {
-    let row = byId.get(id2);
+    let row = byId2.get(id2);
     if (override.removed) {
       row && next.set(id2, override);
       continue;
@@ -9122,6 +9122,9 @@ function effectiveStart(node, nowSeconds) {
 function laneKeyOf(node, projectById) {
   return node.projectId ? projectById.get(node.projectId)?.isNoProject ? NO_PROJECT_ID : node.projectId : NO_PROJECT_ID;
 }
+function orderLanes(lanes) {
+  return [...lanes].sort((a, b) => a.isNoProject !== b.isNoProject ? a.isNoProject ? 1 : -1 : a.label.localeCompare(b.label, "en", { sensitivity: "accent" }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
 var tokensOf = (node) => Math.max(0, Number(node.row?.input_tokens) || 0) + Math.max(0, Number(node.row?.output_tokens) || 0), blockTokens = tokensOf;
 function dayLabel(day, bold) {
   let date2 = new Date(day * DAY_S * 1e3);
@@ -9198,13 +9201,15 @@ function layoutSwimlanes(input) {
       let key = laneOf(each);
       sessionsByLane.set(key, [...sessionsByLane.get(key) ?? [], each]);
     }
-  let laneKeys = [];
+  let noProject = model.projects.find((project) => project.isNoProject), laneLabel = (key) => (key === NO_PROJECT_ID ? noProject : projectById.get(key))?.label ?? (key === NO_PROJECT_ID ? "Home" : key), laneEntries = [], laneSeen = /* @__PURE__ */ new Set(), addLane = (key) => {
+    laneSeen.has(key) || (laneSeen.add(key), laneEntries.push({ id: key, label: laneLabel(key), isNoProject: key === NO_PROJECT_ID }));
+  };
   for (let project of model.projects)
-    !project.isNoProject && (sessionsByLane.has(project.id) || project.id === scope) && !laneKeys.includes(project.id) && laneKeys.push(project.id);
-  for (let key of [...sessionsByLane.keys()].sort())
-    key !== NO_PROJECT_ID && !laneKeys.includes(key) && laneKeys.push(key);
-  (sessionsByLane.has(NO_PROJECT_ID) || scope === NO_PROJECT_ID) && laneKeys.push(NO_PROJECT_ID);
-  let noProject = model.projects.find((project) => project.isNoProject), familyStart = /* @__PURE__ */ new Map();
+    !project.isNoProject && (sessionsByLane.has(project.id) || project.id === scope) && addLane(project.id);
+  for (let key of sessionsByLane.keys())
+    key !== NO_PROJECT_ID && addLane(key);
+  (sessionsByLane.has(NO_PROJECT_ID) || scope === NO_PROJECT_ID) && addLane(NO_PROJECT_ID);
+  let laneKeys = orderLanes(laneEntries).map((entry) => entry.id), familyStart = /* @__PURE__ */ new Map();
   for (let family of model.families) {
     let roots = family.nodeIds.filter((id2) => node(id2).kind === "session" && !(parentOf(id2) && family.nodeIds.includes(parentOf(id2)))), starts = (roots.length > 0 ? roots : family.nodeIds).map((id2) => sortKey(id2));
     familyStart.set(family.id, starts.length > 0 ? Math.min(...starts) : -1 / 0);
@@ -9235,7 +9240,7 @@ function layoutSwimlanes(input) {
     let height = isCollapsed ? 32 : Math.max(112, 16 + rows.length * 72), lane = {
       key,
       project,
-      label: project?.label ?? (key === NO_PROJECT_ID ? "Home" : key),
+      label: laneLabel(key),
       top,
       height,
       collapsed: isCollapsed,
@@ -9821,7 +9826,7 @@ function sameRects(a, b) {
   }
   return !0;
 }
-var sameLinks = (a, b) => a.length === b.length && a.every((end, i) => end.id === b[i].id && end.source === b[i].source && end.target === b[i].target && end.kind === b[i].kind);
+var byId = (a, b) => a < b ? -1 : a > b ? 1 : 0, sameLinks = (a, b) => a.length === b.length && a.every((end, i) => end.id === b[i].id && end.source === b[i].source && end.target === b[i].target && end.kind === b[i].kind);
 function stage(same) {
   let deps, value2;
   return (next, compute) => {
@@ -9840,14 +9845,14 @@ function createCanvasRouting() {
     get({ model, spec, frameShown, positions, ports, router }) {
       let shown = frameShown ? shownStage([frameShown], () => frameShown) : shownStage([model, spec], () => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds))), rects = rectsStage([shown, positions, spec], () => {
         let out = /* @__PURE__ */ new Map();
-        for (let id2 of shown) {
+        for (let id2 of [...shown].sort(byId)) {
           let point = positions.get(id2);
           point && out.set(id2, rectOf(id2, point, spec));
         }
         return out;
       }), links = linksStage(
         [model, rects],
-        () => model.edges.filter((edge) => rects.has(edge.source) && rects.has(edge.target)).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, kind: edge.kind }))
+        () => model.edges.filter((edge) => rects.has(edge.source) && rects.has(edge.target)).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, kind: edge.kind })).sort((a, b) => byId(a.id, b.id))
       ), routes = routesStage([links, rects, ports, router], () => {
         routed += 1;
         let ends = links.map((link2) => ({ id: link2.id, source: link2.source, target: link2.target, ...ports(link2.kind, rects.get(link2.source), rects.get(link2.target)) })), out = /* @__PURE__ */ new Map(), done = routeLinks(ends, rects, router);
