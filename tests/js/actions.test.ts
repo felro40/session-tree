@@ -4,10 +4,13 @@ import { describe, it } from 'node:test'
 import {
   applyOverrides,
   branchNote,
+  createBranchFlights,
   createFencedMutation,
+  decodeExportEnvelope,
   deleteBlockedReason,
   exportFilename,
   isActionable,
+  isAlreadyAbsent,
   moveTargets,
   projectRootCwd,
   renameRoute,
@@ -159,6 +162,109 @@ describe('restErrorText (ctx.rest refusals → words)', () => {
     assert.equal(restErrorText(new Error('409: {"detail":"revision_conflict"}')), 'The session changed elsewhere; refresh and try again (revision_conflict)')
     assert.equal(restErrorText(new Error('503: owner unavailable')), 'owner unavailable')
     assert.equal(restErrorText(new Error('Hermes gateway unavailable')), 'Hermes gateway unavailable')
+  })
+
+  it('NB2: both title refusals read the same way, the core 400 and the backend 422 (no truncation)', () => {
+    assert.equal(restErrorText(new Error('400: {"detail":"Title too long (150 chars, max 100)"}')), 'Title too long (150 chars, max 100)')
+    const detail = [{ type: 'string_too_long', loc: ['body', 'title'], msg: 'String should have at most 400 characters', input: 'x'.repeat(5000) }]
+
+    assert.equal(restErrorText(new Error(`422: ${JSON.stringify({ detail })}`)), 'Title too long (5000 chars, max 100)')
+    assert.equal(
+      restErrorText(new Error('422: {"detail":[{"type":"bool_type","loc":["body","unread"],"msg":"Input should be a valid boolean"}]}')),
+      'unread: Input should be a valid boolean'
+    )
+  })
+})
+
+describe('isAlreadyAbsent (NB3: the core delete is idempotent)', () => {
+  it('the core already_absent answer and the backend fence-read 404 count as deleted; other refusals do not', () => {
+    assert.equal(isAlreadyAbsent({ ok: true, already_absent: true }), true)
+    assert.equal(isAlreadyAbsent(new Error('404: {"detail":"Session not found"}')), true)
+    assert.equal(isAlreadyAbsent({ ok: true, deleted_ids: ['a'] }), false)
+    assert.equal(isAlreadyAbsent(new Error('404: {"detail":"Unknown profile: nope"}')), false)
+    assert.equal(isAlreadyAbsent(new Error('409: {"detail":"session_busy"}')), false)
+  })
+})
+
+describe('decodeExportEnvelope (B1: the core export bytes, verbatim)', () => {
+  const envelope = (bytes: Buffer) => ({
+    ok: true,
+    session_id: 's',
+    encoding: 'base64',
+    content_type: 'application/json',
+    bytes: bytes.length,
+    sha256: '',
+    body: bytes.toString('base64')
+  })
+
+  it('returns the exact bytes: a whole-number float keeps its .0, Infinity and non-ASCII survive', () => {
+    const core = Buffer.from('{"id":"s","estimated_cost_usd":2.0,"actual":Infinity,"title":"Café ✓ 🌲","messages":[]}', 'utf8')
+    const bytes = decodeExportEnvelope(envelope(core))
+
+    assert.ok(Buffer.from(bytes).equals(core))
+    // What the old page did: parse + stringify is not verbatim (and throws on Infinity).
+    assert.throws(() => JSON.parse(core.toString('utf8')))
+    assert.notEqual(JSON.stringify(JSON.parse('{"c":2.0}')), '{"c":2.0}')
+  })
+
+  it('refuses a malformed or incomplete envelope', () => {
+    assert.throws(() => decodeExportEnvelope({ id: 's', messages: [] }), /not an export envelope/)
+    assert.throws(() => decodeExportEnvelope({ ...envelope(Buffer.from('abc')), bytes: 4 }), /incomplete/)
+  })
+})
+
+describe('createBranchFlights (NB1: one session.branch_stored per parent at a time)', () => {
+  const gateway = () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = []
+    const pending: ((value: unknown) => void)[] = []
+    const request = (<T>(method: string, params: Record<string, unknown>) => {
+      calls.push({ method, params })
+
+      return new Promise<T>(resolve => pending.push(resolve as (value: unknown) => void))
+    }) as <T>(method: string, params: Record<string, unknown>) => Promise<T>
+
+    return { calls, pending, request }
+  }
+
+  it('two rapid Branch invocations on the same parent send one RPC; the second joins the first', async () => {
+    const { calls, pending, request } = gateway()
+    let minted = 0
+    const branch = createBranchFlights(request, () => `key-${(minted += 1)}`)
+    const first = branch({ parentId: 'p', profile: 'default', cwd: '/w' })
+    const second = branch({ parentId: 'p', profile: 'default', cwd: '/w' })
+
+    assert.equal(calls.length, 1)
+    assert.equal(first.joined, false)
+    assert.equal(second.joined, true)
+    assert.deepEqual(calls[0], {
+      method: 'session.branch_stored',
+      params: { parent_session_id: 'p', idempotency_key: 'key-1', source: 'desktop', cwd: '/w', profile: 'default' }
+    })
+    pending[0]({ stored_session_id: 'child' })
+    assert.deepEqual(await first.flight, { stored_session_id: 'child' })
+    assert.deepEqual(await second.flight, { stored_session_id: 'child' })
+
+    // Settled: the next Branch is a new attempt with a new key.
+    const third = branch({ parentId: 'p', profile: 'default' })
+
+    assert.equal(third.joined, false)
+    assert.equal(calls.length, 2)
+    assert.equal(calls[1].params.idempotency_key, 'key-2')
+    assert.equal('cwd' in calls[1].params, false)
+  })
+
+  it('other parents (or the same id in another profile) are separate flights; a failure drops the flight', async () => {
+    const { calls, pending, request } = gateway()
+    const branch = createBranchFlights(request, () => 'k')
+    const a = branch({ parentId: 'p', profile: 'default' })
+
+    branch({ parentId: 'q', profile: 'default' })
+    branch({ parentId: 'p', profile: 'work' })
+    assert.equal(calls.length, 3)
+    pending[0](Promise.reject(new Error('refused')))
+    await assert.rejects(a.flight, /refused/)
+    assert.equal(branch({ parentId: 'p', profile: 'default' }).joined, false)
+    assert.equal(calls.length, 4)
   })
 })
 

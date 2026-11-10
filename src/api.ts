@@ -6,7 +6,7 @@
 import { host } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
 
-import type { MutationIdentity, MutationSnapshot } from './model/actions.ts'
+import type { ExportEnvelope, MutationIdentity, MutationSnapshot } from './model/actions.ts'
 import { mergeProjects, parseProjectsTree } from './model/projects.ts'
 import type { ProjectInfo } from './model/projects.ts'
 import type { SessionsResponse } from './model/sessions.ts'
@@ -93,11 +93,20 @@ export function postArchive(ctx: PluginContext, profile: string, id: string, arc
   return ctx.rest(sessionPath(id, 'archive', profile), { method: 'POST', body: { archived, ...identity }, timeoutMs: 20000 })
 }
 
-export function postDelete(ctx: PluginContext, profile: string, id: string, identity: MutationIdentity): Promise<{ ok: boolean; deleted_ids?: string[] }> {
+export function postDelete(
+  ctx: PluginContext,
+  profile: string,
+  id: string,
+  identity: MutationIdentity
+): Promise<{ ok: boolean; deleted_ids?: string[]; already_absent?: boolean }> {
   return ctx.rest(sessionPath(id, 'delete', profile), { method: 'POST', body: { ...identity }, timeoutMs: 30000 })
 }
 
-/** The session as the core export endpoint streams it (metadata + every message). */
-export function fetchExport(ctx: PluginContext, profile: string, id: string): Promise<unknown> {
-  return ctx.rest<unknown>(sessionPath(id, 'export', profile), { timeoutMs: 120000 })
+/**
+ * The session as the core export endpoint streams it (metadata + every message), as its exact
+ * bytes in a base64 envelope (`decodeExportEnvelope`): `ctx.rest` parses every answer as JSON,
+ * so the core body itself would not arrive verbatim.
+ */
+export function fetchExport(ctx: PluginContext, profile: string, id: string): Promise<ExportEnvelope> {
+  return ctx.rest<ExportEnvelope>(sessionPath(id, 'export', profile), { timeoutMs: 120000 })
 }

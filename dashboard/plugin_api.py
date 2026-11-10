@@ -191,7 +191,7 @@ def sessions(
 #   ``session_busy`` (409). Nothing here writes ``state.db`` itself.
 # * delete: the core ``DELETE /api/sessions/{id}`` handler itself (the same fenced mutation).
 # * export: ``GET /api/sessions/{id}/export``'s own streaming handler, so the bytes are the
-#   core's.
+#   core's; they reach the page base64-encoded in a small envelope, never re-serialised.
 #
 # Shaped so a future SDK verb can replace each one: the payloads are the core ones.
 
@@ -215,8 +215,8 @@ def _checked_session_id(session_id: str) -> str:
     return session_id
 
 
-def _require_session(name: str, home: Any, session_id: str) -> None:
-    """404 unless *session_id* is a stored row of profile *name* (read-only open)."""
+def _require_session(name: str, home: Any, session_id: str) -> dict[str, Any]:
+    """The stored row of *session_id* in profile *name* (read-only open); 404 when there is none."""
     from hermes_cli.web_routers.profiles import _read_profile_db
 
     errors: list[dict[str, str]] = []
@@ -225,6 +225,7 @@ def _require_session(name: str, home: Any, session_id: str) -> None:
         raise HTTPException(status_code=503, detail=errors[0]["error"])
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
+    return row
 
 
 class _Fence(BaseModel):
@@ -241,7 +242,9 @@ class _Fence(BaseModel):
 
 
 class RenameBody(_Fence):
-    #: Empty clears the title (the core PATCH semantics); Hermes trims and caps it at 100.
+    #: Empty clears the title (the core PATCH semantics). Hermes refuses a title over its
+    #: ``MAX_TITLE_LENGTH`` (100) with 400 "Title too long (N chars, max 100)"; one over
+    #: ``MAX_TITLE_INPUT`` is refused here first (422). Nothing is truncated.
     title: StrictStr = Field(..., max_length=MAX_TITLE_INPUT)
 
 
@@ -310,25 +313,54 @@ async def archive(session_id: str, body: ArchiveBody, request: Request, profile:
 async def delete(session_id: str, body: DeleteBody, request: Request, profile: str = _profile_query()) -> dict[str, Any]:
     """Delete, as the app does it: the core ``DELETE /api/sessions/{id}`` handler itself (the
     fenced ``delete`` mutation, the owner's running-session refusal, the on-disk scrub). The
-    ``session.delete`` RPC is not served to a Webapp window (unknown method)."""
-    from fastapi.concurrency import run_in_threadpool
+    ``session.delete`` RPC is not served to a Webapp window (unknown method).
+
+    No existence pre-check: the core decides, and its delete is idempotent (an id that is
+    already gone answers ``{"ok": true, "already_absent": true}``)."""
     from hermes_cli.web_routers.sessions import delete_session_endpoint
 
-    name, home = _one_profile(profile)
+    name, _home = _one_profile(profile)
     sid = _checked_session_id(session_id)
-    await run_in_threadpool(_require_session, name, home, sid)
     return await delete_session_endpoint(sid, request, profile=name, request_id=body.request_id,
                                          expected_revision=body.expected_revision,
                                          expected_generation=body.expected_generation)
 
 
+async def _drain(response: Any) -> bytes:
+    """The exact bytes a Starlette response sends (each streamed chunk, encoded as it does)."""
+    if not hasattr(response, "body_iterator"):
+        return bytes(response.body)
+    out = bytearray()
+    async for chunk in response.body_iterator:
+        out += chunk if isinstance(chunk, (bytes, bytearray, memoryview)) else chunk.encode(response.charset)
+    return bytes(out)
+
+
 @router.get("/sessions/{session_id}/export")
-async def export(session_id: str, profile: str = _profile_query()):
-    """The session (metadata + every message) as JSON, streamed by the core export handler."""
+async def export(session_id: str, profile: str = _profile_query()) -> dict[str, Any]:
+    """The session (metadata + every message) exactly as the core export handler streams it.
+
+    The body is the core's bytes, base64-encoded in an envelope: ``ctx.rest`` parses every
+    answer as JSON, and a parse + re-serialise is not verbatim (``2.0`` → ``2``; ``Infinity`` does
+    not parse). The page decodes ``body`` and writes those bytes to the file unchanged."""
+    import base64
+    import hashlib
+
     from fastapi.concurrency import run_in_threadpool
     from hermes_cli.web_routers.sessions import export_session_endpoint
 
     name, home = _one_profile(profile)
     sid = _checked_session_id(session_id)
-    await run_in_threadpool(_require_session, name, home, sid)
-    return await export_session_endpoint(sid, profile=name)
+    row = await run_in_threadpool(_require_session, name, home, sid)
+    response = await export_session_endpoint(sid, profile=name)
+    data = await _drain(response)
+    return {
+        "ok": True,
+        "session_id": sid,
+        "title": row.get("title"),
+        "encoding": "base64",
+        "content_type": response.media_type or "application/json",
+        "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "body": base64.b64encode(data).decode("ascii"),
+    }

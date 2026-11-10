@@ -7494,6 +7494,33 @@ function exportFilename(sessionId, title) {
   let titlePart = title ? sanitizeFilenamePart(title) : "", idPart = sanitizeFilenamePart(sessionId).slice(0, 8) || "session";
   return `${titlePart || "session"}-${idPart}.json`;
 }
+function decodeExportEnvelope(envelope) {
+  let value2 = envelope;
+  if (!value2 || value2.encoding !== "base64" || typeof value2.body != "string" || !Number.isSafeInteger(value2.bytes))
+    throw new Error("The export answer is not an export envelope");
+  let binary = atob(value2.body), bytes = new Uint8Array(binary.length);
+  for (let index2 = 0; index2 < binary.length; index2 += 1)
+    bytes[index2] = binary.charCodeAt(index2);
+  if (bytes.length !== value2.bytes)
+    throw new Error(`The export arrived incomplete (${bytes.length} of ${value2.bytes} bytes)`);
+  return bytes;
+}
+function createBranchFlights(request, mintKey) {
+  let flights = /* @__PURE__ */ new Map();
+  return function(params) {
+    let key = JSON.stringify([params.profile, params.parentId]), existing = flights.get(key);
+    if (existing)
+      return { flight: existing, joined: !0 };
+    let flight = request("session.branch_stored", {
+      parent_session_id: params.parentId,
+      idempotency_key: mintKey(),
+      source: "desktop",
+      ...params.cwd ? { cwd: params.cwd } : {},
+      profile: params.profile
+    }).finally(() => flights.delete(key));
+    return flights.set(key, flight), { flight, joined: !1 };
+  };
+}
 function projectRootCwd(project) {
   return (project?.path || project?.repoPaths.find(Boolean) || "").trim();
 }
@@ -7540,7 +7567,7 @@ function restErrorText(error) {
   if (match)
     try {
       let body = JSON.parse(match[2]);
-      detail = typeof body.detail == "string" ? body.detail : JSON.stringify(body.detail ?? body);
+      detail = typeof body.detail == "string" ? body.detail : Array.isArray(body.detail) && body.detail.length > 0 ? body.detail.map(validationText).join("; ") : JSON.stringify(body.detail ?? body);
     } catch {
     }
   let reasons = {
@@ -7551,6 +7578,14 @@ function restErrorText(error) {
     not_found: "Session not found"
   };
   return reasons[detail] ? `${reasons[detail]} (${detail})` : detail;
+}
+var MAX_TITLE_LENGTH = 100;
+function validationText(item) {
+  let { loc, msg, type, input } = item ?? {}, field = Array.isArray(loc) ? String(loc[loc.length - 1] ?? "") : "";
+  return field === "title" && type === "string_too_long" && typeof input == "string" ? `Title too long (${[...input].length} chars, max ${MAX_TITLE_LENGTH})` : field ? `${field}: ${msg ?? "invalid"}` : msg ?? "Invalid input";
+}
+function isAlreadyAbsent(outcome) {
+  return outcome instanceof Error ? /^404: /.test(outcome.message) && /Session not found|"not_found"/.test(outcome.message) : !!(outcome && typeof outcome == "object" && outcome.already_absent === !0);
 }
 function applyOverrides(rows, overrides) {
   if (overrides.size === 0)
@@ -9280,7 +9315,9 @@ function useRowOverrides(serverRows) {
   return settledFor !== serverRows && (setSettledFor(serverRows), overrides.size > 0 && setOverrides(settleOverrides(serverRows, overrides))), [overrides, setOverrides];
 }
 function useSessionActionsController(options) {
-  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState5(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState5(), [deleting, setDeleting] = useState5(), [mutate] = useState5(() => createFencedMutation(randomUuid)), latest = useRef3({ options, labels, colors }), menuHost = useRef3(null), requestedMenuNode = useRef3(null), dialogFromMenu = useRef3(!1);
+  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState5(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState5(), [deleting, setDeleting] = useState5(), [mutate] = useState5(() => createFencedMutation(randomUuid)), [branchFlights] = useState5(
+    () => createBranchFlights((method, params) => host2.request(method, params), randomUuid)
+  ), latest = useRef3({ options, labels, colors }), menuHost = useRef3(null), requestedMenuNode = useRef3(null), dialogFromMenu = useRef3(!1);
   useEffect3(() => {
     latest.current = { options, labels, colors };
   });
@@ -9332,28 +9369,26 @@ function useSessionActionsController(options) {
         notifyError(error, latest.current.labels.copyIdFailed);
       },
       async branch(node) {
-        let row = rowOf(node);
+        let row = rowOf(node), joined = !1;
         try {
-          let result = await host2.request("session.branch_stored", {
-            parent_session_id: row.id,
-            // Stable per attempt: a lost-response retry returns the SAME child (#65410).
-            idempotency_key: randomUuid(),
-            source: "desktop",
-            ...row.cwd ? { cwd: row.cwd } : {},
-            profile: node.profile
-          }), child = result?.stored_session_id;
+          let started = branchFlights({ parentId: row.id, profile: node.profile, cwd: row.cwd });
+          joined = started.joined;
+          let result = await started.flight;
+          if (joined)
+            return;
+          let child = result?.stored_session_id;
           if (!child)
             throw new Error("The gateway returned no branch id");
           result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
           }), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
         } catch (error) {
-          notifyError(error, "Could not branch session");
+          joined || notifyError(error, "Could not branch session");
         }
       },
       async exportSession(node) {
         let row = rowOf(node);
         try {
-          let data = await fetchExport(latest.current.options.ctx, node.profile, row.id), url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" })), anchor = document.createElement("a");
+          let bytes = decodeExportEnvelope(await fetchExport(latest.current.options.ctx, node.profile, row.id)), url = URL.createObjectURL(new Blob([bytes], { type: "application/json" })), anchor = document.createElement("a");
           anchor.href = url, anchor.download = exportFilename(row.id, node.title), anchor.click(), latest.current.options.ctx.setTimeout(() => URL.revokeObjectURL(url), 1e3), host2.notify({ kind: "success", message: latest.current.labels.exported, durationMs: 2e3 });
         } catch (error) {
           notifyError(error, latest.current.labels.exportFailed);
@@ -9409,7 +9444,7 @@ function useSessionActionsController(options) {
         dialogFromMenu.current = !0;
       }
     };
-  }, [mutate, setOverrides]), backendRename = async (node, title) => {
+  }, [branchFlights, mutate, setOverrides]), backendRename = async (node, title) => {
     let row = node.row, { ctx } = latest.current.options;
     return (await mutate(
       JSON.stringify(["rename", node.profile, row.id, title]),
@@ -9455,7 +9490,8 @@ function useSessionActionsController(options) {
             () => fetchMutationSnapshot(latest.current.options.ctx, node.profile, row.id),
             (identity4) => postDelete(latest.current.options.ctx, node.profile, row.id, identity4)
           ).catch((error) => {
-            throw new Error(errorText(error));
+            if (!isAlreadyAbsent(error))
+              throw new Error(errorText(error));
           }), setOverrides((previous) => new Map(previous).set(row.id, { removed: !0 })), latest.current.options.onRemoved(node.id), latest.current.options.refreshSessions();
         }
       }
@@ -9495,7 +9531,6 @@ function RenameDialog({
         "aria-label": labels.renameTitle,
         "data-testid": "session-tree-rename-input",
         disabled: busy,
-        maxLength: 100,
         placeholder: labels.untitledPlaceholder,
         value: value2,
         onChange: (event) => setValue(event.target.value),

@@ -7,9 +7,10 @@
  *   backend's fenced `POST /sessions/{id}/rename` (`renameSessionPreferringRpc`)
  * - Mark as read / unread → the backend's fenced `POST /sessions/{id}/read`
  * - Move to project → `session.workspace.move` (session key + the target's root folder)
- * - Branch → `session.branch_stored` with an idempotency key; the page stays and selects the child
- * - Export → the backend's `GET /sessions/{id}/export` (the core export bytes), saved as
- *   `<title>-<id8>.json`
+ * - Branch → `session.branch_stored` with one idempotency key per attempt and one request per
+ *   parent at a time (`createBranchFlights`); the page stays and selects the child
+ * - Export → the backend's `GET /sessions/{id}/export` (the core export's exact bytes, base64),
+ *   written verbatim as `<title>-<id8>.json`
  * - Archive / Unarchive → the backend's fenced `POST /sessions/{id}/archive` (the app's
  *   `setSessionArchived` PATCH); Delete → the backend's fenced `POST /sessions/{id}/delete` (the
  *   core DELETE handler) after a confirmation. Not the `session.archive` / `session.delete` RPCs:
@@ -39,10 +40,13 @@ import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { fetchExport, fetchMutationSnapshot, postArchive, postDelete, postReadState, postRename } from '../api.ts'
 import {
   branchNote,
+  createBranchFlights,
   createFencedMutation,
+  decodeExportEnvelope,
   deleteBlockedReason,
   exportFilename,
   isActionable,
+  isAlreadyAbsent,
   moveTargets,
   projectRootCwd,
   renameRoute,
@@ -108,6 +112,9 @@ export function useSessionActionsController(options: SessionActionsOptions): {
   const [renaming, setRenaming] = useState<GraphNode>()
   const [deleting, setDeleting] = useState<GraphNode>()
   const [mutate] = useState(() => createFencedMutation(randomUuid))
+  const [branchFlights] = useState(() =>
+    createBranchFlights(<T,>(method: string, params: Record<string, unknown>) => host.request<T>(method, params), randomUuid)
+  )
   const latest = useRef({ options, labels, colors })
   const menuHost = useRef<HTMLElement | null>(null)
   const requestedMenuNode = useRef<null | string>(null)
@@ -202,16 +209,21 @@ export function useSessionActionsController(options: SessionActionsOptions): {
 
       async branch(node) {
         const row = rowOf(node)
+        let joined = false
 
         try {
-          const result = await host.request<{ session_id?: string; stored_session_id?: string }>('session.branch_stored', {
-            parent_session_id: row.id,
-            // Stable per attempt: a lost-response retry returns the SAME child (#65410).
-            idempotency_key: randomUuid(),
-            source: 'desktop',
-            ...(row.cwd ? { cwd: row.cwd } : {}),
-            profile: node.profile
-          })
+          // One request per parent at a time: a double-submit joins the flight in progress
+          // (one idempotency key per attempt), and only the first caller places the child
+          // (or reports the failure).
+          const started = branchFlights({ parentId: row.id, profile: node.profile, cwd: row.cwd })
+
+          joined = started.joined
+          const result = await started.flight
+
+          if (joined) {
+            return
+          }
+
           const child = result?.stored_session_id
 
           if (!child) {
@@ -228,7 +240,9 @@ export function useSessionActionsController(options: SessionActionsOptions): {
           latest.current.options.refreshSessions()
           host.notify({ kind: 'success', message: `Branched “${node.title}”`, durationMs: 2000 })
         } catch (error) {
-          notifyError(error, 'Could not branch session')
+          if (!joined) {
+            notifyError(error, 'Could not branch session')
+          }
         }
       },
 
@@ -236,8 +250,10 @@ export function useSessionActionsController(options: SessionActionsOptions): {
         const row = rowOf(node)
 
         try {
-          const data = await fetchExport(latest.current.options.ctx, node.profile, row.id)
-          const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }))
+          // The core export's exact bytes (decoded from the backend's base64 envelope), written
+          // verbatim: never parsed and re-serialised.
+          const bytes = decodeExportEnvelope(await fetchExport(latest.current.options.ctx, node.profile, row.id))
+          const url = URL.createObjectURL(new Blob([bytes], { type: 'application/json' }))
           const anchor = document.createElement('a')
 
           anchor.href = url
@@ -337,7 +353,7 @@ export function useSessionActionsController(options: SessionActionsOptions): {
         dialogFromMenu.current = true
       }
     }
-  }, [mutate, setOverrides])
+  }, [branchFlights, mutate, setOverrides])
 
   const backendRename = async (node: GraphNode, title: string): Promise<null | string | undefined> => {
     const row = node.row!
@@ -399,13 +415,16 @@ export function useSessionActionsController(options: SessionActionsOptions): {
 
           // The app's own route (`deleteSession`): the core fenced DELETE, through the backend. A
           // refusal (a running turn, a gateway owner that says no) rejects: ConfirmDialog shows
-          // its message inline and stays open.
+          // its message inline and stays open. A row already gone (deleted elsewhere: the fence
+          // read answers 404, or the core answers `already_absent`) is deleted, as the core says.
           await mutate(
             JSON.stringify(['delete', node.profile, row.id]),
             () => fetchMutationSnapshot(latest.current.options.ctx, node.profile, row.id),
             identity => postDelete(latest.current.options.ctx, node.profile, row.id, identity)
           ).catch((error: unknown) => {
-            throw new Error(errorText(error))
+            if (!isAlreadyAbsent(error)) {
+              throw new Error(errorText(error))
+            }
           })
           setOverrides(previous => new Map(previous).set(row.id, { removed: true }))
           latest.current.options.onRemoved(node.id)
@@ -472,7 +491,6 @@ function RenameDialog({
           aria-label={labels.renameTitle}
           data-testid="session-tree-rename-input"
           disabled={busy}
-          maxLength={100}
           placeholder={labels.untitledPlaceholder}
           value={value}
           onChange={event => setValue(event.target.value)}

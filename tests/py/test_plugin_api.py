@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -252,7 +253,8 @@ def test_reads_never_write_the_session_store(client, hermes_home):
 
 
 def test_router_mutations_are_only_the_fenced_session_actions(plugin_api):
-    # Card 3: the only writes are rename and read state, both through the core fenced mutation.
+    # Card 3: the only writes are rename, read state, archive and delete, each through the core's
+    # own fenced mutation path (``_mutate_session_request`` / ``delete_session_endpoint``).
     writes = sorted((route.path, method) for route in plugin_api.router.routes
                     for method in getattr(route, "methods", set()) if method not in {"GET", "HEAD"})
     assert writes == [("/sessions/{session_id}/archive", "POST"), ("/sessions/{session_id}/delete", "POST"),
@@ -365,10 +367,44 @@ def test_delete_removes_the_row_keeps_its_branch_children_and_refuses_a_stale_fe
     assert "st-md-tip" not in rows
     for child in ("st-md-katex", "st-md-redline"):
         assert rows[child]["_branched_from"] == "st-md-tip"  # orphaned, never cascaded
-    assert _post(client, "st-md-tip", "delete", {}).status_code == 404
+    # Already gone, no fence: the core guard answers first (409), not a plugin 404.
+    assert _post(client, "st-md-tip", "delete", {}).status_code == 409
 
 
-def test_export_bytes_equal_the_core_export_endpoint(client):
+def test_delete_of_an_already_absent_row_is_the_core_idempotent_success(client, hermes_home):
+    # NB3: no plugin-side 404 pre-check; the core DELETE decides, and an id that is already gone
+    # answers {ok: true, already_absent: true} (hermes_cli/web_routers/sessions.py delete_session_endpoint).
+    import uuid
+
+    assert _stored(hermes_home, "st-orphan-parent") == {}  # deleted by the seeder
+    gone = _post(client, "st-orphan-parent", "delete",
+                 {"request_id": uuid.uuid4().hex, "expected_revision": 0, "expected_generation": 0})
+    assert gone.status_code == 200, gone.text
+    assert gone.json() == {"ok": True, "already_absent": True}
+    # A row deleted elsewhere after the page read its fence (a new request): the same answer.
+    snap = _snapshot(client, "st-single-11").json()
+    first = _post(client, "st-single-11", "delete", _fence(snap))
+    assert first.status_code == 200 and "st-single-11" in first.json()["deleted_ids"]
+    again = _post(client, "st-single-11", "delete", _fence(snap))
+    assert again.status_code == 200, again.text
+    assert again.json() == {"ok": True, "already_absent": True}
+    assert _stored(hermes_home, "st-single-11") == {}
+
+
+def test_a_title_over_hermes_cap_is_refused_not_truncated(client, hermes_home):
+    # NB2: the core refuses 101-400 characters (400 "Title too long"); the plugin refuses more
+    # than 400 before Hermes sees it (422). Neither saves a cut title.
+    before = _stored(hermes_home, "st-single-12")["title"]
+    core = _post(client, "st-single-12", "rename", {"title": "x" * 150, **_fence(_snapshot(client, "st-single-12").json())})
+    assert core.status_code == 400 and "Title too long" in core.json()["detail"], core.text
+    ours = _post(client, "st-single-12", "rename", {"title": "y" * 5000, **_fence(_snapshot(client, "st-single-12").json())})
+    assert ours.status_code == 422
+    assert ours.json()["detail"][0]["type"] == "string_too_long" and ours.json()["detail"][0]["loc"][-1] == "title"
+    assert _stored(hermes_home, "st-single-12")["title"] == before
+
+
+def _core_export(sid: str) -> bytes:
+    """The bytes the core ``GET /api/sessions/{id}/export`` sends, in-process."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from hermes_cli.web_routers.sessions import export_session_endpoint
@@ -376,14 +412,65 @@ def test_export_bytes_equal_the_core_export_endpoint(client):
     core = FastAPI()
     core.add_api_route("/api/sessions/{session_id}/export", export_session_endpoint, methods=["GET"])
     with TestClient(core) as core_client:
-        for sid in ("st-sys-tip", "st-md-v2"):
-            ours = client.get(f"{PREFIX}/sessions/{sid}/export", params={"session_profile": "default"})
-            theirs = core_client.get(f"/api/sessions/{sid}/export", params={"profile": "default"})
-            assert ours.status_code == 200 and theirs.status_code == 200
-            assert ours.headers["content-type"].startswith("application/json")
-            assert ours.content == theirs.content
-            body = json.loads(ours.content)
-            assert body["id"] == sid and len(body["messages"]) == body["message_count"]
+        theirs = core_client.get(f"/api/sessions/{sid}/export", params={"profile": "default"})
+    assert theirs.status_code == 200, theirs.text
+    return theirs.content
+
+
+def _page_bytes(client, sid: str) -> bytes:
+    """What the page writes to the file: the envelope's body, base64-decoded (decodeExportEnvelope)."""
+    import base64
+    import hashlib
+
+    ours = client.get(f"{PREFIX}/sessions/{sid}/export", params={"session_profile": "default"})
+    assert ours.status_code == 200, ours.text
+    assert ours.headers["content-type"].startswith("application/json")
+    envelope = ours.json()
+    assert envelope["ok"] is True and envelope["session_id"] == sid and envelope["encoding"] == "base64"
+    data = base64.b64decode(envelope["body"], validate=True)
+    assert envelope["bytes"] == len(data) and envelope["sha256"] == hashlib.sha256(data).hexdigest()
+    assert envelope["content_type"] == "application/json"
+    return data
+
+
+def test_export_bytes_equal_the_core_export_endpoint(client):
+    for sid in ("st-sys-tip", "st-md-v2"):
+        data = _page_bytes(client, sid)
+        assert data == _core_export(sid)
+        body = json.loads(data)
+        assert body["id"] == sid and len(body["messages"]) == body["message_count"]
+
+
+def test_export_keeps_a_whole_number_float_byte_for_byte(client, hermes_home):
+    # B1: a parse + JSON.stringify round trip writes Python's 2.0 as 2; the envelope does not.
+    seeder = sys.modules["session_tree_seed_fixtures"]
+    made = seeder.add_branch("st-export-whole", "st-hp-root", "Whole-number cost", cost=2.0)
+    assert made["created"] is True
+    data = _page_bytes(client, "st-export-whole")
+    assert data == _core_export("st-export-whole")
+    assert b'"estimated_cost_usd":2.0' in data
+    assert json.loads(data)["estimated_cost_usd"] == 2.0
+
+
+def test_export_keeps_a_non_finite_float_byte_for_byte(client, hermes_home):
+    # Hermes stores an infinite cost (NaN it cannot: SQLite turns it into NULL and the NOT NULL
+    # usage column refuses it), and the core export writes it as ``Infinity``, which JSON.parse
+    # refuses. The envelope still carries the exact bytes. The row is removed again afterwards.
+    from hermes_state import SessionDB
+
+    seeder = sys.modules["session_tree_seed_fixtures"]
+    seeder.add_branch("st-export-inf", "st-hp-root", "Infinite cost", cost=float("inf"))
+    try:
+        data = _page_bytes(client, "st-export-inf")
+        assert data == _core_export("st-export-inf")
+        assert b'"estimated_cost_usd":Infinity' in data
+    finally:
+        db = SessionDB(db_path=hermes_home / "state.db")
+        try:
+            db.delete_session("st-export-inf")
+        finally:
+            db.close()
+    assert _stored(hermes_home, "st-export-inf") == {}
 
 
 @pytest.mark.parametrize("path,method,body", [
@@ -391,10 +478,10 @@ def test_export_bytes_equal_the_core_export_endpoint(client):
     ("/sessions/st-nope/rename", "POST", {"title": "x"}),
     ("/sessions/st-nope/read", "POST", {"unread": True}),
     ("/sessions/st-nope/archive", "POST", {"archived": True}),
-    ("/sessions/st-nope/delete", "POST", {}),
     ("/sessions/st-nope/export", "GET", None),
 ])
 def test_actions_404_on_an_unknown_session(client, path, method, body):
+    # Delete is not here: the core's delete of an absent id is an idempotent success (NB3).
     response = client.request(method, f"{PREFIX}{path}", params={"session_profile": "default"}, json=body, headers=_auth())
     assert response.status_code == 404
 

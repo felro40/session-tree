@@ -34,6 +34,93 @@ export function exportFilename(sessionId: string, title?: null | string): string
   return `${titlePart || 'session'}-${idPart}.json`
 }
 
+/**
+ * What the backend's `GET /sessions/{id}/export` answers: the core export body's bytes as
+ * base64, never parsed. `ctx.rest` JSON-parses every response (`lib/browser-transport.ts`
+ * `browserApi`), and a parse + `JSON.stringify` round trip is not verbatim: Python's `2.0`
+ * becomes `2`, and `Infinity` does not parse at all.
+ */
+export interface ExportEnvelope {
+  ok: boolean
+  session_id: string
+  title?: null | string
+  encoding: 'base64'
+  content_type: string
+  bytes: number
+  sha256: string
+  body: string
+}
+
+/** The exact bytes of the core export, decoded from the envelope (refused when malformed). */
+export function decodeExportEnvelope(envelope: unknown): Uint8Array<ArrayBuffer> {
+  const value = envelope as Partial<ExportEnvelope> | null
+
+  if (!value || value.encoding !== 'base64' || typeof value.body !== 'string' || !Number.isSafeInteger(value.bytes)) {
+    throw new Error('The export answer is not an export envelope')
+  }
+
+  const binary = atob(value.body)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  if (bytes.length !== value.bytes) {
+    throw new Error(`The export arrived incomplete (${bytes.length} of ${value.bytes} bytes)`)
+  }
+
+  return bytes
+}
+
+// --- Branch ------------------------------------------------------------------------------------
+
+export interface BranchParams {
+  parentId: string
+  profile: string
+  cwd?: null | string
+}
+
+export interface BranchResult {
+  session_id?: string
+  stored_session_id?: string
+}
+
+export type GatewayRequest = <T>(method: string, params: Record<string, unknown>) => Promise<T>
+
+/**
+ * `session.branch_stored`, one request per parent at a time (the app's `branchCreateFlightsRef`
+ * in `use-session-actions`): a second Branch on the same parent while the first is in flight
+ * joins it (`joined: true`) instead of sending another create. Each attempt mints one
+ * idempotency key; a failed or finished flight is dropped, so a later Branch is a new attempt
+ * with a new key. (In the Webapp the canonical client turns the call into a retained
+ * `session.mutate` and drops the key itself; this guard holds on every transport.)
+ */
+export function createBranchFlights(request: GatewayRequest, mintKey: () => string) {
+  const flights = new Map<string, Promise<BranchResult>>()
+
+  return function branch(params: BranchParams): { flight: Promise<BranchResult>; joined: boolean } {
+    const key = JSON.stringify([params.profile, params.parentId])
+    const existing = flights.get(key)
+
+    if (existing) {
+      return { flight: existing, joined: true }
+    }
+
+    const flight = request<BranchResult>('session.branch_stored', {
+      parent_session_id: params.parentId,
+      idempotency_key: mintKey(),
+      source: 'desktop',
+      ...(params.cwd ? { cwd: params.cwd } : {}),
+      profile: params.profile
+    }).finally(() => flights.delete(key))
+
+    flights.set(key, flight)
+
+    return { flight, joined: false }
+  }
+}
+
 // --- Move to project ---------------------------------------------------------------------------
 
 /** The folder a session moves into: the project's path, else its first repo (`projectRootCwd`). */
@@ -176,7 +263,12 @@ export function restErrorText(error: unknown): string {
     try {
       const body = JSON.parse(match[2]) as { detail?: unknown }
 
-      detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail ?? body)
+      detail =
+        typeof body.detail === 'string'
+          ? body.detail
+          : Array.isArray(body.detail) && body.detail.length > 0
+            ? body.detail.map(validationText).join('; ')
+            : JSON.stringify(body.detail ?? body)
     } catch {
       // Not JSON: the raw body.
     }
@@ -191,6 +283,38 @@ export function restErrorText(error: unknown): string {
   }
 
   return reasons[detail] ? `${reasons[detail]} (${detail})` : detail
+}
+
+/** Hermes's own title cap (`SessionDB.MAX_TITLE_LENGTH`); the core refuses longer titles. */
+export const MAX_TITLE_LENGTH = 100
+
+/**
+ * One FastAPI validation error (a 422 `detail` item) in words. The backend refuses a title far
+ * past Hermes's cap before Hermes sees it; that refusal reads like the core's own 400 ("Title too
+ * long (N chars, max 100)"), so both lengths give the same message.
+ */
+function validationText(item: unknown): string {
+  const { loc, msg, type, input } = (item ?? {}) as { loc?: unknown[]; msg?: string; type?: string; input?: unknown }
+  const field = Array.isArray(loc) ? String(loc[loc.length - 1] ?? '') : ''
+
+  if (field === 'title' && type === 'string_too_long' && typeof input === 'string') {
+    return `Title too long (${[...input].length} chars, max ${MAX_TITLE_LENGTH})`
+  }
+
+  return field ? `${field}: ${msg ?? 'invalid'}` : (msg ?? 'Invalid input')
+}
+
+/**
+ * Delete is idempotent in the core (`delete_session_endpoint`: an id that is already gone answers
+ * `{ok: true, already_absent: true}`). The page treats a row that vanished before the delete —
+ * the backend's 404 "Session not found" on the fence read, or that answer — as deleted.
+ */
+export function isAlreadyAbsent(outcome: unknown): boolean {
+  if (outcome instanceof Error) {
+    return /^404: /.test(outcome.message) && /Session not found|"not_found"/.test(outcome.message)
+  }
+
+  return Boolean(outcome && typeof outcome === 'object' && (outcome as { already_absent?: unknown }).already_absent === true)
 }
 
 // --- Optimistic overrides ----------------------------------------------------------------------

@@ -12,6 +12,7 @@
  * (page.mouse / page.keyboard → CDP Input.*). Screenshots go to <test root>/shots/.
  */
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -223,6 +224,68 @@ async function overlapsOf(page: Page, id: string): Promise<string[]> {
       })
       .map(node => node.getAttribute('data-id') ?? '')
   }, id)
+}
+
+/**
+ * A core endpoint's exact response bytes, fetched by the signed-in page (no JSON parse). The
+ * request carries this tab's Webapp grant the way the app's own transport does
+ * (`lib/browser-transport.ts` `browserFetch`: `X-Hermes-Session-Token` from the tab's
+ * `hermes.webapp.session.v1:[origin, basePath]` sessionStorage entry).
+ */
+async function rawBytes(s: Session, path: string): Promise<Buffer> {
+  const base64 = await s.page.evaluate(async p => {
+    const key = Object.keys(sessionStorage).find(name => name.startsWith('hermes.webapp.session.v1:'))
+    const token = key ? sessionStorage.getItem(key) : null
+    const response = await fetch(p, { credentials: 'same-origin', headers: token ? { 'X-Hermes-Session-Token': token } : {} })
+
+    if (!response.ok) {
+      throw new Error(`${p}: ${response.status} ${await response.text()}`)
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    let binary = ''
+
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte)
+    }
+
+    return btoa(binary)
+  }, path)
+
+  return Buffer.from(base64, 'base64')
+}
+
+const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+
+/**
+ * Export *id* through the real menu (right-click → Export), save the download, and compare it
+ * byte for byte with the core `GET /api/sessions/{id}/export` (and the backend envelope's sha256).
+ */
+async function exportBytes(s: Session, id: string, filename: string): Promise<{ file: Buffer; core: Buffer; facts: Record<string, unknown> }> {
+  const { page } = s
+
+  await openMenu(page, id)
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 20_000 }), choose(page, 'export')])
+  const path = join(t.root, 'tmp', download.suggestedFilename())
+
+  await download.saveAs(path)
+  const file = readFileSync(path)
+  const core = await rawBytes(s, `/api/sessions/${encodeURIComponent(id)}/export?profile=default`)
+  const envelope = await api<{ bytes: number; sha256: string }>(s, `/api/plugins/session-tree/sessions/${encodeURIComponent(id)}/export?session_profile=default`)
+  let firstDiff = -1
+
+  for (let index = 0; index < Math.max(file.length, core.length); index += 1) {
+    if (file[index] !== core[index]) {
+      firstDiff = index
+      break
+    }
+  }
+
+  assert(download.suggestedFilename() === filename, `file name ${download.suggestedFilename()}`)
+  assert(file.equals(core), `the file differs from the core export: ${file.length} vs ${core.length} B, first differing byte ${firstDiff}`)
+  assert(sha256(file) === sha256(core) && envelope.sha256 === sha256(core) && envelope.bytes === core.length, 'sha256 / size mismatch')
+
+  return { file, core, facts: { file: filename, bytes: file.length, sha256: sha256(file), identical: true } }
 }
 
 /** A fresh test home for this mutating suite: the previous one goes to the e2e trash. */
@@ -474,6 +537,71 @@ async function main(): Promise<void> {
       return { title: row?.title, block: await blockTitle(page, 'st-md-redline') }
     })
 
+    await check('Rename limits (NB2): a pasted 5,000-character title is not cut; the refusal is shown and the title is unchanged on read-back (also the core\'s 101–400 refusal)', async () => {
+      const id = 'st-hp-routing'
+      const before = (await rowOf(s, id))?.title
+      const renames: number[] = []
+      const listener = (response: { url(): string; status(): number }) => {
+        if (new RegExp(`/sessions/${id}/rename`).test(response.url())) {
+          renames.push(response.status())
+        }
+      }
+
+      page.on('response', listener)
+
+      try {
+        const attempt = async (length: number) => {
+          await page.evaluate(text => navigator.clipboard.writeText(text), 'L'.repeat(length))
+          const input = page.locator('[data-testid="session-tree-rename-input"]')
+
+          await input.press('Control+A')
+          await input.press('Control+V')
+          const kept = await input.evaluate(el => (el as HTMLInputElement).value.length)
+
+          await input.press('Enter')
+          const error = page.locator('[data-testid="session-tree-rename-error"]')
+
+          await page.waitForFunction(n => document.querySelector('[data-testid="session-tree-rename-error"]')?.textContent?.includes(`(${n} chars`), length, { timeout: 15_000 })
+
+          return { kept, error: (await error.innerText()).trim() }
+        }
+
+        await openMenu(page, id)
+        await choose(page, 'rename')
+        await page.locator(`[data-testid="session-tree-rename-dialog"][data-node-id="${id}"]`).waitFor({ timeout: 5000 })
+        const long = await attempt(5000)
+        const mid = await attempt(150)
+        const open = await page.locator('[data-testid="session-tree-rename-dialog"]').isVisible()
+
+        await page.locator('[data-testid="session-tree-rename-dialog"]').getByRole('button', { name: 'Cancel' }).click()
+        await page.locator('[data-testid="session-tree-rename-dialog"]').waitFor({ state: 'detached', timeout: 5000 })
+        // The refusals also raised the app's error toasts (as its own rename does); they stay
+        // until dismissed and would cover the toolbar.
+        const dismiss = page.getByRole('button', { name: 'Dismiss notification' })
+        let toasts = 0
+
+        for (; toasts < 10 && (await dismiss.count()) > 0; toasts += 1) {
+          await dismiss.first().click()
+          await page.waitForTimeout(300)
+        }
+        assert((await dismiss.count()) === 0, 'error toasts left')
+        const after = (await rowOf(s, id))?.title
+        const core = await api<{ title: string }>(s, `/api/sessions/${id}`)
+
+        assert(long.kept === 5000 && mid.kept === 150, `the input cut the paste: ${long.kept}, ${mid.kept}`)
+        assert(long.error === 'Title too long (5000 chars, max 100)', `5000: "${long.error}"`)
+        assert(mid.error === 'Title too long (150 chars, max 100)', `150: "${mid.error}"`)
+        assert(JSON.stringify(renames) === JSON.stringify([422, 400]), `rename answers ${JSON.stringify(renames)}`)
+        assert(open, 'the dialog closed on a refusal')
+        assert(after === before && core.title === before, `title changed: ${after} / ${core.title}`)
+        assert((await blockTitle(page, id)) === before, 'the block title changed')
+
+        return { long, mid, answers: renames, title: after, toastsDismissed: toasts }
+      } finally {
+        page.off('response', listener)
+      }
+    })
+
     await check('Copy ID: the stored id is on the clipboard, with a toast', async () => {
       await openMenu(page, 'st-hp-routing')
       await page.locator(MENU).getByRole('menuitem', { name: 'Copy ID' }).click()
@@ -508,20 +636,24 @@ async function main(): Promise<void> {
       return { first, unread: unread?.unread, second, read: read?.unread }
     })
 
-    await check('Export: downloads <title>-<id8>.json with the core export\'s contents', async () => {
-      await openMenu(page, 'st-md-v2')
-      const [download] = await Promise.all([page.waitForEvent('download', { timeout: 20_000 }), choose(page, 'export')])
-      const file = join(t.root, 'tmp', download.suggestedFilename())
+    await check('Export: downloads <title>-<id8>.json, byte for byte the core export (sha256 too)', async () => {
+      const exported = await exportBytes(s, 'st-md-v2', 'side-panel-v2-polish-st-md-v2.json')
+      const saved = JSON.parse(exported.file.toString('utf8')) as { id: string; messages: unknown[]; title: string }
 
-      await download.saveAs(file)
-      const saved = JSON.parse(readFileSync(file, 'utf8')) as { id: string; messages: unknown[]; title: string }
-      const core = await api<unknown>(s, '/api/sessions/st-md-v2/export')
-
-      assert(download.suggestedFilename() === 'side-panel-v2-polish-st-md-v2.json', `file name ${download.suggestedFilename()}`)
-      assert(JSON.stringify(saved) === JSON.stringify(core), 'the file differs from the core export')
       assert(saved.id === 'st-md-v2' && saved.messages.length === 6, `contents ${saved.id} ${saved.messages.length}`)
 
-      return { file: download.suggestedFilename(), messages: saved.messages.length, title: saved.title }
+      return { ...exported.facts, messages: saved.messages.length, title: saved.title }
+    })
+
+    await check('Export of a session with a whole-number float (estimated_cost_usd 2.0): the file keeps "2.0", byte for byte the core export', async () => {
+      seedFixtures(t, ['--whole-cost-branch', 'st-export-whole', 'st-orphan-child', 'Whole-number cost'])
+      await page.locator(BLOCK('st-export-whole')).waitFor({ timeout: 30_000 })
+      const exported = await exportBytes(s, 'st-export-whole', 'whole-number-cost-st-expor.json')
+
+      assert(exported.core.includes('"estimated_cost_usd":2.0'), 'the core export has no whole-number float')
+      assert(exported.file.includes('"estimated_cost_usd":2.0'), 'the file lost the .0')
+
+      return exported.facts
     })
 
     await check('Move to project ▸: the other folder projects only; the moved session\'s cwd and project change and the graph re-scopes it', async () => {
@@ -712,6 +844,33 @@ async function main(): Promise<void> {
       assert(await page.locator(BLOCK('st-unowned')).isVisible(), 'the refused block disappeared')
 
       return { error: shown, owner: core.user_id }
+    })
+
+    await check('Delete of a row deleted elsewhere while the confirm is open (NB3): the confirm finishes as deleted, like the core\'s idempotent delete', async () => {
+      const id = 'st-export-whole'
+
+      await openMenu(page, id)
+      await choose(page, 'delete')
+      const text = page.locator('[data-testid="session-tree-delete-text"]')
+
+      await text.waitFor({ timeout: 5000 })
+      // Another client deletes it first, through the same fenced backend route.
+      const snap = await api<{ runtime_revision: number; runtime_generation: number }>(s, `/api/plugins/session-tree/sessions/${id}/mutation-snapshot?session_profile=default`)
+      const elsewhere = await api<{ ok: boolean; deleted_ids?: string[] }>(s, `/api/plugins/session-tree/sessions/${id}/delete?session_profile=default`, {
+        method: 'POST',
+        body: { request_id: `e2e-${Date.now()}`, expected_revision: snap.runtime_revision, expected_generation: snap.runtime_generation }
+      })
+
+      assert(elsewhere.ok && elsewhere.deleted_ids?.includes(id), `the other delete: ${JSON.stringify(elsewhere)}`)
+      await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
+      await text.waitFor({ state: 'detached', timeout: 15_000 })
+      await page.locator(BLOCK(id)).waitFor({ state: 'detached', timeout: 15_000 })
+      const errors = await page.getByText(/Session not found/).count()
+
+      assert(!(await rowsOf(s, true)).has(id), 'the row is back')
+      assert(errors === 0, 'a "Session not found" error is shown')
+
+      return { deletedElsewhere: elsewhere.deleted_ids, confirm: 'closed as deleted' }
     })
 
     await check('a session open in a tab: still actionable from the graph (the page comes back from the sidebar nav)', async () => {
