@@ -1371,3 +1371,103 @@ runtime path; a common-prefix comparison breaks after compression, rewind or del
   `react`, `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
 - lint 0; build 0; `npm test` 264/264 (was 242); `test:py` 201 (was 177); `test:e2e` 146/146 —
   foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 19 (new).
+
+## Fix r1 (card 6) — bounded excerpt (B1), light-theme contrast (B2) + N2, N3
+
+Step 0: HEAD `f850ade`, `git status --short` empty; baseline as in the gates above.
+
+### B1 — the excerpt's patterns were super-linear on the whole message
+
+Cause (review r1): `plain_text` ran lazy `.+?` patterns (emphasis, links) over the whole message;
+from every opener without a closer they scanned to the end. Before (offline, the `f850ade`
+module, this machine): 8 KB `_x ` 123 ms, `**x ` 196 ms, `*x ` 122 ms, `~~x ` 94 ms, `[x ` 76 ms,
+pasted code 14 ms; the review measured 200 KB `_x ` 73.2 s and 8,173 ms for the pasted-code
+message through the real API, with a concurrent `/health` stalled 7,882 ms.
+
+Fix (`dashboard/session_details.py`): `plain_text` reads the first **`INPUT_MAX` = 4,096
+characters** (only the start is shown), and every pattern of the file is linear. Audit:
+
+| Pattern | Before | Now |
+|---|---|---|
+| emphasis ×4 (`**`/`__`, `*`, `_`, `~~`) | `.+?` across lines, unbounded | `[^\n]{1,240}?`: one line, ≤ `SPAN` = 240 |
+| inline code | `` (`+)(.+?)\1 `` across lines | a backtick run not inside a longer run, `[^\n]{1,240}?`, the same run |
+| link, image, reference link | `[^\]]+` / `[^)]*` unbounded | labels `[^\[\]\n]{1,240}+` (possessive, stop at the next bracket); targets ≤ 512 with one level of nested `(…)` |
+| reference definition (new) | stayed as text | the line is dropped |
+| autolink | `[^>\s]+` | `[^<>\s]{1,512}+` |
+| dropped blocks (`<tool_call>`, `<think>`, `<script>`, …) | opener `[^>]*` unbounded | opener `[^<>]{0,512}+`; body to the closer **or the end** (an unterminated one matches once) |
+| fence | linear already (closer or end) | the same, possessive blank runs |
+| HTML tag / comment | comment `<!--.*?-->`: each unclosed opener to the end | tag possessive; comment to `-->` or the end; new `_TAG_TAIL` drops a tag cut open at the end |
+| heading tail, quote, list, rule, table rule | adjacent `[ \t]*` runs could trade characters (quadratic on long blank runs) | possessive runs; the heading tail starts at a run's first blank |
+| whitespace collapse | `\s+` (linear) | unchanged |
+
+Cut by the cap, a fence keeps its code as text, a tool-call payload is dropped (no closer: to the
+end), a tag cut open at the end is removed. Normal content keeps its plain text: every earlier
+excerpt test passes unchanged (Markdown, code block, tool call, HTML-looking text, the 400-word
+message, the tool-run "First prompt" fallback). Differences, by design: emphasis and inline code
+no longer span lines; spans longer than 240 characters keep their markers. **N2 done:**
+`[click me](javascript:alert(document.domain)) raw anchor` → `click me raw anchor`, and
+`[1]: javascript:alert(4)` is dropped. The read stays Hermes's `get_messages(latest=True,
+limit=60)` (whole `content`, no `substr` query; read-only either way).
+
+Measured (pytest `tests/py/test_details_bounds.py`, 20 bodies of ≥ 200 KB in
+`scripts/seed-fixtures.py` `PATHOLOGICAL`: the review's `_x `, `**x `, `*x `, `~~x `, `[x `, `[x](`,
+`` `x ``, `<x `, an unterminated fence, the pasted code ×4000, plus `__x `, `![x `, `<!--x `,
+`<http:`, `<think `, an unterminated `<tool_call>`, blank runs, `#  `, `- `, `| -- `):
+
+- **`plain_text` per body (median of 3, bar 50 ms): worst `**x ` / `__x ` 6.3 ms**, `_x ` 4.1,
+  `*x ` 4.1, `~~x ` 3.2; `[x ` 0.38, `[x](` 0.36, `` `x `` 0.29, `<x ` 0.60, fence 0.42, pasted code
+  0.37, the others 0.05–0.45 ms.
+- **Every compiled pattern on the uncapped 200 KB bodies** (the cap's backstop; bar 1 s): worst
+  `_EMPHASIS[1]` 185.8 ms (`*x `), the other emphasis patterns 140–186 ms, every other pattern
+  ≤ 4.5 ms. Quadratic patterns took 8–73 s here.
+- **Per id through `details` (processing, read-only open; bar 50 ms): worst 6.50 ms** (`__x `),
+  `**x ` 6.49, `_x ` 4.23, `*x ` 4.19, `~~x ` 3.35, the others 0.20–0.77 ms; the endpoint
+  wall 2.1–8.4 ms per single-id request.
+- **One request of 100 ids, each a 200 KB pathological last message: 159 ms** (bar 2 s).
+- 5,000-message session per id (unchanged code path): median 1.82 ms, max 2.19 ms; endpoint 6.34 ms.
+- **Real API (e2e-rich, the Webapp on 19360–19364, profile `work`, `--pathological`):** the
+  pasted-code session alone **7 ms** wall (was 8,173 ms), its excerpt `value =
+  self._cache.get(key_name, None) # look up _cache …`; all 20 bodies in one request **40 ms**; a
+  plugin `/health` sent 15 ms into that request **9 ms** (idle 3 ms; was 7,882 ms).
+
+### B2 — light-theme contrast below 3:1
+
+Measured by the new e2e check (`scripts/e2e-rich.ts`, light **and** dark): the colour at its
+alpha inside every ancestor's `opacity`, over the backgrounds of the ancestors whose box covers
+the probed point (`scripts/e2e/contrast.ts`, unit-tested in `tests/js/contrast.test.ts`: black /
+white 21:1, `#777` 4.48, `#959595` 2.99, alpha and opacity-chain compositing, a non-covering layer,
+the border's lower side). A border counts the lower of its inside and its outside.
+
+| Element | light before → after | dark before → after |
+|---|---|---|
+| ghost border (both) | 1.96 → **3.46** | 2.34 → **4.98** |
+| stand-in title "Parent not loaded" | 2.61 → **3.52** | ≥ 3 (passed) → **5.22** |
+| stand-in dashed border | 1.54 → **3.49** | 1.85 → **5.22** |
+| link stroke (N3) | 1.86 → **3.51** | 2.40 → **5.29** |
+
+The "before" run is the same check on `f850ade`'s CSS (it failed with exactly these; the review
+measured 1.98 / 2.62 / 1.56 / 1.87). Changes (`src/styles.css`, Rich section only, colours via
+`var(--ui-*)` only): ghost border `--ui-text-tertiary` (was 18 % primary in stroke-secondary), its
+fill 4 % primary (was 3 %); stand-in border `--ui-text-tertiary` (was 50 % of it) and `opacity: 1`
+(was 0.8 — and, without the override, the shared Dense stand-in's 0.6 applies: the first after-run
+measured 1.99 because of it); link stroke `--ui-text-tertiary` (was 55 % of it). Card geometry is
+untouched: the ghosts keep their offsets (3 and 7 px below the card at Fit, z −1), cards stay
+280 × 164, no rectangle or link route changes (the no-jump, detour and layout checks pass as before).
+**N3 token-bar track: not taken** — raising the 1.2:1 track to 3:1 would bring it within ~1.2:1 of
+the fill (3.68:1 against the card), so the fill/track boundary would get worse; it stays open.
+Screenshots (zoomed in with the wheel after a middle-drag pan): `rich-ghosts-{light,dark}.png`,
+`rich-standin-{light,dark}.png`.
+
+### Still open
+
+r1 N1 (`layout.ts` `nearest()` has no group bounds), N4 (`COUNT(DISTINCT role||':'||timestamp)`),
+N5 (`DetailsStore.entries` never pruned), N3's token-bar track (above); earlier forwarded items as
+listed above.
+
+### Gates, bundle and numbers (code commit `ecf25ac`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 652 902 bytes** (was 652 523; CSS only), byte-identical over two builds and
+  to the committed file (sha256 `815a4086…faad370e0e`). Imports: `@hermes/plugin-sdk`, `react`,
+  `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
+- lint 0; build 0; `npm test` 272/272 (was 264); `test:py` 246 (was 201); `test:e2e` 148/148 —
+  foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 21 (was 19).
