@@ -874,7 +874,8 @@ Card start commit `b56708ca991edd4dc142c2bb4519e8965ebaa9d8`, `git status --shor
 
 - **Switching:** Settings → View style → Project swimlanes stored `{style: "swimlanes"}` and the page
   drew it; the toolbar switcher went Swimlanes → Dense → Swimlanes (synced).
-- **Lanes:** syscanvas, hermes-plugins, mdesign (the `projects.tree` order) and Home last; header
+- **Lanes:** syscanvas, hermes-plugins, mdesign (the `projects.tree` order then; since round 4 the
+  lanes use the fixed alphabetical order: hermes-plugins, mdesign, syscanvas) and Home last; header
   counts and tokens equal the backend's `/sessions` rows under the same filters: syscanvas 12 /
   645 000, hermes-plugins 9 / 135 000, mdesign 11 / 165 000, Home 7 / 105 000. Every block inside its
   lane's band.
@@ -1078,6 +1079,14 @@ that, like the real canvas, keyed the routes on the model.
   read from the model) → routes (link ends, rectangles, `style.ports`, `style.router`). Each stage
   reruns only when one of its inputs is a new object and keeps its previous output when the new one
   is equal, so the routes never depend on the model object.
+- **Correction (card-5 review r3, B1-r3; fixed in round 4 below):** the claim that a content-only
+  refetch re-routes nothing was untrue for branched sessions. The link ends were compared position
+  by position in `model.edges` order, which follows the row order; the backend sorts rows by
+  `last_active`, so a turn in a branched child that was not the newest row moved its edge to the
+  front and re-routed every link (698 + 686 ms for st-scale-0003, reviewer r3). The e2e below
+  appended to st-scale-0000, a root already the newest row, which can never reorder. Since round
+  4 the link ends are sorted by edge id and the rectangles built in id order, so a reorder of the
+  rows alone re-routes nothing.
 - **Memo-chain audit (`graph-canvas.tsx`):** what feeds the router or its obstacles — shown,
   rectangles, link ends, routes — is in that chain, with no model key. Left on the model, as it must
   be: `lineage`, `baseNodes` (block content: title, last used, messages, tokens, status, pinned),
@@ -1151,3 +1160,99 @@ that, like the real canvas, keyed the routes on the model.
   `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
 - lint 0; build 0; `npm test` 226/226 (was 217); `test:py` 177 (unchanged); `test:e2e` 125/125 —
   foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 26 (was 25).
+
+## Fix r3 (card 5, round 4) — order-independent link check (B1-r3) + fixed lane order
+
+Measured 2026-11-10 by the card-5 round-4 coder, same isolated homes and ports (19350–19354), fresh
+homes (`scripts/test-hermes reset`, then `npm run test:e2e`). Fix start commit `324633a`
+(`git status --short` empty); code commit `a453b7d`, docs commit after it. The user authorised this
+round as a one-off ("A1 + B1", comment on `t_3f07e736`, dated 2026-11-09). Where this section
+disagrees with the sections above, this section is current.
+
+### B1-r3 — a row reorder alone re-routed every link
+
+- **Cause (review r3):** `sameLinks` compared the link ends position by position, in
+  `model.edges` order. `buildGraph` adds edges in row order and the backend returns rows newest
+  first (`order_by_last_active`), so a chat turn in a branched child that was not the newest row
+  moved its edge to the front: the same set, another order, every link re-routed (698 + 686 ms for
+  st-scale-0003, reviewer r3), with routes identical to the old ones.
+- **Fix (`src/page/canvas-routing.ts`):** the links stage sorts the link ends by edge id
+  (code-unit order), so in-order equality is set equality and the same set keeps the previous
+  array; the rectangles stage builds its map in block-id order, because `routeLinks` takes its
+  obstacle list in the map's order. Neither input of the router depends on the row order any
+  more, so the same set always gives the same routes. The router itself is unchanged; Dense keeps
+  live links during a drag and the re-route on drop (R13).
+- **Unit (`tests/js/canvas-routing.test.ts`, through `createCanvasRouting` + the frame cache, as
+  the page drives them):** Show all off and on, a bumped branched child (`st-md-katex`, row 4+, new
+  `message_count` and `last_active`) moved to the front as the backend sorts it — the test checks
+  that its edge's index in `model.edges` did change — makes **0 router calls**, `routes`, link ends
+  and rectangles `===`; reversing or shuffling the rows alone (Show all off and on) makes 0 router
+  calls; a fresh chain over the same rows in three orders gives byte-identical link ends,
+  rectangles and routes; Dense: reversed rows keep `routes ===`, a drop still re-routes once.
+- **e2e (`scripts/e2e-swimlanes.ts`, new check):** profile `scale`, Swimlanes, first render
+  settled + 3 s. Before the append it proves from the backend's own answer that the session is a
+  branched child (`_branched_from`) and not the newest row, and after it that the row became the
+  newest. One `SessionDB.append_message` pair (`seed-fixtures.py --append`), wait for the block's
+  DOM count, 2 s more. Final run:
+  - Show all off, **st-scale-0003** (row 3 → 0): 2 → 4 msgs after 984 ms, **0 long tasks**;
+  - Show all on, **st-scale-0007** (row 7 → 0): 2 → 4 msgs after 853 ms, **0 long tasks**.
+  - The st-scale-0000 check (B1-r2) is kept: 0 long tasks with Show all off and on.
+
+### Fixed lane order (user ruling; closes review r3's N1)
+
+- **Rule:** `orderLanes` (`src/styles/swimlanes/layout.ts`, pure, used for All projects and for a
+  project scope, collapsed lanes included): project lanes by
+  `a.label.localeCompare(b.label, 'en', { sensitivity: 'accent' })`, ties by project id in
+  code-unit order, the no-project lane last whatever its label. Colours, icons, labels and
+  membership still come from `projects.tree`; the toolbar's scope picker and the other styles keep
+  `projects.tree`'s order (the e2e asserts the toolbar is still in its non-alphabetical order).
+- **Unit:** `orderLanes` — mixed-case labels; a three-way tie (`foo` / `Foo` / `FOO`) broken by id;
+  the no-project lane given in the middle with the label `AAA Home` ends last; all 120
+  permutations of a 5-lane input give the same output and leave the input alone. Layout: the
+  default fixture's lanes are hermes-plugins, mdesign, syscanvas, Home for `projects.tree`'s
+  syscanvas-first order and for its reverse, with equal positions; a scope keeps the order; a
+  synthetic 3-project case keeps lanes and positions when `projects.tree` reorders. Chain, Show
+  all off and on: two `projects.tree` answers with the same projects in other orders keep
+  `positions`, `rects` and `routes` `===` with 0 router calls; a chat turn in a branched mdesign row
+  plus `projects.tree` listing mdesign first: 0 router calls; adding a project ("Aardvark", which
+  sorts first) re-routes once, and the same set in another order then routes nothing.
+- **e2e (new check):** profile `scale` (3 auto projects, so no seed change was needed), Swimlanes:
+  the project `projects.tree` lists last (read from the toolbar) gets a turn in its newest root
+  session; the check waits until the toolbar lists it first (projects.tree refetched and
+  reordered), then 3 s more. Final run: st-scale-0020 (hermes-plugins), `projects.tree` order
+  syscanvas, mdesign, hermes-plugins → hermes-plugins, mdesign, syscanvas; lane headers
+  hermes-plugins, mdesign, syscanvas before and after (alphabetical); **0 long tasks**.
+- **The lane-order e2e on the default fixture** now expects the alphabetical lanes
+  (hermes-plugins, mdesign, syscanvas, Home) with counts and tokens unchanged.
+
+### Fails on `324633a`
+
+- **Unit:** a `git archive 324633a` export (scratch `c5r4/old`, outside the repo) with the two new
+  test files; `swimlanes-layout.test.ts` gets a stand-in `orderLanes` that keeps the input order
+  (324633a has none). 17 of 55 fail: all 6 B1-r3 chain tests (e.g. "the router ran for a branched
+  child moved to the front: 22 !== 11"), all 5 lane-order chain tests, the default-fixture lane
+  test, the synthetic reorder test and the 4 `orderLanes` tests. Log: `old-unit.log`.
+- **e2e:** the same export with the new `e2e-swimlanes.ts` (3 of 28 fail): the default-fixture
+  lane order (lanes `syscanvas, hermes-plugins, mdesign, Home`); B1-r3 with a **673 ms** long task
+  (st-scale-0003, Show all off; the Show all on run, st-scale-0007, recorded **459 ms**); the lane
+  order check: lanes moved `mdesign, syscanvas, hermes-plugins` → `hermes-plugins, mdesign,
+  syscanvas` with a **717 ms** long task. Logs: `swim-old.log`, `swim-old-facts.json`, copied with
+  the screenshots to `~/.cache/session-tree-e2e/c5-fix-r3-screenshots/`.
+
+### Still holding
+
+- **Minute tick:** idle across a real tick, Show all off and on: 1 tick each, 0 long tasks.
+- **500-session fixture (final run):** Swimlanes first render **662 ms**, pan **61.9 fps**; Dense at
+  the end of the swimlanes suite **336 ms, 61.4 fps**; core-dense's own check 316 ms, 60.9 fps.
+- **Dense unchanged:** core-dense 28/28 with its suite file unchanged; Dense → Swimlanes → Dense
+  left all 20 stored Dense positions exact.
+- **No position writes:** during Swimlanes only `PATCH /settings` and the Move's
+  `POST /state/forget` (network log).
+
+### Gates, bundle and numbers (code commit `a453b7d`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 603 051 bytes** (was 602 455), byte-identical over two builds and to the
+  committed file (sha256 `a39db99d…41e364c15b`). Imports: `@hermes/plugin-sdk`, `react`,
+  `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
+- lint 0; build 0; `npm test` 242/242 (was 226); `test:py` 177 (unchanged); `test:e2e` 127/127 —
+  foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 (was 26).

@@ -28,14 +28,18 @@ The style contract (`src/styles/types.ts`) got one optional part, `frame`:
   router takes 0.5–0.7 s on the 500-session fixture). A new model (every refetch, such as one
   chat turn elsewhere) does recompute the layout; a recompute whose positions (or shown set)
   equal the previous ones reuses the previous map (set), so the canvas keeps its rectangles.
-- **When links are re-routed** (`src/page/canvas-routing.ts`, card-5 review r2 B1-r2). The
-  canvas's routing chain never keys on the model object: shown set → rectangles → link ends (per
-  link its edge id, source, target and kind) → routes. Each stage keeps its previous object when
-  its result is equal, and the router runs only when the link ends, the rectangles, the style's
-  ports or its router change. A refetch that changes only block content (message count, tokens,
-  last used, title, status) redraws those blocks and re-routes nothing; a structural change (a
-  session added, removed, archived or moved to another lane, a new link, a local midnight, an
-  offset change) re-routes once.
+- **When links are re-routed** (`src/page/canvas-routing.ts`, card-5 review r2 B1-r2 and r3
+  B1-r3). The canvas's routing chain never keys on the model object: shown set → rectangles (built
+  in block-id order) → link ends (per link its edge id, source, target and kind, **sorted by edge
+  id**) → routes. Each stage keeps its previous object when its result is equal, and the router
+  runs only when the set of link ends, the rectangles, the style's ports or its router change.
+  The order of the rows never reaches the router: the backend sorts rows by `last_active`, so a
+  chat turn moves that row (and, for a branched session, its edge) to the front; that reorder
+  alone, or any other reorder of the same rows, re-routes nothing. A refetch that changes only
+  block content (message count, tokens, last used, title, status) redraws those blocks and
+  re-routes nothing, whichever session it was in (a root or a branched child); a structural
+  change (a session added, removed, archived or moved to another lane, a new link, a change of
+  the set of lanes, a local midnight, an offset change) re-routes once.
 - The `nowMs` passed to the pure layout (for the future-start clamp below) is the one captured at
   that recompute. Only the **now marker** (the line and the pill) follows the live clock: the
   layers map the live `nowMs` with the same piecewise mapping (`swimNowX`, from today's local
@@ -59,10 +63,22 @@ column and the axis).
   write this style can cause is Move to project's existing `POST /state/forget` (it forgets the
   block's spot in the *other* styles' layouts), and the synced style itself (`PATCH /settings`) when
   the user switches style.
-- **Lanes.** `projects.tree` order, then any project id the tree does not list (sorted), then the
-  no-project lane, named like the core's bucket (`Home`, from the tree's `isNoProject` node). A
-  project with no session under the current filters (profile, Show archived, hidden sources) gets
-  no lane unless it is the scope.
+- **Lanes: a fixed, alphabetical order** (user ruling, 2026-11-09, card 5 round 4; it replaces
+  "lanes use `projects.tree`'s order"). `projects.tree` lists auto projects by session recency,
+  so a chat turn in another project used to move every lane and re-route every link (card-5
+  review r3, N1). Now `orderLanes` (`src/styles/swimlanes/layout.ts`, one pure function used for
+  All projects and for a project scope, collapsed lanes included) sorts the project lanes by
+  label with `localeCompare(…, 'en', { sensitivity: 'accent' })` (case-insensitive, one fixed
+  locale so Node and the browser agree), breaks ties (`Foo` / `foo`) by project id in code-unit
+  order, and puts the no-project lane (named like the core's bucket, `Home`, from the tree's
+  `isNoProject` node) last whatever its label. A project id the tree does not list sorts by its
+  id as its label. Colours, icons, labels and membership still come from `projects.tree`; only
+  the order changed, and only for Swimlanes lanes: the toolbar's scope picker and the other
+  styles keep `projects.tree`'s order. So a turn in another project, or a `projects.tree` answer
+  in another order, keeps the positions, rectangles and routes (0 router calls); only a change of
+  the set of lanes (a project added or removed, a rename that changes the sort) re-routes, once.
+  A project with no session under the current filters (profile, Show archived, hidden sources)
+  gets no lane unless it is the scope. Collapse state is keyed by lane, so it is unaffected.
 - **Header column.** Fixed in screen x (a horizontal pan does not move it), follows the lanes
   vertically, matches their heights at every zoom, 168 px wide at every zoom. Swatch (the project's
   colour or icon), name, `N sessions · T tok`, `I in trees · S singles`. When the lane is shorter
