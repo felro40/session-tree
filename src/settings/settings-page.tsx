@@ -11,6 +11,7 @@ import { useEffect } from 'react'
 import { usePrefsVersion, useSyncVersion } from '../page/services.ts'
 import type { Services } from '../page/services.ts'
 import { DEFAULT_STYLE_ID, isRegisteredStyle, registeredStyles } from '../styles/registry.ts'
+import { settingsNotes } from './notes.ts'
 
 export const USE_SYNCED = 'synced'
 
@@ -63,11 +64,11 @@ export function SettingsPage({ services: { sync, prefs } }: { services: Services
           onChange={on => sync.setSettings(profile, { snap: on })}
         />
       </div>
-      {offline && (
-        <p className="session-tree__settings-note" data-testid="session-tree-settings-offline">
-          The Session Tree backend is unreachable: changes are kept here and saved when it is back.
+      {settingsNotes({ offline, readOnly: sync.storeReadOnly }).map(note => (
+        <p key={note.id} className="session-tree__settings-note" data-testid={`session-tree-settings-${note.id}`}>
+          {note.text}
         </p>
-      )}
+      ))}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import { laidOutFamilies, layoutGraph, rectOf } from '../../src/model/layout.ts'
 import type { Point, Rect } from '../../src/model/layout.ts'
-import { curvePath, curveRouter, DETOUR_MARGINS, insideRect, orthogonalRoute, pathToSvg, routeLinks, samplePath } from '../../src/model/route.ts'
+import { curvePath, curveRouter, DETOUR_MARGINS, elbowPoints, insideRect, orthogonalRoute, orthogonalRouter, pathToSvg, routeLinks, samplePath } from '../../src/model/route.ts'
 import type { LinkEnds, Port, Route } from '../../src/model/route.ts'
 import { DENSE_HEIGHT, DENSE_WIDTH, denseLayoutSpec, densePorts } from '../../src/styles/dense/spec.ts'
 import { loadFixture } from './fixtures.ts'
@@ -257,5 +257,57 @@ describe('orthogonalRoute', () => {
 
     assert.ok(points[1].x > from.x && points[1].y === from.y)
     assert.ok(points[points.length - 2].x < to.x && points[points.length - 2].y === to.y)
+  })
+})
+
+describe('orthogonal router (Swimlanes): elbows with rounded corners, detour on a blocked link', () => {
+  const swim = (x: number, y: number): Rect => ({ x, y, width: 170, height: 54 })
+
+  it('parent right edge → child left edge: out, one vertical run 14 px right of the parent, in', () => {
+    const from = { x: 170, y: 27, dir: 'right' as const }
+    const to = { x: 400, y: 171, dir: 'left' as const }
+
+    assert.deepEqual(elbowPoints(from, to), [
+      { x: 170, y: 27 },
+      { x: 184, y: 27 },
+      { x: 184, y: 171 },
+      { x: 400, y: 171 }
+    ])
+    assert.deepEqual(elbowPoints(from, { ...to, y: 27 }), [
+      { x: 170, y: 27 },
+      { x: 400, y: 27 }
+    ])
+    // Rounded corners: two quadratic corners, none sharper than the radius allows.
+    const route = orthogonalRouter.live(from, to)
+
+    assert.equal(route.path.segs.filter(seg => seg.kind === 'Q').length, 2)
+    assert.equal(route.detoured, false)
+  })
+
+  it('"continued as" (down → left): drops from the predecessor, then runs right into the successor', () => {
+    assert.deepEqual(elbowPoints({ x: 30, y: 54, dir: 'down' }, { x: 300, y: 200, dir: 'left' }), [
+      { x: 30, y: 54 },
+      { x: 30, y: 200 },
+      { x: 300, y: 200 }
+    ])
+  })
+
+  it('a target left of the turn goes round instead of backtracking through the parent', () => {
+    const points = elbowPoints({ x: 170, y: 27, dir: 'right' }, { x: 100, y: 200, dir: 'left' })
+
+    assert.ok(points.length === 6)
+    assert.ok(points[1].x > 170 && points[4].x < 100)
+  })
+
+  it('a link whose elbow would cross a block detours around it and enters no block', () => {
+    const rects = new Map([['P', swim(0, 0)], ['C', swim(400, 144)], ['X', swim(150, 60)]])
+    const links: LinkEnds[] = [{ id: 'P->C', source: 'P', target: 'C', from: { x: 170, y: 27, dir: 'right' }, to: { x: 400, y: 171, dir: 'left' } }]
+    const plain = orthogonalRouter.live(links[0].from, links[0].to)
+
+    assert.ok(samplePath(plain.path).some(point => insideRect(point, rects.get('X')!)), 'the plain elbow does not cross X')
+    const routes = routeLinks(links, rects, orthogonalRouter)
+
+    assert.equal(routes.get('P->C')!.detoured, true)
+    assert.deepEqual(intrusions(routes, links, rects), [])
   })
 })

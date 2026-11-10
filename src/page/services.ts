@@ -12,9 +12,10 @@ import { LAYOUT_CHANGED_EVENT, stateTransport } from '../api.ts'
 import { restErrorText } from '../model/actions.ts'
 import { DevicePrefs } from '../model/device-prefs.ts'
 import { LayoutSync, NEWER_SCHEMA, POLL_MS } from '../model/layout-sync.ts'
+import { READ_ONLY_MESSAGE } from '../settings/notes.ts'
 
 /** The store was written by a newer Session Tree (B1 of the card-4 review): the page's banner. */
-export const READ_ONLY_MESSAGE = 'Layout saved by a newer Session Tree version — changes here are not saved'
+export { READ_ONLY_MESSAGE }
 
 export interface Services {
   sync: LayoutSync

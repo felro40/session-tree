@@ -10,7 +10,7 @@
  */
 import { Button, EmptyState, ErrorState, host, useQuery, useValue } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
-import { ReactFlowProvider, useReactFlow } from '@xyflow/react'
+import { ReactFlowProvider, useReactFlow, useStoreApi } from '@xyflow/react'
 import type { Viewport } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -78,8 +78,9 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const [toast, setToast] = useState<UndoToast>()
   const settings = sync.settings(profile)
   const style = getStyle(resolveStyleId(device.styleOverride, settings.style))
-  const snap = settings.snap
+  const snap = settings.snap && style.draggable
   const flow = useReactFlow()
+  const flowStore = useStoreApi()
 
   useEffect(() => sync.watch(profile), [sync, profile])
 
@@ -158,12 +159,28 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   // block under "no project", and one made before the stored positions arrive would be saved
   // over nothing (and shown, then moved).
   const ready = Boolean(sessions.data) && !projects.isPending && sync.settled(profile)
+  const collapsedLanes = device.collapsedLanes
+  const collapsed = useMemo(() => new Set(collapsedLanes), [collapsedLanes])
+  // Card 5: a framed style (Swimlanes) is laid out from the data alone on every render; it never
+  // reads the layout store and never queues anything to it (no `place()`, R12).
+  const frameLayout = useMemo(
+    () =>
+      ready && style.frame
+        ? style.frame.compute({ model, showAll, collapsed, nowMs, tzOffsetMinutes: -new Date(nowMs).getTimezoneOffset() })
+        : undefined,
+    [ready, style, model, showAll, collapsed, nowMs]
+  )
   const layout = useMemo(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
-    () => (ready ? sync.place(ref, previous => style.layout(model, previous, spec), { save: style.savesLayout && !projects.isError, keys }) : EMPTY_LAYOUT),
+    () =>
+      style.frame
+        ? (frameLayout ?? EMPTY_LAYOUT)
+        : ready
+          ? sync.place(ref, previous => style.layout(model, previous, spec), { save: style.savesLayout && !projects.isError, keys })
+          : EMPTY_LAYOUT,
     // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
-    [ready, sync, ref, style, model, keys, spec, syncVersion, projects.isError]
+    [ready, sync, ref, style, model, keys, spec, syncVersion, projects.isError, frameLayout]
   )
 
   const busy = useValue(host.state.busy)
@@ -186,6 +203,17 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === false ? selectedChoice : null
 
   const fit = useCallback(() => {
+    if (frameLayout) {
+      // A framed style frames its lanes itself (right of the header column, under the axis).
+      const { width, height } = flowStore.getState()
+
+      if (width > 0 && height > 0) {
+        void flow.setViewport(frameLayout.fit(width, height, MIN_ZOOM), { duration: 0 })
+      }
+
+      return
+    }
+
     const inScope =
       scope === ALL_PROJECTS
         ? undefined
@@ -195,7 +223,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
             .map(id => ({ id }))
 
     void flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : undefined })
-  }, [flow, model, spec, scope])
+  }, [flow, flowStore, frameLayout, model, spec, scope])
 
   // A new layout (Show all, Re-arrange) is framed once; refreshes are not.
   useEffect(() => {
@@ -213,6 +241,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const vpKeyRef = useRef(vpKey)
   const canvasShown = ready && model.nodes.length > 0 && !sessions.isError
   const appliedKey = useRef<null | string>(null)
+  const appliedScope = useRef(scope)
 
   useEffect(() => {
     vpKeyRef.current = vpKey
@@ -226,21 +255,27 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     if (appliedKey.current === null) {
       // The canvas just mounted with this key's viewport (or framed itself).
       appliedKey.current = vpKey
+      appliedScope.current = scope
 
       return
     }
 
     if (appliedKey.current !== vpKey) {
+      // Card 5: in a framed style (Swimlanes) a new scope collapses the other lanes, so the view
+      // always re-fits on a scope change; a remembered view still comes back on a reload.
+      const refit = Boolean(style.frame) && appliedScope.current !== scope
+
       appliedKey.current = vpKey
+      appliedScope.current = scope
       const saved = prefs.viewport(vpKey)
 
-      if (saved) {
+      if (saved && !refit) {
         void flow.setViewport(saved, { duration: 0 })
       } else {
         fit()
       }
     }
-  }, [vpKey, canvasShown, prefs, flow, fit])
+  }, [vpKey, canvasShown, prefs, flow, fit, scope, style])
 
   const onViewport = useCallback((viewport: Viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs])
 
@@ -274,6 +309,11 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const dismissToast = useCallback(() => setToast(undefined), [setToast])
 
   const onRearrange = useCallback(() => {
+    if (!style.savesLayout) {
+      // Swimlanes has no saved positions to reset (R12): Re-arrange is hidden there.
+      return
+    }
+
     const previous = sync.rearrange(ref)
     const id = Date.now()
 
@@ -287,7 +327,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         requestFit()
       }
     })
-  }, [sync, ref, requestFit, setToast])
+  }, [sync, ref, style, requestFit, setToast])
 
   useEffect(() => {
     if (!toast) {
@@ -345,7 +385,11 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   })
 
   const visibleCount = useMemo(() => visibleRows(rows).length, [rows])
-  const onCanvas = useMemo(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec])
+  const onCanvas = useMemo(
+    () => (frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0)),
+    [model, spec, frameLayout]
+  )
+  const onToggleLane = useCallback((key: string) => prefs.toggleLane(key), [prefs])
   const Panel = style.Panel
   const panelOpen = prefs.panelOpen(style.id)
   const offline = sync.offline(profile)
@@ -422,10 +466,14 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           nowMs={nowMs}
           initialViewport={saved}
           onViewport={onViewport}
+          frameLayout={frameLayout}
+          onToggleLane={onToggleLane}
         />
         {onCanvas === 0 && (
           <div className="session-tree__hint" data-testid="session-tree-no-branches">
-            No branched sessions here — the sessions without branches are listed on the right.
+            {style.singles === 'lane-chip'
+              ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip."
+              : 'No branched sessions here — the sessions without branches are listed on the right.'}
           </div>
         )}
       </>
@@ -472,6 +520,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           maxZoom={MAX_ZOOM}
           onFit={fit}
           onRearrange={onRearrange}
+          canRearrange={style.savesLayout}
+          snapUnavailable={style.draggable ? undefined : style.snapUnavailable}
           singlesCount={model.singles.length}
           styles={registeredStyles().map(each => ({ id: each.id, label: each.label }))}
           styleId={style.id}

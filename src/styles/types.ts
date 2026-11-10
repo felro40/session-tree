@@ -5,9 +5,10 @@
  *
  * Card 2 registers Dense + inspector; cards 5–7 add the other three; card 4 adds switching.
  */
-import type { EdgeTypes, NodeTypes } from '@xyflow/react'
+import type { EdgeTypes, Node, NodeTypes } from '@xyflow/react'
 import type { ComponentType } from 'react'
 
+import type { Viewport } from '../model/device-prefs.ts'
 import type { EdgeKind, GraphModel, GraphNode } from '../model/graph.ts'
 import type { LayoutResult, LayoutSpec, Point, Rect } from '../model/layout.ts'
 import type { ProjectInfo } from '../model/projects.ts'
@@ -59,6 +60,50 @@ export interface StylePanelProps {
   nowMs: number
 }
 
+/** What a framed style's layout is computed from (card 5): the data and this device only. */
+export interface FrameInput {
+  model: GraphModel
+  showAll: boolean
+  /** Lane keys this device collapsed. */
+  collapsed: ReadonlySet<string>
+  nowMs: number
+  /** Minutes to add to UTC for local time. */
+  tzOffsetMinutes: number
+}
+
+/** A framed style's layout: positions plus what its own layers draw. */
+export interface FrameLayout extends LayoutResult {
+  /** Blocks drawn on the canvas. */
+  shown: ReadonlySet<string>
+  /** Zoom + pan that frame the content in a canvas of this size. */
+  fit(width: number, height: number, minZoom: number): Viewport
+}
+
+export interface FrameLayerProps {
+  layout: FrameLayout
+  model: GraphModel
+  nowMs: number
+  onOpen(node: GraphNode): void
+  /** A lane header was clicked (collapse / expand on this device). */
+  onToggleLane(key: string): void
+  /** The extra node (a lane chip) that was activated, with its box relative to the canvas. */
+  active: null | { id: string; box: Rect }
+  onCloseActive(): void
+}
+
+/**
+ * A style that computes its layout from the data on every render and draws its own layers
+ * around the flow (Swimlanes: lane bands and the day grid under it; the lane header column, the
+ * time axis and the singles popover over it). It never reads or writes the layout store.
+ */
+export interface StyleFrame {
+  compute(input: FrameInput): FrameLayout
+  /** Flow nodes that are not blocks (lane chips); their types are in the style's `nodeTypes`. */
+  extraNodes(layout: FrameLayout): Node[]
+  Under: ComponentType<{ layout: FrameLayout }>
+  Over: ComponentType<FrameLayerProps>
+}
+
 export interface StyleDefinition {
   id: StyleId
   label: string
@@ -84,4 +129,8 @@ export interface StyleDefinition {
   resetPortX: number
   /** Optional right-hand panel (Dense: the inspector). */
   Panel?: ComponentType<StylePanelProps>
+  /** Shown as the disabled Snap toggle's tooltip when the style has no dragging (Swimlanes). */
+  snapUnavailable?: string
+  /** A style laid out from the data alone, with its own layers (Swimlanes). */
+  frame?: StyleFrame
 }

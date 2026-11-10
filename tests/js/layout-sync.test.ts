@@ -677,7 +677,7 @@ describe('LayoutSync: a refused save never loops (B1)', () => {
   })
 
   it('classifies failures: transient (no answer, timeout, 5xx, 408, 429) retry; any other 4xx is a refusal; 409 newer_schema is its own kind', () => {
-    for (const transient of ['fetch failed', 'Request timed out after 15000 ms', '500: x', '502: x', '503: {}', '408: x', '429: x']) {
+    for (const transient of ['fetch failed', 'Request timed out after 15000 ms', '500: x', '502: x', '503: {}', '408: x', '429: x', '401: x', '403: {"detail":"signed out"}']) {
       assert.equal(refusalKind(new Error(transient)), null, transient)
       assert.equal(isRefusal(new Error(transient)), false, transient)
     }
@@ -705,6 +705,62 @@ describe('LayoutSync: a refused save never loops (B1)', () => {
     server.refuse = false
     await timers.advance(10_000)
     assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [1, 1] })
+  })
+
+  it('carry-forward 2: a 401 / 403 (signed out) keeps the drop queued and retries it after sign-in; no "could not save" notice', async () => {
+    for (const status of ['401: {"detail":"Not authenticated"}', '403: {"detail":"Forbidden"}']) {
+      const { server, timers, sync, kinds } = setup()
+
+      sync.watch('default')
+      await settle()
+      server.refuse = status
+      sync.drop(REF, new Map([['a', { x: 4, y: 2 }]]))
+      await timers.advance(300 + 1000 + 2000)
+      assert.ok(writesOf(server).length >= 2, `${status}: not retried (${writesOf(server).length})`)
+      assert.equal(sync.pendingCount, 1, `${status}: the drop was dropped`)
+      assert.deepEqual(kinds, [], `${status}: notified`)
+      // Signed in again: the queued drop goes out.
+      server.refuse = false
+      await timers.advance(10_000)
+      assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [4, 2] }, status)
+      assert.equal(sync.pendingCount, 0)
+    }
+  })
+
+  it('carry-forward 3: placements a cap refused are stored again after a Re-arrange (and after a stored PUT)', async () => {
+    const { server, timers, sync } = setup()
+    const ids = ['a', 'b']
+
+    sync.watch('default')
+    await settle()
+    server.refuse = true // 413
+    sync.place(REF, autoLayout(ids))
+    await timers.advance(300)
+    assert.deepEqual(writesOf(server), ['patch:if_absent:2'])
+    // The cap clears; without a Re-arrange the refused placements stay unqueued (B1).
+    server.refuse = false
+    sync.place(REF, autoLayout(ids))
+    await timers.advance(300)
+    assert.deepEqual(writesOf(server), ['patch:if_absent:2'])
+    // Re-arrange: the layout is fresh, its placements may be stored now.
+    const shown = sync.rearrange(REF)
+
+    await timers.advance(300)
+    sync.place(REF, autoLayout(ids))
+    await timers.advance(300)
+    assert.deepEqual(writesOf(server), ['patch:if_absent:2', 'delete', 'patch:if_absent:2'])
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [0, 0], b: [100, 0] })
+
+    // A refused placement again, then a successful PUT (Undo) of that layout: placeable again.
+    server.refuse = true
+    sync.place(REF, autoLayout(['a', 'b', 'c']))
+    await timers.advance(300)
+    server.refuse = false
+    sync.restore(REF, shown)
+    await timers.advance(300)
+    sync.place(REF, autoLayout(['a', 'b', 'c']))
+    await timers.advance(300)
+    assert.deepEqual(writesOf(server).slice(3), ['patch:if_absent:1', 'put', 'patch:if_absent:3'])
   })
 })
 

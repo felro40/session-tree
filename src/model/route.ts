@@ -476,6 +476,58 @@ export const curveRouter: LinkRouter = {
   }
 }
 
+/**
+ * The orthogonal link (Swimlanes; the elbow styles): out of the source along its port, one
+ * vertical run, into the target along its port. A right → left link turns `stub` px right of the
+ * source; a link whose target starts left of that goes round (out, down or up to the middle,
+ * back, in). A down → left link drops to the target's height, then runs right into it.
+ */
+export function elbowPoints(from: Port, to: Port, stub = 14): Point[] {
+  const start = { x: from.x, y: from.y }
+  const end = { x: to.x, y: to.y }
+
+  if (from.dir === 'down' || from.dir === 'up') {
+    return simplify([start, { x: from.x, y: to.y }, end])
+  }
+
+  if (Math.abs(to.y - from.y) < 0.5 && to.x >= from.x) {
+    return [start, end]
+  }
+
+  if (to.x - stub >= from.x + stub) {
+    const turn = from.x + stub
+
+    return simplify([start, { x: turn, y: from.y }, { x: turn, y: to.y }, end])
+  }
+
+  const middle = (from.y + to.y) / 2
+
+  return simplify([start, { x: from.x + stub, y: from.y }, { x: from.x + stub, y: middle }, { x: to.x - stub, y: middle }, { x: to.x - stub, y: to.y }, end])
+}
+
+/** Orthogonal elbows with rounded corners; a blocked link detours (same corner radius). */
+export function makeOrthogonalRouter(radius = 7, stub = 14): LinkRouter {
+  const plain = (from: Port, to: Port) => roundedPolyline(elbowPoints(from, to, stub), radius)
+
+  return {
+    shape: 'orthogonal',
+    live: (from, to) => routeOf(plain(from, to), false),
+    route({ from, to, obstacles, ends }) {
+      const path = plain(from, to)
+
+      if (!pathHits(path, obstacles)) {
+        return routeOf(path, false)
+      }
+
+      const around = detour(from, to, obstacles, radius, ends)
+
+      return around ? routeOf(around, true) : routeOf(path, false)
+    }
+  }
+}
+
+export const orthogonalRouter: LinkRouter = makeOrthogonalRouter()
+
 export interface LinkEnds {
   id: string
   source: string

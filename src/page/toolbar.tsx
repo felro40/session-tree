@@ -62,6 +62,10 @@ export interface ToolbarProps {
   maxZoom: number
   onFit(): void
   onRearrange(): void
+  /** Re-arrange exists only for a style that saves positions (not Swimlanes, R12). */
+  canRearrange?: boolean
+  /** Set when the style has no dragging: Snap shows disabled with this tooltip. */
+  snapUnavailable?: string
   singlesCount: number
   /** R18 quick switcher: the registered styles and the one shown. */
   styles: { id: string; label: string }[]
@@ -191,19 +195,40 @@ export function Toolbar(props: ToolbarProps) {
         <Codicon name="archive" size={13} />
         Archived
       </ToolButton>
-      <ToolButton testId="session-tree-rearrange" title="Re-arrange (reset this layout)" onClick={props.onRearrange}>
-        <Codicon name="refresh" size={13} />
-      </ToolButton>
+      {props.canRearrange !== false && (
+        <ToolButton testId="session-tree-rearrange" title="Re-arrange (reset this layout)" onClick={props.onRearrange}>
+          <Codicon name="refresh" size={13} />
+        </ToolButton>
+      )}
       <span className="st-sep" />
-      <ToolButton
-        testId="session-tree-snap"
-        title={`Snap to grid (${props.snap ? 'on' : 'off'})`}
-        pressed={props.snap}
-        onClick={() => props.onSnap(!props.snap)}
-      >
-        <Codicon name="symbol-numeric" size={13} />
-        Snap
-      </ToolButton>
+      {props.snapUnavailable ? (
+        // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
+        <span className="st-tb-wrap" title={props.snapUnavailable} data-testid="session-tree-snap-wrap">
+          <button
+            type="button"
+            className="st-tb is-disabled"
+            data-testid="session-tree-snap"
+            title={props.snapUnavailable}
+            aria-label={`Snap to grid — ${props.snapUnavailable}`}
+            aria-disabled="true"
+            disabled
+            onMouseDown={noFocus}
+          >
+            <Codicon name="symbol-numeric" size={13} />
+            Snap
+          </button>
+        </span>
+      ) : (
+        <ToolButton
+          testId="session-tree-snap"
+          title={`Snap to grid (${props.snap ? 'on' : 'off'})`}
+          pressed={props.snap}
+          onClick={() => props.onSnap(!props.snap)}
+        >
+          <Codicon name="symbol-numeric" size={13} />
+          Snap
+        </ToolButton>
+      )}
       <span className="st-sep" />
       <ToolButton testId="session-tree-zoom-out" title="Zoom out" onClick={() => void zoomTo(clamp(getZoom() / ZOOM_STEP))}>
         −

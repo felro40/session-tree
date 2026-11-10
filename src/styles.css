@@ -882,3 +882,479 @@ g.is-dimmed {
   color: var(--ui-text-secondary);
   font-size: 12px;
 }
+
+/* --- card 5: Project swimlanes ----------------------------------------------------------- */
+
+.st-tb-wrap {
+  display: inline-flex;
+}
+
+.st-tb:disabled,
+.st-tb.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Under the flow (flow coordinates): lane bands, the earlier zone, day lines, now line. */
+.st-swim-under {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.st-swim-under-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+}
+
+.st-swim-band {
+  fill: transparent;
+  stroke: var(--ui-stroke-tertiary);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.st-swim-band.is-alt {
+  fill: color-mix(in srgb, var(--ui-text-primary) 3.5%, transparent);
+}
+
+.st-swim-band.is-collapsed {
+  fill: color-mix(in srgb, var(--ui-text-primary) 6%, transparent);
+}
+
+.st-swim-hatch-line {
+  stroke: color-mix(in srgb, var(--ui-text-primary) 7%, transparent);
+  stroke-width: 3;
+}
+
+.st-swim-dayline {
+  stroke: color-mix(in srgb, var(--ui-text-primary) 8%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.st-swim-nowline {
+  stroke: var(--ui-accent);
+  stroke-width: 1.5;
+  opacity: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.st-swim-activity {
+  fill: var(--st-pc);
+  opacity: 0.45;
+}
+
+.st-swim-activity.is-standin {
+  fill: none;
+  stroke: var(--st-pc);
+  stroke-dasharray: 2 2;
+}
+
+/* Over the flow (screen coordinates): the axis, the header column, the corner, the popover. */
+.st-swim-over {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.st-swim-axis {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  background: color-mix(in srgb, var(--ui-bg-editor) 92%, var(--ui-text-primary));
+}
+
+.st-swim-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding: 6px 0 0 5px;
+  border-left: 1px solid color-mix(in srgb, var(--ui-text-primary) 22%, transparent);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-swim-tick.is-bold {
+  color: var(--ui-text-primary);
+  font-weight: 600;
+}
+
+.st-swim-tick.is-earlier {
+  border-left: 0;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.st-swim-now {
+  position: absolute;
+  top: 4px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--ui-accent);
+  color: var(--ui-bg-editor);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.st-swim-gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--ui-stroke-tertiary);
+  background: var(--ui-bg-editor);
+  box-shadow: 4px 0 10px color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  pointer-events: auto;
+}
+
+.st-swim-lh {
+  position: absolute;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  padding: 9px 10px 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  border-left: 3px solid var(--st-pc);
+  cursor: pointer;
+}
+
+.st-swim-lh.is-alt {
+  background: color-mix(in srgb, var(--ui-text-primary) 3.5%, transparent);
+}
+
+.st-swim-lh:hover {
+  background: color-mix(in srgb, var(--st-pc) 10%, transparent);
+}
+
+.st-swim-lh[aria-disabled='true'] {
+  cursor: default;
+}
+
+.st-swim-lh.is-collapsed {
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  opacity: 0.85;
+}
+
+.st-swim-lh-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.st-swim-lh.is-collapsed .st-swim-lh-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.st-swim-lh-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.st-swim-lh-chevron {
+  margin-left: auto;
+  color: var(--ui-text-tertiary);
+}
+
+.st-swim-lh-meta {
+  margin-top: 3px;
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-swim-lh-meta.is-sub {
+  margin-top: 1px;
+  opacity: 0.85;
+}
+
+.st-swim-corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-right: 1px solid var(--ui-stroke-tertiary);
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  background: color-mix(in srgb, var(--ui-bg-editor) 92%, var(--ui-text-primary));
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.st-swim-pop {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: 60%;
+  padding: 6px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 8px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--ui-text-primary) 22%, transparent);
+  pointer-events: auto;
+}
+
+.st-swim-pop h4 {
+  margin: 2px 6px 6px;
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.st-swim-pop-list {
+  overflow-y: auto;
+}
+
+.st-swim-pop-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.st-swim-pop-item:hover {
+  background: color-mix(in srgb, var(--ui-accent) 16%, transparent);
+}
+
+.st-swim-pop-item.is-archived {
+  opacity: 0.55;
+}
+
+.st-swim-pop-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st-pc);
+}
+
+.st-swim-pop-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-swim-pop-age {
+  margin-left: auto;
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+}
+
+/* Blocks: 170 × 54, the project colour as a top border, a title line and one meta line. */
+.session-tree__block.st-swim {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 6px 8px 0 10px;
+  overflow: visible;
+  border-top: 3px solid var(--st-pc, var(--ui-text-quaternary));
+  border-radius: 7px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ui-text-primary) 14%, transparent);
+}
+
+.session-tree__block.st-swim::before {
+  display: none;
+}
+
+.session-tree__block.st-swim.is-selected,
+.session-tree__block.st-swim.is-lineage {
+  border-top-color: var(--st-pc, var(--ui-text-quaternary));
+}
+
+.session-tree__block.st-swim.is-open {
+  border-color: var(--ui-accent);
+  border-top-color: var(--st-pc, var(--ui-text-quaternary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 40%, transparent);
+}
+
+.session-tree__block.st-swim.is-compacted {
+  box-shadow:
+    3px 3px 0 -1px var(--ui-bg-editor),
+    3px 3px 0 0 var(--ui-stroke-secondary),
+    6px 6px 0 -1px var(--ui-bg-editor),
+    6px 6px 0 0 color-mix(in srgb, var(--ui-stroke-secondary) 70%, transparent);
+}
+
+.session-tree__block.st-swim.is-archived {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.session-tree__block.st-swim.is-ghost {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.session-tree__block.st-swim.is-standin {
+  border: 1px dashed color-mix(in srgb, var(--ui-text-tertiary) 60%, transparent);
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.85;
+  mask-image: linear-gradient(90deg, rgb(0 0 0 / 20%) 0, #000 55%);
+}
+
+.st-swim-r1 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.st-swim .st-title {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.st-swim.is-standin .st-title {
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.st-swim-meta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-swim-meta i {
+  font-style: normal;
+  opacity: 0.5;
+}
+
+.st-swim-meta .st-run {
+  color: var(--ui-green);
+}
+
+.st-swim-meta .st-ask {
+  color: var(--ui-yellow);
+}
+
+.st-swim-meta .st-opn {
+  color: var(--ui-accent);
+}
+
+.st-swim-cpill {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 50%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-accent) 22%, var(--ui-bg-elevated));
+  color: var(--ui-text-primary);
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.st-swim .st-swim-more {
+  top: 4px;
+  transform: none;
+}
+
+/* Links: orthogonal elbows, an arrow into the child; "continued as" dashed in the accent. */
+.session-tree__link.st-swim-link {
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 80%, transparent);
+  stroke-width: 1.5;
+}
+
+.session-tree__link.st-swim-link.session-tree__link--reset {
+  stroke: var(--ui-accent);
+  stroke-dasharray: 6 5;
+}
+
+.session-tree__link.st-swim-link.session-tree__link--standin {
+  stroke-dasharray: 2 4;
+}
+
+.session-tree__link.st-swim-link.is-highlighted {
+  stroke: var(--ui-accent);
+  stroke-width: 2;
+}
+
+.st-swim-arrow {
+  fill: color-mix(in srgb, var(--ui-text-tertiary) 90%, transparent);
+}
+
+.st-swim-arrow.is-reset,
+.st-swim-arrow.is-highlighted {
+  fill: var(--ui-accent);
+}
+
+.st-swim-link-label {
+  color: var(--ui-accent);
+  font-size: 10.5px;
+}
+
+/* The lane's "no branches N" chip (a flow node at the lane's right end). */
+.st-swim-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px dashed color-mix(in srgb, var(--st-pc) 55%, var(--ui-stroke-secondary));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--st-pc) 7%, var(--ui-bg-editor));
+  color: var(--ui-text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.st-swim-chip:hover,
+.st-swim-chip.is-on {
+  border-style: solid;
+  color: var(--ui-text-primary);
+}
+
+.st-swim-chip b {
+  color: var(--ui-text-primary);
+  font-weight: 600;
+}

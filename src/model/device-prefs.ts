@@ -18,6 +18,12 @@ export interface DeviceToggles {
   profile: null | string
   /** The style's side panel (Dense: the inspector; Rich cards: the drawer) open, per style id. */
   panelOpen: Record<string, boolean>
+  /**
+   * Swimlanes lanes this device collapsed (card 5): one list of lane keys (project id, or the
+   * no-project lane's fixed key), the same for every profile and scope. A project scope's own
+   * collapsing of the other lanes is derived and never written here.
+   */
+  collapsedLanes: string[]
 }
 
 export interface PrefsStorage {
@@ -28,7 +34,9 @@ export interface PrefsStorage {
 export const DEVICE_KEY = 'device.v1'
 export const VIEWPORT_KEY = 'viewport.v1'
 
-const DEFAULTS: DeviceToggles = { styleOverride: null, showAll: false, showArchived: false, profile: null, panelOpen: {} }
+const DEFAULTS: DeviceToggles = { styleOverride: null, showAll: false, showArchived: false, profile: null, panelOpen: {}, collapsedLanes: [] }
+/** Lane keys kept at most (a stale project id never grows the list without bound). */
+export const MAX_COLLAPSED_LANES = 200
 
 export const viewportKey = (style: string, profile: string, scope: string) => `${style}|${profile}|${scope}`
 
@@ -69,6 +77,17 @@ export class DevicePrefs {
     this.set({ panelOpen: { ...this.toggles.panelOpen, [style]: open } })
   }
 
+  laneCollapsed(key: string): boolean {
+    return this.toggles.collapsedLanes.includes(key)
+  }
+
+  /** Collapses or expands one Swimlanes lane on this device. */
+  toggleLane(key: string): void {
+    const lanes = this.toggles.collapsedLanes
+
+    this.set({ collapsedLanes: lanes.includes(key) ? lanes.filter(each => each !== key) : [...lanes, key] })
+  }
+
   viewport(key: string): undefined | Viewport {
     const value = this.storage.get<unknown>(`${VIEWPORT_KEY}:${key}`, null) as Viewport | null
 
@@ -101,11 +120,18 @@ function sanitize(value: unknown): DeviceToggles {
     }
   }
 
+  const collapsedLanes = Array.isArray(raw.collapsedLanes)
+    ? [...new Set((raw.collapsedLanes as unknown[]).filter((key): key is string => typeof key === 'string' && key.length > 0 && key.length <= 4096))].slice(
+        -MAX_COLLAPSED_LANES
+      )
+    : DEFAULTS.collapsedLanes
+
   return {
     styleOverride: typeof raw.styleOverride === 'string' ? raw.styleOverride : DEFAULTS.styleOverride,
     showAll: typeof raw.showAll === 'boolean' ? raw.showAll : DEFAULTS.showAll,
     showArchived: typeof raw.showArchived === 'boolean' ? raw.showArchived : DEFAULTS.showArchived,
     profile: typeof raw.profile === 'string' ? raw.profile : DEFAULTS.profile,
-    panelOpen
+    panelOpen,
+    collapsedLanes
   }
 }

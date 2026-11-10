@@ -24,8 +24,9 @@
  *     schema. Nothing more is sent; changes stay in this window only (`storeReadOnly`, the
  *     page's banner); one notice;
  *   - *other refusals* (any other 4xx: caps, validation): that op is dropped; an auto-layout's
- *     refused placements are remembered for the page's lifetime so `place()` never queues them
- *     again; one notice per refusal kind (status) per page lifetime.
+ *     refused placements are remembered so `place()` never queues them again, until that layout
+ *     is re-arranged or replaced (card-4 review carry-forward 3); one notice per refusal kind
+ *     (status) per page lifetime. 401 / 403 (signed out) are transient (carry-forward 2).
  * - **Pending queue** (card-4 review NB1): each window owns one slot of the device's queue
  *   (`layoutPending.v2`: `{slots: {<window id>: {beat, ops}}}`) and rewrites only its own slot.
  *   A slot whose heartbeat is older than `ORPHAN_MS` (its window closed, or a plugin reload
@@ -184,8 +185,10 @@ const entryKey = (ref: LayoutRef, key: string) => `${refKey(ref)}\u0000${key}`
 const sameRef = (a: LayoutRef, b: LayoutRef) => a.profile === b.profile && a.style === b.style && a.scope === b.scope
 
 /**
- * How a failed write is handled (B1): `null` = transient (no HTTP answer, 5xx, 408, 429: retry),
- * `newer_schema` (409 from a newer `state.json`: read-only), else the refusing status.
+ * How a failed write is handled (B1): `null` = transient (no HTTP answer, 5xx, 408, 429, and
+ * 401 / 403 — a signed-out tab: the queued op is retried after the user signs in again, card-4
+ * review carry-forward 2), `newer_schema` (409 from a newer `state.json`: read-only), else the
+ * refusing status.
  */
 export function refusalKind(error: unknown): null | RefusalKind {
   const match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ''))
@@ -196,7 +199,7 @@ export function refusalKind(error: unknown): null | RefusalKind {
 
   const status = Number(match[1])
 
-  if (status < 400 || status > 499 || status === 408 || status === 429) {
+  if (status < 400 || status > 499 || status === 401 || status === 403 || status === 408 || status === 429) {
     return null
   }
 
@@ -424,9 +427,22 @@ export class LayoutSync {
   rearrange(ref: LayoutRef): Map<string, Point> {
     const previous = this.positions(ref)
 
+    // Carry-forward 3 (card-4 review): a fresh layout may store what a cap refused before.
+    this.clearRefused(ref)
     this.queue({ kind: 'replace', ref, entries: null }, true)
 
     return previous
+  }
+
+  /** Forgets the refused auto-layout placements of one layout (a Re-arrange, a stored PUT). */
+  private clearRefused(ref: LayoutRef): void {
+    const prefix = `${refKey(ref)}\u0000`
+
+    for (const key of [...this.refusedPlacements]) {
+      if (key.startsWith(prefix)) {
+        this.refusedPlacements.delete(key)
+      }
+    }
   }
 
   /** Undo of a Re-arrange: the layout becomes `previous` again. */
@@ -659,6 +675,12 @@ export class LayoutSync {
           this.dequeue(batch)
           this.failures = 0
           this.markOnline(opProfile(op))
+
+          if (op.kind === 'replace') {
+            // The layout was replaced on the server (Re-arrange's delete, Undo's PUT): what a
+            // cap refused before may fit now (carry-forward 3).
+            this.clearRefused(op.ref)
+          }
         } catch (error) {
           const kind = refusalKind(error)
 

@@ -34,11 +34,14 @@ import type { MenuLabels } from './labels.ts'
 import { useSessionActions } from './session-actions-context.ts'
 import type { SessionActions } from './session-actions-context.ts'
 
-/** The block (React Flow node) an event happened on. */
+/**
+ * The block an event happened on: a React Flow node, or a list entry that stands for one (a
+ * Swimlanes singles popover row carries `data-st-node`).
+ */
 export function nodeIdAt(target: EventTarget | null): null | string {
-  const element = (target as Element | null)?.closest?.('.react-flow__node')
+  const element = (target as Element | null)?.closest?.('.react-flow__node, [data-st-node]')
 
-  return element?.getAttribute('data-id') ?? null
+  return element?.getAttribute('data-st-node') ?? element?.getAttribute('data-id') ?? null
 }
 
 const ICON = 14

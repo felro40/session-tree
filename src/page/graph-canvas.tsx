@@ -20,7 +20,9 @@ import type { GroupLabel, LayoutSpec, Point, Rect } from '../model/layout.ts'
 import { routeLinks } from '../model/route.ts'
 import type { LiveStatus } from '../model/status.ts'
 import { blockHandles } from '../styles/shared.tsx'
-import type { BlockData, GroupLabelData, LinkData, RoutedLink, StyleDefinition } from '../styles/types.ts'
+import type { BlockData, FrameLayout, GroupLabelData, LinkData, RoutedLink, StyleDefinition } from '../styles/types.ts'
+import { FrameUiCtx } from './frame-context.ts'
+import type { FrameUi } from './frame-context.ts'
 import { usePluginCtx } from './plugin-context.ts'
 import { useSessionActions } from './session-actions-context.ts'
 import { SessionMenu } from './session-menu.tsx'
@@ -55,6 +57,10 @@ export interface GraphCanvasProps {
   initialViewport?: Viewport
   /** After every pan or zoom: remembered per style + profile + scope on this device. */
   onViewport(viewport: Viewport): void
+  /** A framed style's layout (Swimlanes): which blocks are shown, and what its layers draw. */
+  frameLayout?: FrameLayout
+  /** A framed style's lane header was clicked. */
+  onToggleLane?(key: string): void
 }
 
 interface Tooltip {
@@ -72,7 +78,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport } = props
+  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props
   // Read once: the canvas frames itself (or restores this view) on mount only.
   const [mountViewport] = useState(initialViewport)
   const ctx = usePluginCtx()
@@ -84,8 +90,15 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // R3: while Space is held a left-drag pans from anywhere, also from a block (not a block drag).
   const [spaceHeld, setSpaceHeld] = useState(false)
   const tooltipTimer = useRef<() => void>(undefined)
+  const frame = style.frame && frameLayout ? style.frame : undefined
+  // A framed style's activated extra node (a Swimlanes lane chip: its singles popover).
+  const [activeExtra, setActiveExtra] = useState<null | { id: string; box: Rect }>(null)
+  const active = frame ? activeExtra : null
 
-  const shown = useMemo(() => new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds)), [model, spec])
+  const shown = useMemo(
+    () => (frameLayout && style.frame ? new Set(frameLayout.shown) : new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds))),
+    [model, spec, frameLayout, style]
+  )
   const lineage = useMemo(() => lineageOf(model, selectedId), [model, selectedId])
 
   // Committed rectangles of every block on the canvas (the router's obstacles).
@@ -184,8 +197,13 @@ export function GraphCanvas(props: GraphCanvasProps) {
       })
     }
 
+    // A framed style's own non-block nodes (Swimlanes: the lane chips).
+    if (frame && frameLayout) {
+      nodes.push(...(frame.extraNodes(frameLayout) as FlowNode[]))
+    }
+
     return nodes
-  }, [model, positions, labels, shown, style, spec, statusOf, lineage, selectedId, nowMs])
+  }, [model, positions, labels, shown, style, spec, statusOf, lineage, selectedId, nowMs, frame, frameLayout])
 
   const nodes = useMemo(() => {
     const moved = drag ? baseNodes.map(node => (drag.has(node.id) ? { ...node, position: drag.get(node.id)!, dragging: true } : node)) : baseNodes
@@ -310,6 +328,43 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const onNodeContextMenu = useCallback<NodeMouseHandler<FlowNode>>(() => hideTooltip(), [hideTooltip])
 
   const onMoveEnd = useCallback((_event: unknown, viewport: Viewport) => onViewport(viewport), [onViewport])
+
+  const closeActive = useCallback(() => setActiveExtra(null), [])
+
+  const onMoveStart = useCallback(() => {
+    hideTooltip()
+    closeActive()
+  }, [hideTooltip, closeActive])
+
+  const frameUi = useMemo<FrameUi>(
+    () => ({
+      activeId: active?.id ?? null,
+      activate(id, element) {
+        const box = wrapper.current?.getBoundingClientRect()
+        const rect = element.getBoundingClientRect()
+
+        hideTooltip()
+        setActiveExtra(current =>
+          current?.id === id || !box ? null : { id, box: { x: rect.left - box.left, y: rect.top - box.top, width: rect.width, height: rect.height } }
+        )
+      }
+    }),
+    [active, hideTooltip]
+  )
+
+  // A framed style frames itself (its header column and axis take canvas room): on mount when
+  // this view has no remembered zoom + pan.
+  const onInit = useCallback(
+    (instance: { setViewport(viewport: Viewport): Promise<boolean> }) => {
+      const box = wrapper.current?.getBoundingClientRect()
+
+      if (frameLayout && style.frame && !mountViewport && box && box.width > 0) {
+        void instance.setViewport(frameLayout.fit(box.width, box.height, MIN_ZOOM))
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+    []
+  )
 
   const onMenuOpen = useCallback(
     (node: GraphNode) => {
@@ -465,58 +520,78 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
   useEffect(() => () => tooltipTimer.current?.(), [])
 
+  const Under = frame?.Under
+  const Over = frame?.Over
+
   return (
     <SessionMenu model={model} onOpenFor={onMenuOpen} onRestoreFocus={restoreFocus}>
       <div
         ref={wrapper}
         tabIndex={-1}
-        className={`session-tree__canvas${snap ? ' has-grid' : ''}`}
+        className={`session-tree__canvas${snap ? ' has-grid' : ''}${frame ? ' is-framed' : ''}`}
         data-testid="session-tree-canvas"
         data-style={style.id}
         data-snap={snap ? 'on' : 'off'}
         data-grid={style.grid}
+        data-draggable={style.draggable ? 'true' : 'false'}
       >
-        <ReactFlow<FlowNode, FlowEdge>
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDragStop={onNodeDragStop}
-          onNodeClick={onNodeClick}
-          onNodeDoubleClick={onNodeDoubleClick}
-          onNodeContextMenu={onNodeContextMenu}
-          onNodeMouseEnter={onNodeMouseEnter}
-          onNodeMouseLeave={hideTooltip}
-          onMoveStart={hideTooltip}
-          panOnDrag={[1]}
-          panActivationKeyCode="Space"
-          zoomOnScroll
-          panOnScroll={false}
-          zoomOnDoubleClick={false}
-          zoomOnPinch
-          selectionOnDrag={false}
-          selectionKeyCode={null}
-          multiSelectionKeyCode={null}
-          deleteKeyCode={null}
-          nodesConnectable={false}
-          nodesFocusable={false}
-          edgesFocusable={false}
-          elevateNodesOnSelect={false}
-          snapToGrid={snap}
-          snapGrid={[style.grid, style.grid]}
-          minZoom={MIN_ZOOM}
-          maxZoom={MAX_ZOOM}
-          onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
-          fitView={!mountViewport}
-          fitViewOptions={{ padding: 0.08, maxZoom: 1.25 }}
-          defaultViewport={mountViewport}
-          onMoveEnd={onMoveEnd}
-          proOptions={{ hideAttribution: true }}
-        >
-          {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}
-        </ReactFlow>
+        <FrameUiCtx.Provider value={frameUi}>
+          {Under && frameLayout && <Under layout={frameLayout} />}
+          <ReactFlow<FlowNode, FlowEdge>
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDragStop={onNodeDragStop}
+            onNodeClick={onNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick}
+            onNodeContextMenu={onNodeContextMenu}
+            onNodeMouseEnter={onNodeMouseEnter}
+            onNodeMouseLeave={hideTooltip}
+            onMoveStart={onMoveStart}
+            onInit={onInit}
+            nodesDraggable={style.draggable}
+            panOnDrag={[1]}
+            panActivationKeyCode="Space"
+            zoomOnScroll
+            panOnScroll={false}
+            zoomOnDoubleClick={false}
+            zoomOnPinch
+            selectionOnDrag={false}
+            selectionKeyCode={null}
+            multiSelectionKeyCode={null}
+            deleteKeyCode={null}
+            nodesConnectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            elevateNodesOnSelect={false}
+            snapToGrid={snap}
+            snapGrid={[style.grid, style.grid]}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
+            onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
+            fitView={!mountViewport && !style.frame}
+            fitViewOptions={{ padding: 0.08, maxZoom: 1.25 }}
+            defaultViewport={mountViewport}
+            onMoveEnd={onMoveEnd}
+            proOptions={{ hideAttribution: true }}
+          >
+            {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}
+          </ReactFlow>
+          {Over && frameLayout && (
+            <Over
+              layout={frameLayout}
+              model={model}
+              nowMs={nowMs}
+              onOpen={onOpen}
+              onToggleLane={key => onToggleLane?.(key)}
+              active={active}
+              onCloseActive={closeActive}
+            />
+          )}
+        </FrameUiCtx.Provider>
         {tooltip && (
           <div
             className="session-tree__tooltip"
