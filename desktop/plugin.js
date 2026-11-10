@@ -66,7 +66,7 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState7 = React2.useState, useEffect6 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState7 = React2.useState, useEffect7 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
       var value2 = getSnapshot(), _useState = useState7({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
       return useLayoutEffect2(
@@ -74,7 +74,7 @@ var require_use_sync_external_store_shim_production = __commonJS({
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
         [subscribe, value2, getSnapshot]
-      ), useEffect6(
+      ), useEffect7(
         function() {
           return checkIfSnapshotChanged(inst) && forceUpdate({ inst }), subscribe(function() {
             checkIfSnapshotChanged(inst) && forceUpdate({ inst });
@@ -119,9 +119,9 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React2.useRef, useEffect6 = React2.useEffect, useMemo6 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore2 = shim.useSyncExternalStore, useRef6 = React2.useRef, useEffect7 = React2.useEffect, useMemo6 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef5(null);
+      var instRef = useRef6(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
@@ -153,8 +153,8 @@ var require_with_selector_production = __commonJS({
         },
         [getSnapshot, getServerSnapshot, selector2, isEqual]
       );
-      var value2 = useSyncExternalStore(subscribe, instRef[0], instRef[1]);
-      return useEffect6(
+      var value2 = useSyncExternalStore2(subscribe, instRef[0], instRef[1]);
+      return useEffect7(
         function() {
           inst.hasValue = !0, inst.value = value2;
         },
@@ -175,7 +175,7 @@ var require_with_selector = __commonJS({
 
 // src/plugin.tsx
 init_define_import_meta_env();
-import { host as host4, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
+import { host as host6, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/base.css
 var base_default = `/* this will be exported as base.css and can be used for a basic styling */
@@ -687,7 +687,7 @@ svg.react-flow__connectionline {
 
 // src/page/session-tree-page.tsx
 init_define_import_meta_env();
-import { EmptyState, host as host3, useQuery, useValue } from "@hermes/plugin-sdk";
+import { Button as Button2, EmptyState, ErrorState, host as host4, useQuery, useValue } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
@@ -7362,7 +7362,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo5, useState as useState6 } from "react";
+import { useCallback as useCallback5, useEffect as useEffect5, useMemo as useMemo5, useRef as useRef5, useState as useState6 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -7438,6 +7438,22 @@ function projectIndex(projects) {
   };
 }
 
+// src/model/timeout.ts
+init_define_import_meta_env();
+function withTimeout(promise, ms, setTimer, message) {
+  return new Promise((resolve, reject) => {
+    let cancel = setTimer(() => reject(new Error(message)), ms);
+    promise.then(
+      (value2) => {
+        cancel(), resolve(value2);
+      },
+      (error) => {
+        cancel(), reject(error);
+      }
+    );
+  });
+}
+
 // src/api.ts
 var SESSION_LIMIT = 2e3, PROFILE_PARAM = "session_profile";
 function fetchHealth(ctx, profile) {
@@ -7454,9 +7470,10 @@ function fetchSessions(ctx, { profile, includeArchived = !1 }) {
 function fetchProfiles(ctx) {
   return ctx.rest(`/health?${PROFILE_PARAM}=*`, { timeoutMs: 8e3 });
 }
-async function fetchProjects(profiles) {
-  let results = await Promise.allSettled(
-    profiles.map((profile) => host.request("projects.tree", { profile, preview_limit: 0 }).then(parseProjectsTree))
+var PROJECTS_TIMEOUT_MS = 8e3;
+async function fetchProjects(profiles, ctx) {
+  let bounded = (promise) => ctx ? withTimeout(promise, PROJECTS_TIMEOUT_MS, (fn, ms) => ctx.setTimeout(fn, ms), `projects.tree did not answer in ${PROJECTS_TIMEOUT_MS / 1e3} s`) : promise, results = await Promise.allSettled(
+    profiles.map((profile) => bounded(host.request("projects.tree", { profile, preview_limit: 0 })).then(parseProjectsTree))
   ), trees = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
   if (trees.length === 0 && results.length > 0)
     throw results[0].reason;
@@ -7481,6 +7498,18 @@ function postDelete(ctx, profile, id2, identity4) {
 function fetchExport(ctx, profile, id2) {
   return ctx.rest(sessionPath(id2, "export", profile), { timeoutMs: 12e4 });
 }
+var profileQuery = (profile, extra = {}) => new URLSearchParams({ [PROFILE_PARAM]: profile, ...extra }).toString();
+function stateTransport(ctx) {
+  return {
+    getState: (profile, sinceRev) => ctx.rest(`/state?${profileQuery(profile, sinceRev === void 0 ? {} : { since_rev: String(sinceRev) })}`, { timeoutMs: 1e4 }),
+    patchPositions: (profile, body) => ctx.rest(`/state/positions?${profileQuery(profile)}`, { method: "PATCH", body, timeoutMs: 15e3 }),
+    patchSettings: (profile, patch) => ctx.rest(`/settings?${profileQuery(profile)}`, { method: "PATCH", body: patch, timeoutMs: 15e3 }),
+    deleteLayout: (profile, style2, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style: style2, scope })}`, { method: "DELETE", timeoutMs: 15e3 }),
+    putLayout: (profile, body) => ctx.rest(`/state/layout?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
+    forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: "POST", body: { ids }, timeoutMs: 15e3 })
+  };
+}
+var LAYOUT_CHANGED_EVENT = "plugin.session-tree.layout.changed";
 
 // src/model/actions.ts
 init_define_import_meta_env();
@@ -7505,6 +7534,18 @@ function decodeExportEnvelope(envelope) {
     throw new Error(`The export arrived incomplete (${bytes.length} of ${value2.bytes} bytes)`);
   return bytes;
 }
+function createBranchCooldown(windowMs, now2 = Date.now) {
+  let last;
+  return {
+    branched(childId) {
+      last = { id: childId, at: now2() };
+    },
+    blocks(id2) {
+      return !!(last && last.id === id2 && now2() - last.at < windowMs);
+    }
+  };
+}
+var BRANCH_COOLDOWN_MS = 800;
 function createBranchFlights(request, mintKey) {
   let flights = /* @__PURE__ */ new Map();
   return function(params) {
@@ -7534,9 +7575,9 @@ function deleteBlockedReason(status) {
 function branchNote(branches) {
   return branches <= 0 ? "" : branches === 1 ? "Its 1 branch stays as a separate session." : `Its ${branches} branches stay as separate sessions.`;
 }
-function renameRoute(row, host5, title) {
+function renameRoute(row, host7, title) {
   let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]);
-  return title.trim() && host5.focusedSessionId && host5.focusedStoredSessionId && ids.has(host5.focusedStoredSessionId) ? { kind: "rpc", runtimeId: host5.focusedSessionId } : { kind: "backend" };
+  return title.trim() && host7.focusedSessionId && host7.focusedStoredSessionId && ids.has(host7.focusedStoredSessionId) ? { kind: "rpc", runtimeId: host7.focusedSessionId } : { kind: "backend" };
 }
 var DEFINITIVE = /revision_conflict|stale_generation|permission_denied|profile_mismatch|invalid_params|admission_conflict|session_busy|retained_receipts|runtime_coordination_required|unknown_execution|not_found|mutation_identity_required|client_upgrade_required|Session not found/;
 function createFencedMutation(mintId) {
@@ -7585,7 +7626,17 @@ function validationText(item) {
   return field === "title" && type === "string_too_long" && typeof input == "string" ? `Title too long (${[...input].length} chars, max ${MAX_TITLE_LENGTH})` : field ? `${field}: ${msg ?? "invalid"}` : msg ?? "Invalid input";
 }
 function isAlreadyAbsent(outcome) {
-  return outcome instanceof Error ? /^404: /.test(outcome.message) && /Session not found|"not_found"/.test(outcome.message) : !!(outcome && typeof outcome == "object" && outcome.already_absent === !0);
+  if (outcome instanceof Error) {
+    let match = /^404: (.*)$/s.exec(outcome.message);
+    if (!match)
+      return !1;
+    try {
+      return JSON.parse(match[1]).detail === "Session not found";
+    } catch {
+      return !1;
+    }
+  }
+  return !!(outcome && typeof outcome == "object" && outcome.already_absent === !0);
 }
 function applyOverrides(rows, overrides) {
   if (overrides.size === 0)
@@ -7615,6 +7666,59 @@ function settleOverrides(rows, overrides) {
     Object.keys(override).every((key) => key === "removed" || (row[key] ?? void 0) === (override[key] ?? void 0)) || next.set(id2, override);
   }
   return next;
+}
+
+// src/model/device-prefs.ts
+init_define_import_meta_env();
+var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = { styleOverride: null, showAll: !1, showArchived: !1, profile: null, panelOpen: {} }, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
+  storage;
+  listeners = /* @__PURE__ */ new Set();
+  toggles;
+  version = 0;
+  constructor(storage) {
+    this.storage = storage, this.toggles = sanitize(storage.get(DEVICE_KEY, null));
+  }
+  get() {
+    return this.toggles;
+  }
+  get changeVersion() {
+    return this.version;
+  }
+  set(patch) {
+    this.toggles = sanitize({ ...this.toggles, ...patch }), this.storage.set(DEVICE_KEY, this.toggles), this.version += 1;
+    for (let listener of [...this.listeners])
+      listener();
+  }
+  panelOpen(style2) {
+    return this.toggles.panelOpen[style2] ?? !0;
+  }
+  setPanelOpen(style2, open) {
+    this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
+  }
+  viewport(key) {
+    let value2 = this.storage.get(`${VIEWPORT_KEY}:${key}`, null);
+    return value2 && [value2.x, value2.y, value2.zoom].every(Number.isFinite) && value2.zoom > 0 ? { x: value2.x, y: value2.y, zoom: value2.zoom } : void 0;
+  }
+  /** Not a listener event: the viewport is the canvas's own state, only remembered here. */
+  setViewport(key, viewport) {
+    [viewport.x, viewport.y, viewport.zoom].every(Number.isFinite) && this.storage.set(`${VIEWPORT_KEY}:${key}`, { x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+  }
+  subscribe(listener) {
+    return this.listeners.add(listener), () => this.listeners.delete(listener);
+  }
+};
+function sanitize(value2) {
+  let raw = value2 && typeof value2 == "object" ? value2 : {}, panelOpen = {};
+  if (raw.panelOpen && typeof raw.panelOpen == "object")
+    for (let [style2, open] of Object.entries(raw.panelOpen))
+      typeof open == "boolean" && (panelOpen[style2] = open);
+  return {
+    styleOverride: typeof raw.styleOverride == "string" ? raw.styleOverride : DEFAULTS.styleOverride,
+    showAll: typeof raw.showAll == "boolean" ? raw.showAll : DEFAULTS.showAll,
+    showArchived: typeof raw.showArchived == "boolean" ? raw.showArchived : DEFAULTS.showArchived,
+    profile: typeof raw.profile == "string" ? raw.profile : DEFAULTS.profile,
+    panelOpen
+  };
 }
 
 // src/model/graph.ts
@@ -8062,37 +8166,10 @@ function mergeLayout(previous, model, spec) {
   return { positions, labels };
 }
 
-// src/model/layout-memory.ts
-init_define_import_meta_env();
-var LayoutMemory = class {
-  byKey = /* @__PURE__ */ new Map();
-  get(key) {
-    return this.byKey.get(key);
-  }
-  /** Runs `compute` against the stored positions and keeps its result. Idempotent. */
-  place(key, compute) {
-    let result = compute(this.byKey.get(key));
-    return this.byKey.set(key, result.positions), result;
-  }
-  /** A drop: these blocks now sit here (last write wins per block). */
-  move(key, moves) {
-    this.byKey.set(key, new Map([...this.byKey.get(key) ?? [], ...moves]));
-  }
-  /** Re-arrange: forget this layout so the next `place` lays it out fresh. */
-  reset(key) {
-    this.byKey.delete(key);
-  }
-  /** Forget one block in every layout (moved to another project: placed anew in its band). */
-  forget(id2) {
-    for (let [key, positions] of this.byKey)
-      positions.has(id2) && this.byKey.set(key, new Map([...positions].filter(([other]) => other !== id2)));
-  }
-};
-
 // src/model/status.ts
 init_define_import_meta_env();
-function liveStatus(row, host5) {
-  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host5.focusedStoredSessionId && ids.has(host5.focusedStoredSessionId)), focusedBusy = open && (host5.busy || !!(host5.focusedSessionId && host5.busyBySession[host5.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host5.busyBySession[row.id], needsInput = [...ids].some((id2) => host5.needsInput.has(id2)), unread = !!row.unread;
+function liveStatus(row, host7) {
+  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host7.focusedStoredSessionId && ids.has(host7.focusedStoredSessionId)), focusedBusy = open && (host7.busy || !!(host7.focusedSessionId && host7.busyBySession[host7.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host7.busyBySession[row.id], needsInput = [...ids].some((id2) => host7.needsInput.has(id2)), unread = !!row.unread;
   return {
     running,
     needsInput,
@@ -8707,12 +8784,23 @@ function Actions({ node, onOpen }) {
       /* @__PURE__ */ jsx4(Codicon3, { name: "link-external", size: 12 }),
       "Open"
     ] }),
-    /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-act", "data-action": "branch", disabled: !available, title: labels.branch, onClick: () => {
-      actions?.branch(node);
-    }, children: [
-      /* @__PURE__ */ jsx4(Codicon3, { name: "repo-forked", size: 12 }),
-      labels.branch
-    ] }),
+    /* @__PURE__ */ jsxs4(
+      "button",
+      {
+        type: "button",
+        className: "st-act",
+        "data-action": "branch",
+        disabled: !available,
+        title: labels.branch,
+        onClick: (event) => {
+          event.detail > 1 || actions?.branch(node);
+        },
+        children: [
+          /* @__PURE__ */ jsx4(Codicon3, { name: "repo-forked", size: 12 }),
+          labels.branch
+        ]
+      }
+    ),
     /* @__PURE__ */ jsx4("button", { type: "button", className: "st-act", "data-action": "rename", disabled: !available, title: labels.rename, "aria-label": labels.rename, onClick: () => actions?.rename(node), children: /* @__PURE__ */ jsx4(Codicon3, { name: "edit", size: 12 }) }),
     /* @__PURE__ */ jsx4(
       "button",
@@ -8841,6 +8929,7 @@ var denseStyle = {
   layoutSpec: denseLayoutSpec,
   layout: (model, previous, spec) => mergeLayout(previous, model, spec),
   draggable: !0,
+  savesLayout: !0,
   singles: "inspector-list",
   router: curveRouter,
   ports: densePorts,
@@ -8849,10 +8938,24 @@ var denseStyle = {
   Panel: DenseInspector
 };
 
+// src/styles/e2e-alt/index.ts
+init_define_import_meta_env();
+
 // src/styles/registry.ts
-var DEFAULT_STYLE_ID = "dense", STYLES = /* @__PURE__ */ new Map([[denseStyle.id, denseStyle]]);
+var DEFAULT_STYLE_ID = "dense", STYLES = /* @__PURE__ */ new Map([
+  [denseStyle.id, denseStyle]
+]);
+function registeredStyles() {
+  return [...STYLES.values()];
+}
+function isRegisteredStyle(id2) {
+  return typeof id2 == "string" && STYLES.has(id2);
+}
 function getStyle(id2) {
   return STYLES.get(id2) ?? STYLES.get(DEFAULT_STYLE_ID);
+}
+function resolveStyleId(override, synced) {
+  return isRegisteredStyle(override) ? override : isRegisteredStyle(synced) ? synced : DEFAULT_STYLE_ID;
 }
 
 // src/page/graph-canvas.tsx
@@ -9034,7 +9137,7 @@ function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onOpen, statusOf, snap, nowMs } = props, ctx = usePluginCtx(), wrapper = useRef2(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef2(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef2(void 0), shown = useMemo3(() => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)), [model, spec]), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo3(() => {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport } = props, [mountViewport] = useState4(initialViewport), ctx = usePluginCtx(), wrapper = useRef2(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef2(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef2(void 0), shown = useMemo3(() => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)), [model, spec]), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo3(() => {
     let out = /* @__PURE__ */ new Map();
     for (let id2 of shown) {
       let point = positions.get(id2);
@@ -9130,16 +9233,19 @@ function GraphCanvas(props) {
         next.set(move.id, move.position);
       return next;
     });
-  }, []), onNodeDragStart = useCallback3(() => {
-    hideTooltip();
-  }, [hideTooltip]), onNodeDragStop = useCallback3(
+  }, []), onNodeDragStart = useCallback3(
+    (_event, _node, dragged) => {
+      hideTooltip(), onDragging(dragged.map((item) => item.id).filter((id2) => !id2.startsWith(GROUP_PREFIX)));
+    },
+    [hideTooltip, onDragging]
+  ), onNodeDragStop = useCallback3(
     (_event, _node, dragged) => {
       let moves = /* @__PURE__ */ new Map();
       for (let item of dragged)
         item.id.startsWith(GROUP_PREFIX) || moves.set(item.id, { x: item.position.x, y: item.position.y });
-      setDrag(void 0), moves.size > 0 && onMove(moves);
+      setDrag(void 0), moves.size > 0 && onMove(moves), onDragging(null);
     },
-    [onMove]
+    [onMove, onDragging]
   ), graphNode = useCallback3((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback3(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
@@ -9152,7 +9258,7 @@ function GraphCanvas(props) {
       node && !node.readOnly && node.kind === "session" && onOpen(node);
     },
     [graphNode, onOpen]
-  ), onNodeContextMenu = useCallback3(() => hideTooltip(), [hideTooltip]), onMenuOpen = useCallback3(
+  ), onNodeContextMenu = useCallback3(() => hideTooltip(), [hideTooltip]), onMoveEnd = useCallback3((_event, viewport) => onViewport(viewport), [onViewport]), onMenuOpen = useCallback3(
     (node) => {
       hideTooltip(), onSelect(node.id);
     },
@@ -9270,8 +9376,10 @@ function GraphCanvas(props) {
             minZoom: MIN_ZOOM,
             maxZoom: MAX_ZOOM,
             onlyRenderVisibleElements: nodes.length > VISIBLE_ONLY_ABOVE,
-            fitView: !0,
+            fitView: !mountViewport,
             fitViewOptions: { padding: 0.08, maxZoom: 1.25 },
+            defaultViewport: mountViewport,
+            onMoveEnd,
             proOptions: { hideAttribution: !0 },
             children: snap && /* @__PURE__ */ jsx6(Background, { variant: BackgroundVariant.Dots, gap: style2.grid, size: 1.3 })
           }
@@ -9317,7 +9425,7 @@ function useRowOverrides(serverRows) {
 function useSessionActionsController(options) {
   let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState5(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState5(), [deleting, setDeleting] = useState5(), [mutate] = useState5(() => createFencedMutation(randomUuid)), [branchFlights] = useState5(
     () => createBranchFlights((method, params) => host2.request(method, params), randomUuid)
-  ), latest = useRef3({ options, labels, colors }), menuHost = useRef3(null), requestedMenuNode = useRef3(null), dialogFromMenu = useRef3(!1);
+  ), [branchCooldown] = useState5(() => createBranchCooldown(BRANCH_COOLDOWN_MS)), latest = useRef3({ options, labels, colors }), menuHost = useRef3(null), requestedMenuNode = useRef3(null), dialogFromMenu = useRef3(!1);
   useEffect3(() => {
     latest.current = { options, labels, colors };
   });
@@ -9370,20 +9478,21 @@ function useSessionActionsController(options) {
       },
       async branch(node) {
         let row = rowOf(node), joined = !1;
-        try {
-          let started = branchFlights({ parentId: row.id, profile: node.profile, cwd: row.cwd });
-          joined = started.joined;
-          let result = await started.flight;
-          if (joined)
-            return;
-          let child = result?.stored_session_id;
-          if (!child)
-            throw new Error("The gateway returned no branch id");
-          result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
-          }), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
-        } catch (error) {
-          joined || notifyError(error, "Could not branch session");
-        }
+        if (!branchCooldown.blocks(row.id))
+          try {
+            let started = branchFlights({ parentId: row.id, profile: node.profile, cwd: row.cwd });
+            joined = started.joined;
+            let result = await started.flight;
+            if (joined)
+              return;
+            let child = result?.stored_session_id;
+            if (!child)
+              throw new Error("The gateway returned no branch id");
+            result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
+            }), branchCooldown.branched(child), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
+          } catch (error) {
+            joined || notifyError(error, "Could not branch session");
+          }
       },
       async exportSession(node) {
         let row = rowOf(node);
@@ -9444,7 +9553,7 @@ function useSessionActionsController(options) {
         dialogFromMenu.current = !0;
       }
     };
-  }, [branchFlights, mutate, setOverrides]), backendRename = async (node, title) => {
+  }, [branchFlights, branchCooldown, mutate, setOverrides]), backendRename = async (node, title) => {
     let row = node.row, { ctx } = latest.current.options;
     return (await mutate(
       JSON.stringify(["rename", node.profile, row.id, title]),
@@ -9575,10 +9684,363 @@ function DeleteDialog({
   );
 }
 
+// src/page/services.ts
+init_define_import_meta_env();
+import { host as host3 } from "@hermes/plugin-sdk";
+import { useCallback as useCallback4, useSyncExternalStore } from "react";
+
+// src/model/layout-sync.ts
+init_define_import_meta_env();
+var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v1", BATCH_LIMIT = 1e3, EMPTY_SETTINGS = { style: null, snap: !1 };
+var sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
+function isRefusal(error) {
+  let match = /^(\d{3}): /.exec(error instanceof Error ? error.message : String(error ?? ""));
+  return !!(match && ["400", "409", "413", "422"].includes(match[1]));
+}
+var LayoutSync = class {
+  profiles = /* @__PURE__ */ new Map();
+  pending;
+  listeners = /* @__PURE__ */ new Set();
+  watched = /* @__PURE__ */ new Map();
+  dragging = /* @__PURE__ */ new Set();
+  cancelFlush;
+  flushing = !1;
+  failures = 0;
+  /** Bumps when an acknowledged write changes the snapshot: a fetch begun before it is stale. */
+  writeSeq = 0;
+  disposed = !1;
+  version = 0;
+  transport;
+  storage;
+  timers;
+  options;
+  constructor(transport, storage, timers, options = {}) {
+    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.pending = (storage.get(PENDING_KEY, null) ?? []).filter(isOp), this.pending.length > 0 && this.schedule(0);
+  }
+  // --- subscription -------------------------------------------------------------------------
+  /** Called after every change a reader can see (positions, settings, status). */
+  subscribe(listener) {
+    return this.listeners.add(listener), () => this.listeners.delete(listener);
+  }
+  /** Bumps on every visible change: a cheap memo key for React. */
+  get changeVersion() {
+    return this.version;
+  }
+  emit() {
+    this.version += 1;
+    for (let listener of [...this.listeners])
+      listener();
+  }
+  // --- reads --------------------------------------------------------------------------------
+  profile(profile) {
+    let state = this.profiles.get(profile);
+    if (!state) {
+      let cached = this.storage.get(`${CACHE_KEY}:${profile}`, null);
+      state = { server: isSnapshot(cached) ? cached : null, settled: !1, status: "loading" }, this.profiles.set(profile, state);
+    }
+    return state;
+  }
+  status(profile) {
+    return this.profile(profile).status;
+  }
+  /** The store revision of this window's snapshot of `profile` (`null`: none yet). */
+  revision(profile) {
+    return this.profile(profile).server?.rev ?? null;
+  }
+  /** Whether the page may lay out: a fetch answered or failed (then the cache, or nothing). */
+  settled(profile) {
+    return this.profile(profile).settled;
+  }
+  /** Whether this profile's layouts come from the cache because the backend is unreachable. */
+  offline(profile) {
+    return this.profile(profile).status === "offline";
+  }
+  /** The synced settings as this window has them (its own unsent changes included). */
+  settings(profile) {
+    let base = { ...this.profile(profile).server?.settings ?? this.anySettings() };
+    for (let op of this.pending)
+      op.kind === "settings" && Object.assign(base, op.patch);
+    return base;
+  }
+  /** Settings are global: any profile's snapshot holds them. */
+  anySettings() {
+    let best = null;
+    for (let state of this.profiles.values())
+      state.server && (!best || state.server.rev > best.rev) && (best = state.server);
+    return best?.settings ?? EMPTY_SETTINGS;
+  }
+  /** The positions of one layout: the server's, this window's unsent changes on top. */
+  positions(ref) {
+    let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+    for (let op of this.pending)
+      (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
+    return out;
+  }
+  // --- local changes ------------------------------------------------------------------------
+  /**
+   * Lay out against the stored positions and keep what the layout placed. Called while the page
+   * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
+   * style that saves nothing, Swimlanes).
+   */
+  place(ref, compute, { save = !0 } = {}) {
+    let previous = this.positions(ref), result = compute(previous.size > 0 ? previous : void 0);
+    if (!save)
+      return result;
+    let placed = [];
+    for (let [id2, point] of result.positions)
+      previous.has(id2) || placed.push([id2, { x: point.x, y: point.y }]);
+    return placed.length > 0 && this.queue({ kind: "upsert", ref, mode: "if_absent", entries: placed }, !1), result;
+  }
+  /** A drop: these blocks now sit here. */
+  drop(ref, moves) {
+    moves.size !== 0 && this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
+  }
+  /** Re-arrange: forget this layout. Answers what was shown, for Undo. */
+  rearrange(ref) {
+    let previous = this.positions(ref);
+    return this.queue({ kind: "replace", ref, entries: null }, !0), previous;
+  }
+  /** Undo of a Re-arrange: the layout becomes `previous` again. */
+  restore(ref, previous) {
+    this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
+  }
+  /**
+   * A block moved to another project: forget its stored spot in every layout of the profile (here
+   * and on the server), so each layout places it anew in its new band.
+   */
+  forget(profile, id2) {
+    this.queue({ kind: "forget", profile, ids: [id2] }, !0);
+  }
+  setSettings(profile, patch) {
+    this.queue({ kind: "settings", profile, patch }, !0);
+  }
+  /** While blocks are dragged nothing is sent, and a refresh keeps their spots. */
+  setDragging(ids) {
+    let was = this.dragging.size > 0;
+    this.dragging = new Set(ids ?? []), was && this.dragging.size === 0 && this.pending.length > 0 && this.schedule(this.options.debounceMs ?? 300);
+  }
+  get isDragging() {
+    return this.dragging.size > 0;
+  }
+  queue(op, notify) {
+    this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300), notify && this.emit();
+  }
+  persistPending() {
+    this.storage.set(PENDING_KEY, this.pending);
+  }
+  /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
+  schedule(ms) {
+    this.disposed || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
+      this.cancelFlush = void 0, this.flush();
+    }, ms));
+  }
+  // --- sending ------------------------------------------------------------------------------
+  /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
+  async flush() {
+    if (!(this.flushing || this.disposed) && !(this.dragging.size > 0)) {
+      this.flushing = !0;
+      try {
+        for (; this.pending.length > 0 && this.dragging.size === 0 && !this.disposed; ) {
+          let [op, count] = this.nextBatch();
+          try {
+            await this.send(op), this.ack(op), this.pending.splice(0, count), this.persistPending(), this.failures = 0, this.markOnline(opProfile(op));
+          } catch (error) {
+            if (isRefusal(error)) {
+              this.pending.splice(0, count), this.persistPending(), this.options.onRefused?.(error), this.emit();
+              continue;
+            }
+            this.markOffline(opProfile(op)), this.retry();
+            return;
+          }
+        }
+      } finally {
+        this.flushing = !1;
+      }
+      this.pending.length > 0 && this.dragging.size === 0 && this.schedule(0);
+    }
+  }
+  /** The first pending op merged with the consecutive upserts of the same layout and mode. */
+  nextBatch() {
+    let first = this.pending[0];
+    if (first.kind !== "upsert")
+      return [first, 1];
+    let merged = new Map(first.entries), count = 1;
+    for (; count < this.pending.length; ) {
+      let next = this.pending[count];
+      if (next.kind !== "upsert" || next.mode !== first.mode || !sameRef(next.ref, first.ref) || merged.size + next.entries.length > BATCH_LIMIT)
+        break;
+      for (let [id2, point] of next.entries)
+        (first.mode === "set" || !merged.has(id2)) && merged.set(id2, point);
+      count += 1;
+    }
+    return [{ ...first, entries: [...merged] }, count];
+  }
+  async send(op) {
+    if (op.kind === "settings")
+      await this.transport.patchSettings(op.profile, op.patch);
+    else if (op.kind === "forget")
+      await this.transport.forgetBlocks(op.profile, op.ids);
+    else if (op.kind === "upsert")
+      for (let start2 = 0; start2 < op.entries.length; start2 += BATCH_LIMIT)
+        await this.transport.patchPositions(op.ref.profile, {
+          style: op.ref.style,
+          scope: op.ref.scope,
+          mode: op.mode,
+          positions: op.entries.slice(start2, start2 + BATCH_LIMIT).map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
+        });
+    else op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
+      style: op.ref.style,
+      scope: op.ref.scope,
+      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
+    });
+  }
+  /** The server applied `op`: fold it into the snapshot this window keeps (the next fetch corrects it). */
+  ack(op) {
+    let now2 = Date.now() / 1e3;
+    if (this.writeSeq += 1, op.kind === "settings") {
+      for (let state2 of this.profiles.values())
+        state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
+      return;
+    }
+    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes]) => Object.keys(scopes).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
+    for (let ref of refs) {
+      let scopes = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+      applyOp(current, op), current.size === 0 ? delete scopes[ref.scope] : scopes[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes).length === 0 && delete server.layouts[ref.style];
+    }
+    state.server = server, this.cache(opProfile(op));
+  }
+  retry() {
+    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+    this.failures += 1, this.schedule(ms);
+  }
+  markOnline(profile) {
+    let state = this.profile(profile);
+    state.status !== "online" && (state.status = "online", state.settled = !0, this.emit());
+  }
+  markOffline(profile) {
+    let state = this.profile(profile);
+    (state.status !== "offline" || !state.settled) && (state.status = "offline", state.settled = !0, this.emit());
+  }
+  cache(profile) {
+    let server = this.profile(profile).server;
+    server && this.storage.set(`${CACHE_KEY}:${profile}`, server);
+  }
+  // --- fetching -----------------------------------------------------------------------------
+  /** Fetch (or re-check) one profile's state. A failure leaves the cache in place, offline. */
+  async refresh(profile) {
+    if (this.disposed)
+      return;
+    let state = this.profile(profile), known = state.settled && state.status === "online" ? state.server?.rev : void 0, seq = this.writeSeq;
+    try {
+      let answer = await this.transport.getState(profile, known);
+      if (seq !== this.writeSeq) {
+        this.refresh(profile);
+        return;
+      }
+      "unchanged" in answer || (state.server = answer, this.cache(profile));
+      let wasOnline = state.status === "online", changed = !("unchanged" in answer) || !wasOnline || !state.settled;
+      state.status = "online", state.settled = !0, !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
+    } catch {
+      this.markOffline(profile), this.watched.has(profile) && this.retryRefresh(profile);
+    }
+  }
+  refreshTimers = /* @__PURE__ */ new Map();
+  retryRefresh(profile) {
+    if (this.refreshTimers.has(profile) || this.disposed)
+      return;
+    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+    this.refreshTimers.set(
+      profile,
+      this.timers.setTimeout(() => {
+        this.refreshTimers.delete(profile), this.refresh(profile);
+      }, ms)
+    );
+  }
+  /** A page or settings view shows `profile`: load it now, and poll / follow pushes for it. */
+  watch(profile) {
+    return this.watched.set(profile, (this.watched.get(profile) ?? 0) + 1), (!this.profile(profile).settled || this.profile(profile).status !== "online") && this.refresh(profile), () => {
+      let count = (this.watched.get(profile) ?? 1) - 1;
+      count <= 0 ? this.watched.delete(profile) : this.watched.set(profile, count);
+    };
+  }
+  /** The poll: every watched profile, cheaply (`since_rev`). */
+  poll() {
+    for (let profile of this.watched.keys())
+      this.refresh(profile);
+  }
+  /** A push from the backend: refresh what it touched, unless this window already has it. */
+  onRemoteChange(payload) {
+    let { rev, profile } = payload ?? {};
+    for (let name of this.watched.keys()) {
+      let known = this.profile(name).server?.rev ?? -1;
+      typeof rev == "number" && rev <= known || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
+    }
+  }
+  dispose() {
+    this.disposed = !0, this.cancelFlush?.();
+    for (let cancel of this.refreshTimers.values())
+      cancel();
+    this.refreshTimers.clear(), this.listeners.clear();
+  }
+  /** Test and debug view: what is still waiting to be sent. */
+  get pendingCount() {
+    return this.pending.length;
+  }
+};
+function applyOp(target, op) {
+  if (op.kind === "forget") {
+    for (let id2 of op.ids)
+      target.delete(id2);
+    return;
+  }
+  if (op.kind === "replace") {
+    target.clear();
+    for (let [id2, point] of op.entries ?? [])
+      target.set(id2, point);
+    return;
+  }
+  for (let [id2, point] of op.entries)
+    (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
+}
+function opProfile(op) {
+  return op.kind === "settings" || op.kind === "forget" ? op.profile : op.ref.profile;
+}
+function isSnapshot(value2) {
+  let snapshot = value2;
+  return !!(snapshot && typeof snapshot.rev == "number" && snapshot.settings && typeof snapshot.layouts == "object" && snapshot.layouts);
+}
+function isOp(value2) {
+  let op = value2;
+  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
+}
+
+// src/page/services.ts
+function createServices(ctx) {
+  let sync = new LayoutSync(
+    stateTransport(ctx),
+    ctx.storage,
+    { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms) },
+    {
+      onRefused: (error) => host3.notify({ kind: "error", title: "Session Tree could not save the layout", message: restErrorText(error) })
+    }
+  );
+  return ctx.onDispose(() => sync.dispose()), ctx.onEvent(LAYOUT_CHANGED_EVENT, (event) => sync.onRemoteChange(event.payload)), ctx.setInterval(() => {
+    document.visibilityState === "visible" && sync.poll();
+  }, POLL_MS), { sync, prefs: new DevicePrefs(ctx.storage) };
+}
+function useSyncVersion(sync) {
+  let subscribe = useCallback4((listener) => sync.subscribe(listener), [sync]);
+  return useSyncExternalStore(subscribe, () => sync.changeVersion);
+}
+function usePrefsVersion(prefs) {
+  let subscribe = useCallback4((listener) => prefs.subscribe(listener), [prefs]);
+  return useSyncExternalStore(subscribe, () => prefs.changeVersion);
+}
+
 // src/page/toolbar.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon5 } from "@hermes/plugin-sdk";
-import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 var noFocus = (event) => event.preventDefault();
 function ToolButton({
   testId,
@@ -9666,6 +10128,32 @@ function Toolbar(props) {
         }
       )
     ] }),
+    /* @__PURE__ */ jsxs8(
+      "label",
+      {
+        className: "st-profile st-style",
+        title: props.styleSource === "device" ? "View style (this device only — Settings → Plugins → Session Tree)" : "View style (synced to every device)",
+        children: [
+          /* @__PURE__ */ jsx8(Codicon5, { name: "layout", size: 12 }),
+          /* @__PURE__ */ jsx8(
+            "select",
+            {
+              "data-testid": "session-tree-style",
+              "data-source": props.styleSource,
+              "aria-label": "View style",
+              value: props.styleId,
+              onChange: (event) => {
+                event.currentTarget.blur(), props.onStyle(event.target.value);
+              },
+              onKeyDown: (event) => {
+                event.key === "Escape" && event.currentTarget.blur();
+              },
+              children: props.styles.map((style2) => /* @__PURE__ */ jsx8("option", { value: style2.id, children: style2.label }, style2.id))
+            }
+          )
+        ]
+      }
+    ),
     /* @__PURE__ */ jsx8("span", { className: "st-spacer" }),
     /* @__PURE__ */ jsxs8(
       ToolButton,
@@ -9724,6 +10212,19 @@ function Toolbar(props) {
     /* @__PURE__ */ jsxs8(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
       /* @__PURE__ */ jsx8(Codicon5, { name: "screen-full", size: 13 }),
       "Fit"
+    ] }),
+    props.hasPanel && /* @__PURE__ */ jsxs8(Fragment6, { children: [
+      /* @__PURE__ */ jsx8("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsx8(
+        ToolButton,
+        {
+          testId: "session-tree-panel",
+          title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
+          pressed: props.panelOpen,
+          onClick: () => props.onPanel(!props.panelOpen),
+          children: /* @__PURE__ */ jsx8(Codicon5, { name: "layout-sidebar-right", size: 13 })
+        }
+      )
     ] })
   ] });
 }
@@ -9731,7 +10232,7 @@ function Toolbar(props) {
 // src/page/use-live-refresh.ts
 init_define_import_meta_env();
 import { useEffect as useEffect4, useRef as useRef4 } from "react";
-var POLL_MS = 1e4;
+var POLL_MS2 = 1e4;
 function useLiveRefresh(ctx, refresh) {
   let latest = useRef4(refresh);
   useEffect4(() => {
@@ -9741,7 +10242,7 @@ function useLiveRefresh(ctx, refresh) {
       latest.current.projects(), latest.current.sessions();
     }), offPoll = ctx.setInterval(() => {
       document.visibilityState === "visible" && (latest.current.sessions(), latest.current.projects());
-    }, POLL_MS);
+    }, POLL_MS2);
     return () => {
       offSessions(), offProjects(), offPoll();
     };
@@ -9749,13 +10250,17 @@ function useLiveRefresh(ctx, refresh) {
 }
 
 // src/page/session-tree-page.tsx
-import { Fragment as Fragment6, jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
-var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
-function SessionTreePage({ ctx }) {
-  return /* @__PURE__ */ jsx9(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx9(ReactFlowProvider, { children: /* @__PURE__ */ jsx9(PageBody, { ctx }) }) });
+import { Fragment as Fragment7, jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
+var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
+function SessionTreePage({ ctx, services }) {
+  return /* @__PURE__ */ jsx9(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx9(ReactFlowProvider, { children: /* @__PURE__ */ jsx9(PageBody, { ctx, services }) }) });
 }
-function PageBody({ ctx }) {
-  let activeProfile = useValue(host3.state.profile) || "default", [profileChoice, setProfileChoice] = useState6(null), profile = profileChoice ?? activeProfile, [scopeChoice, setScope] = useState6(ALL_PROJECTS), [showAll, setShowAll] = useState6(!1), [showArchived, setShowArchived] = useState6(!1), [snap, setSnap] = useState6(!1), [selectedChoice, setSelectedId] = useState6(null), [memory] = useState6(() => new LayoutMemory()), [layoutVersion, setLayoutVersion] = useState6(0), [fitRequest, setFitRequest] = useState6(0), [nowMs, setNowMs] = useState6(() => Date.now()), style2 = getStyle(DEFAULT_STYLE_ID), flow = useReactFlow(), health = useQuery({
+function PageBody({ ctx, services: { sync, prefs } }) {
+  let activeProfile = useValue(host4.state.profile) || "default", syncVersion = useSyncVersion(sync);
+  usePrefsVersion(prefs);
+  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState6(ALL_PROJECTS), [selectedChoice, setSelectedId] = useState6(null), [fitRequest, setFitRequest] = useState6(0), [nowMs, setNowMs] = useState6(() => Date.now()), [toast, setToast] = useState6(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap, flow = useReactFlow();
+  useEffect5(() => sync.watch(profile), [sync, profile]);
+  let health = useQuery({
     queryKey: ["session-tree", "health", activeProfile],
     queryFn: () => fetchHealth(ctx, activeProfile),
     retry: !1,
@@ -9775,12 +10280,12 @@ function PageBody({ ctx }) {
     refetchOnWindowFocus: !1
   }), profileNames = useMemo5(() => {
     let names = new Set(profiles.data?.profiles ?? []);
-    return names.add(activeProfile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
-  }, [profiles.data, activeProfile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
+    return names.add(activeProfile), profile !== ALL_PROFILES && names.add(profile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
+  }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
     queryKey: ["session-tree", "projects", projectProfiles.join(",")],
-    queryFn: () => fetchProjects(projectProfiles),
+    queryFn: () => fetchProjects(projectProfiles, ctx),
     // The gateway socket may still be connecting on a cold page load.
-    retry: 4,
+    retry: 3,
     retryDelay: 750,
     refetchOnWindowFocus: !1
   });
@@ -9795,12 +10300,13 @@ function PageBody({ ctx }) {
   let projectList = useMemo5(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo5(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo5(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo5(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), layoutKey = `${style2.id}|${profile}|${scope}`, ready = !!sessions.data && !projects.isPending, layout = useMemo5(
-    () => ready ? memory.place(layoutKey, (previous) => style2.layout(model, previous, spec)) : EMPTY_LAYOUT,
-    // `layoutVersion` re-runs the merge after a drop or a Re-arrange changed the memory.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the memory's change signal
-    [ready, memory, layoutKey, style2, model, spec, layoutVersion]
-  ), busy = useValue(host3.state.busy), busyBySession = useValue(host3.state.busyBySession), focusedSessionId = useValue(host3.state.focusedSessionId), focusedStoredSessionId = useValue(host3.state.focusedStoredSessionId), hostStatus = useMemo5(
+  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo5(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), layout = useMemo5(
+    // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
+    () => ready ? sync.place(ref, (previous) => style2.layout(model, previous, spec), { save: style2.savesLayout && !projects.isError }) : EMPTY_LAYOUT,
+    // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
+    [ready, sync, ref, style2, model, spec, syncVersion, projects.isError]
+  ), busy = useValue(host4.state.busy), busyBySession = useValue(host4.state.busyBySession), focusedSessionId = useValue(host4.state.focusedSessionId), focusedStoredSessionId = useValue(host4.state.focusedStoredSessionId), hostStatus = useMemo5(
     () => ({
       busy: !!busy,
       busyBySession: busyBySession ?? {},
@@ -9809,14 +10315,30 @@ function PageBody({ ctx }) {
       needsInput: NO_NEEDS_INPUT
     }),
     [busy, busyBySession, focusedSessionId, focusedStoredSessionId]
-  ), statusOf = useCallback4((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback4(() => {
+  ), statusOf = useCallback5((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback5(() => {
     let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
     flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : void 0 });
   }, [flow, model, spec, scope]);
   useEffect5(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback4(() => setFitRequest((count) => count + 1), []), onSelect = useCallback4(
+  let requestFit = useCallback5(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef5(vpKey), canvasShown = ready && model.nodes.length > 0 && !sessions.isError, appliedKey = useRef5(null);
+  useEffect5(() => {
+    if (vpKeyRef.current = vpKey, !canvasShown) {
+      appliedKey.current = null;
+      return;
+    }
+    if (appliedKey.current === null) {
+      appliedKey.current = vpKey;
+      return;
+    }
+    if (appliedKey.current !== vpKey) {
+      appliedKey.current = vpKey;
+      let saved = prefs.viewport(vpKey);
+      saved ? flow.setViewport(saved, { duration: 0 }) : fit();
+    }
+  }, [vpKey, canvasShown, prefs, flow, fit]);
+  let onViewport = useCallback5((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback5(
     (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;
       if (id2 && (!node || node.readOnly))
@@ -9828,17 +10350,24 @@ function PageBody({ ctx }) {
         flow.setCenter(point.x + style2.nodeSize.width / 2, point.y + style2.nodeSize.height / 2, { zoom: zoom3, duration: 0 });
       }
     },
-    [model, layout, flow, style2]
-  ), onMove = useCallback4(
-    (moves) => {
-      memory.move(layoutKey, moves), setLayoutVersion((version) => version + 1);
-    },
-    [memory, layoutKey]
-  ), onRearrange = useCallback4(() => {
-    memory.reset(layoutKey), setLayoutVersion((version) => version + 1), requestFit();
-  }, [memory, layoutKey, requestFit]), onOpen = useCallback4(
+    [model, layout, flow, style2, setSelectedId]
+  ), onMove = useCallback5((moves) => sync.drop(ref, moves), [sync, ref]), onDragging = useCallback5((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback5(() => setToast(void 0), [setToast]), onRearrange = useCallback5(() => {
+    let previous = sync.rearrange(ref), id2 = Date.now();
+    requestFit(), setToast({
+      id: id2,
+      message: "Layout re-arranged",
+      undo: () => {
+        sync.restore(ref, previous), setToast(void 0), requestFit();
+      }
+    });
+  }, [sync, ref, requestFit, setToast]);
+  useEffect5(() => {
+    if (toast)
+      return ctx.setTimeout(() => setToast((current) => current?.id === toast.id ? void 0 : current), UNDO_TOAST_MS);
+  }, [ctx, toast]);
+  let onOpen = useCallback5(
     (node) => {
-      !node.row || node.readOnly || host3.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
+      !node.row || node.readOnly || host4.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
     },
     [activeProfile]
   ), [pendingSelect, setPendingSelect] = useState6(null), [reveal, setReveal] = useState6(null);
@@ -9862,34 +10391,53 @@ function PageBody({ ctx }) {
       projects.refetch();
     },
     onBranched: (id2) => setPendingSelect(id2),
-    onMoved: (id2) => {
-      memory.forget(id2), setLayoutVersion((version) => version + 1);
-    },
+    onMoved: (id2) => sync.forget(profile, id2),
     onRemoved: (id2) => setSelectedId((current) => current === id2 ? null : current)
-  }), visibleCount = useMemo5(() => visibleRows(rows).length, [rows]), onCanvas = useMemo5(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec]), Panel2 = style2.Panel;
+  }), visibleCount = useMemo5(() => visibleRows(rows).length, [rows]), onCanvas = useMemo5(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id), offline = sync.offline(profile), onStyle = useCallback5(
+    (id2) => {
+      prefs.get().styleOverride ? prefs.set({ styleOverride: id2 }) : sync.setSettings(profile, { style: id2 });
+    },
+    [prefs, sync, profile]
+  );
   if (health.isError)
     return /* @__PURE__ */ jsx9("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx9(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
   let body;
-  return sessions.isError ? body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-error", children: /* @__PURE__ */ jsx9(EmptyState, { title: "Could not load sessions", description: errorText2(sessions.error) }) }) : health.isPending || sessions.isPending || projects.isPending ? body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx9(EmptyState, { title: "Loading sessions…" }) }) : model.nodes.length === 0 ? body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx9(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) }) : body = /* @__PURE__ */ jsxs9(Fragment6, { children: [
-    /* @__PURE__ */ jsx9(
-      GraphCanvas,
-      {
-        style: style2,
-        spec,
-        model,
-        positions: layout.positions,
-        labels: layout.labels,
-        selectedId,
-        onSelect,
-        onMove,
-        onOpen,
-        statusOf,
-        snap,
-        nowMs
-      }
-    ),
-    onCanvas === 0 && /* @__PURE__ */ jsx9("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: "No branched sessions here — the sessions without branches are listed on the right." })
-  ] }), /* @__PURE__ */ jsx9(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs9(
+  if (sessions.isError || projects.isError) {
+    let failed = sessions.isError ? sessions : projects;
+    body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessions.isError ? "sessions" : "projects", children: /* @__PURE__ */ jsx9(ErrorState, { title: sessions.isError ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx9(Button2, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
+      failed.refetch();
+    }, children: failed.isFetching ? "Retrying…" : "Retry" }) }) });
+  } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile))
+    body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx9(EmptyState, { title: "Loading sessions…" }) });
+  else if (model.nodes.length === 0)
+    body = /* @__PURE__ */ jsx9("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx9(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
+  else {
+    let saved = prefs.viewport(vpKey);
+    body = /* @__PURE__ */ jsxs9(Fragment7, { children: [
+      /* @__PURE__ */ jsx9(
+        GraphCanvas,
+        {
+          style: style2,
+          spec,
+          model,
+          positions: layout.positions,
+          labels: layout.labels,
+          selectedId,
+          onSelect,
+          onMove,
+          onDragging,
+          onOpen,
+          statusOf,
+          snap,
+          nowMs,
+          initialViewport: saved,
+          onViewport
+        }
+      ),
+      onCanvas === 0 && /* @__PURE__ */ jsx9("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: "No branched sessions here — the sessions without branches are listed on the right." })
+    ] });
+  }
+  return /* @__PURE__ */ jsx9(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs9(
     "div",
     {
       className: "session-tree",
@@ -9897,6 +10445,8 @@ function PageBody({ ctx }) {
       "data-profile": profile,
       "data-scope": scope,
       "data-style": style2.id,
+      "data-sync": sync.status(profile),
+      "data-sync-rev": sync.revision(profile) ?? void 0,
       "data-row-count": sessions.data ? visibleCount : void 0,
       "data-node-count": sessions.data ? model.nodes.length : void 0,
       "data-canvas-count": sessions.data ? onCanvas : void 0,
@@ -9908,32 +10458,43 @@ function PageBody({ ctx }) {
           {
             projects: projectList,
             scope,
-            onScope: (next) => {
-              setScope(next), requestFit();
-            },
+            onScope: setScope,
             profiles: profileNames,
             profile,
             onProfile: (next) => {
-              setProfileChoice(next), setScope(ALL_PROJECTS), setSelectedId(null), requestFit();
+              prefs.set({ profile: next === activeProfile ? null : next }), setScope(ALL_PROJECTS), setSelectedId(null);
             },
             showAll,
             onShowAll: (on) => {
-              setShowAll(on), requestFit();
+              prefs.set({ showAll: on }), requestFit();
             },
             showArchived,
-            onShowArchived: setShowArchived,
+            onShowArchived: (on) => prefs.set({ showArchived: on }),
             snap,
-            onSnap: setSnap,
+            onSnap: (on) => sync.setSettings(profile, { snap: on }),
             minZoom: MIN_ZOOM,
             maxZoom: MAX_ZOOM,
             onFit: fit,
             onRearrange,
-            singlesCount: model.singles.length
+            singlesCount: model.singles.length,
+            styles: registeredStyles().map((each) => ({ id: each.id, label: each.label })),
+            styleId: style2.id,
+            styleSource: device.styleOverride ? "device" : "synced",
+            onStyle,
+            hasPanel: !!Panel2,
+            panelOpen,
+            onPanel: (open) => prefs.setPanelOpen(style2.id, open)
           }
         ),
+        offline && /* @__PURE__ */ jsx9("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
         /* @__PURE__ */ jsxs9("div", { className: "session-tree__main", children: [
           /* @__PURE__ */ jsx9("div", { className: "session-tree__stage", children: body }),
-          Panel2 && sessions.data && /* @__PURE__ */ jsx9(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx9(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+        ] }),
+        toast && /* @__PURE__ */ jsxs9("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
+          /* @__PURE__ */ jsx9("span", { children: toast.message }),
+          /* @__PURE__ */ jsx9("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
+          /* @__PURE__ */ jsx9("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
         ] }),
         dialogs
       ]
@@ -9946,20 +10507,52 @@ function errorText2(error) {
 
 // src/settings/settings-page.tsx
 init_define_import_meta_env();
-import { ListRow, SegmentedControl } from "@hermes/plugin-sdk";
-import { jsx as jsx10 } from "react/jsx-runtime";
-var STYLE_OPTIONS = [{ id: "dense", label: "Dense + inspector" }];
-function SettingsPage() {
-  return /* @__PURE__ */ jsx10("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", children: /* @__PURE__ */ jsx10(
-    ListRow,
-    {
-      id: "session-tree-view-style",
-      title: "View style",
-      description: "How the session graph is drawn. More styles arrive in later versions.",
-      action: /* @__PURE__ */ jsx10(SegmentedControl, { options: STYLE_OPTIONS, value: "dense", onChange: () => {
-      } })
-    }
-  ) });
+import { host as host5, ListRow, SegmentedControl, ToggleRow, useValue as useValue2 } from "@hermes/plugin-sdk";
+import { useEffect as useEffect6 } from "react";
+import { jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
+var USE_SYNCED = "synced";
+function SettingsPage({ services: { sync, prefs } }) {
+  let profile = useValue2(host5.state.profile) || "default";
+  useSyncVersion(sync), usePrefsVersion(prefs), useEffect6(() => sync.watch(profile), [sync, profile]);
+  let styles = registeredStyles().map((style2) => ({ id: style2.id, label: style2.label })), settings = sync.settings(profile), synced = isRegisteredStyle(settings.style) ? settings.style : DEFAULT_STYLE_ID, override = prefs.get().styleOverride, device = isRegisteredStyle(override) ? override : USE_SYNCED, offline = sync.offline(profile);
+  return /* @__PURE__ */ jsxs10("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
+    /* @__PURE__ */ jsx10(
+      ListRow,
+      {
+        id: "session-tree-view-style",
+        title: "View style",
+        description: "How the session graph is drawn, on every device that uses this Hermes.",
+        action: /* @__PURE__ */ jsx10("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx10(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
+      }
+    ),
+    /* @__PURE__ */ jsx10(
+      ListRow,
+      {
+        id: "session-tree-device-style",
+        title: "On this device",
+        description: "Use the synced style here, or pick one for this device only.",
+        action: /* @__PURE__ */ jsx10("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx10(
+          SegmentedControl,
+          {
+            options: [{ id: USE_SYNCED, label: "Use synced style" }, ...styles],
+            value: device,
+            onChange: (id2) => prefs.set({ styleOverride: id2 === USE_SYNCED ? null : id2 })
+          }
+        ) })
+      }
+    ),
+    /* @__PURE__ */ jsx10("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx10(
+      ToggleRow,
+      {
+        id: "session-tree-snap-default",
+        label: "Snap grid default",
+        description: "Show the dot grid and snap dragged blocks to it (the toolbar's Snap toggle; synced).",
+        checked: settings.snap,
+        onChange: (on) => sync.setSettings(profile, { snap: on })
+      }
+    ) }),
+    offline && /* @__PURE__ */ jsx10("p", { className: "session-tree__settings-note", "data-testid": "session-tree-settings-offline", children: "The Session Tree backend is unreachable: changes are kept here and saved when it is back." })
+  ] });
 }
 
 // src/styles.css
@@ -10794,6 +11387,59 @@ g.is-dimmed {
   display: flex;
   flex-direction: column;
 }
+
+/* --- card 4: synced layout (offline banner, Re-arrange toast, settings note) ------------ */
+
+.session-tree__banner {
+  flex: none;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  background: var(--ui-bg-tertiary);
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+}
+
+.session-tree__toast {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 7px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-primary);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ui-text-primary) 18%, transparent);
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+.st-toast-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.st-toast-btn:hover {
+  background: var(--ui-bg-tertiary);
+}
+
+.st-style select {
+  max-width: 150px;
+}
+
+.session-tree__settings-note {
+  margin: 8px 0 0;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
 `;
 
 // src/plugin.tsx
@@ -10809,12 +11455,14 @@ var plugin = {
   name: "Session Tree",
   description: "Your chat sessions as an interactive graph of how they branched.",
   register(ctx) {
-    injectStyles(ctx), ctx.registerMany([
+    injectStyles(ctx);
+    let services = createServices(ctx);
+    ctx.registerMany([
       {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx11(SessionTreePage, { ctx })
+        render: () => /* @__PURE__ */ jsx11(SessionTreePage, { ctx, services })
       },
       {
         id: "nav",
@@ -10828,14 +11476,14 @@ var plugin = {
           id: "session-tree.open",
           label: "Open Session Tree",
           keywords: ["session", "tree", "graph", "branches"],
-          run: () => host4.navigate(ROUTE_PATH)
+          run: () => host6.navigate(ROUTE_PATH)
         }
       }
     ]), ctx.registerSettingsPage?.({
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx11(SettingsPage, {})
+      render: () => /* @__PURE__ */ jsx11(SettingsPage, { services })
     });
   }
 }, plugin_default = plugin;

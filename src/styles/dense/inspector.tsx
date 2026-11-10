@@ -130,7 +130,21 @@ function Actions({ node, onOpen }: { node: GraphNode; onOpen: StylePanelProps['o
         <Codicon name="link-external" size={12} />
         Open
       </button>
-      <button type="button" className="st-act" data-action="branch" disabled={!available} title={labels.branch} onClick={() => void actions?.branch(node)}>
+      <button
+        type="button"
+        className="st-act"
+        data-action="branch"
+        disabled={!available}
+        title={labels.branch}
+        onClick={event => {
+          // A double-click is one Branch: the second click would branch the new child (card-3 review).
+          if (event.detail > 1) {
+            return
+          }
+
+          void actions?.branch(node)
+        }}
+      >
         <Codicon name="repo-forked" size={12} />
         {labels.branch}
       </button>

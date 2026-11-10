@@ -8,6 +8,7 @@ import type { HermesPlugin, PluginContext } from '@hermes/plugin-sdk'
 import flowCss from '@xyflow/react/dist/base.css'
 
 import { SessionTreePage } from './page/session-tree-page.tsx'
+import { createServices } from './page/services.ts'
 import { SettingsPage } from './settings/settings-page.tsx'
 import pluginCss from './styles.css'
 
@@ -31,12 +32,16 @@ const plugin: HermesPlugin = {
   register(ctx) {
     injectStyles(ctx)
 
+    // The synced layout store and this device's preferences, shared by the page and its
+    // settings page (push, poll and timers through ctx.*: a reload retires them).
+    const services = createServices(ctx)
+
     ctx.registerMany([
       {
         id: 'page',
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => <SessionTreePage ctx={ctx} />
+        render: () => <SessionTreePage ctx={ctx} services={services} />
       },
       {
         id: 'nav',
@@ -59,7 +64,7 @@ const plugin: HermesPlugin = {
       id: 'settings',
       title: 'Session Tree',
       icon: 'type-hierarchy',
-      render: () => <SettingsPage />
+      render: () => <SettingsPage services={services} />
     })
   }
 }

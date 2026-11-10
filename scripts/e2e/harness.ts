@@ -4,16 +4,16 @@
  *   root  /home/david/.cache/session-tree-e2e/c<card>-<role>/
  *   home  <root>/home            (HERMES_HOME of the isolated gateway)
  *   ports 19300 + 10·card: coder +0..+4, reviewer +5..+9 (the Webapp listens on the first);
- *         card 3 (the default): coder 19330-19334, reviewer 19335-19339
+ *         card 4 (the default): coder 19340-19344, reviewer 19345-19349
  *
- * The card number comes from SESSION_TREE_CARD (default: the current card, 3).
+ * The card number comes from SESSION_TREE_CARD (default: the current card, 4).
  *
  * The user's real Hermes is never touched: no writes under ~/.hermes, no build in the
  * Hermes checkout (`hermes webapp --skip-build` always), and the package is linked
  * only into the test home's plugins/.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,7 +28,7 @@ const NODE_BIN = dirname(process.execPath)
 export type Role = 'coder' | 'reviewer'
 
 /** The card whose test home and port block this run uses (each card of the set has its own). */
-export const CARD = Number(process.env.SESSION_TREE_CARD ?? 3)
+export const CARD = Number(process.env.SESSION_TREE_CARD ?? 4)
 
 if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
   throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)
@@ -182,21 +182,61 @@ export function configure(t: TestHermes, { backendEnabled = true }: { backendEna
 }
 
 /** The one place a link to this package is allowed: the TEST home's plugins/. */
-export function linkPackage(t: TestHermes): void {
+export function linkPackage(t: TestHermes, target: string = REPO): void {
   const plugins = join(t.home, 'plugins')
   const link = join(plugins, PLUGIN_ID)
 
   mkdirSync(plugins, { recursive: true })
 
   if (existsSync(link)) {
-    if (readlinkSync(link) !== REPO) {
-      throw new Error(`${link} exists and does not point at ${REPO}`)
+    if (readlinkSync(link) !== target) {
+      throw new Error(`${link} exists and does not point at ${target}`)
     }
 
     return
   }
 
-  symlinkSync(REPO, link)
+  symlinkSync(target, link)
+}
+
+/**
+ * Card 4: the package as the sync suite installs it, `<root>/package/`: the same agent half and
+ * backend (copied from the checkout), but a desktop/plugin.js built with the test-only style
+ * (`scripts/build.mjs --test-styles`). The committed desktop/plugin.js is never that build.
+ */
+export function buildTestPackage(t: TestHermes): string {
+  const dir = join(t.root, 'package')
+
+  for (const sub of ['dashboard', 'desktop']) {
+    mkdirSync(join(dir, sub), { recursive: true })
+  }
+
+  for (const file of ['plugin.yaml', '__init__.py', 'dashboard/manifest.json', 'dashboard/plugin_api.py', 'dashboard/layout_store.py']) {
+    copyFileSync(join(REPO, file), join(dir, file))
+  }
+
+  execFileSync(process.execPath, [join(REPO, 'scripts', 'build.mjs'), '--test-styles', '--outfile', join(dir, 'desktop', 'plugin.js')], {
+    cwd: REPO,
+    encoding: 'utf8'
+  })
+
+  return dir
+}
+
+/**
+ * The synced layout store of the test home (`<home>/session-tree/`). A suite that reuses the
+ * shared home starts from no stored layout and settings: an earlier run's drops or Snap would
+ * otherwise carry over (they are synced, by design). Moved aside, never deleted.
+ */
+export function resetLayoutStore(t: TestHermes): void {
+  const store = join(t.home, PLUGIN_ID)
+
+  if (existsSync(store)) {
+    const aside = join(t.root, 'layout-store-old')
+
+    mkdirSync(aside, { recursive: true })
+    renameSync(store, join(aside, `${Date.now()}`))
+  }
 }
 
 /** Second profile (3 sessions) and the 500-session scale profile the seeder fills. */
@@ -211,11 +251,12 @@ export function ensureProfiles(t: TestHermes): void {
 }
 
 /** Everything `start` needs before the gateway runs: launcher, config, package link, fixtures. */
-export function setup(t: TestHermes, { backendEnabled = true }: { backendEnabled?: boolean } = {}): unknown {
+export function setup(t: TestHermes, { backendEnabled = true, packageDir = REPO }: { backendEnabled?: boolean; packageDir?: string } = {}): unknown {
   ensureLauncher(t)
   configure(t, { backendEnabled })
-  linkPackage(t)
+  linkPackage(t, packageDir)
   ensureProfiles(t)
+  resetLayoutStore(t)
 
   return seedFixtures(t)
 }

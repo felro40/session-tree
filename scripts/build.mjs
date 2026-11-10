@@ -3,11 +3,22 @@
 // without a build step.
 import { build } from 'esbuild'
 import { mkdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const outfile = join(root, 'desktop', 'plugin.js')
+/**
+ * `--test-styles` (the e2e's own build only) defines `__SESSION_TREE_TEST_STYLES__` true, which
+ * registers the test-only `e2e-alt` style; it must name an `--outfile` outside desktop/, so the
+ * committed bundle is always the production build (`npm run build`: the flag is false).
+ */
+const testStyles = process.argv.includes('--test-styles')
+const outArg = process.argv.indexOf('--outfile')
+const outfile = outArg === -1 ? join(root, 'desktop', 'plugin.js') : resolve(process.argv[outArg + 1])
+
+if (testStyles && (outArg === -1 || outfile === join(root, 'desktop', 'plugin.js'))) {
+  throw new Error('--test-styles needs an --outfile outside desktop/ (the committed bundle never has the test style)')
+}
 
 /** The only specifiers the Hermes plugin loader resolves for a disk plugin. */
 export const ALLOWED_EXTERNALS = ['@hermes/plugin-sdk', 'react', 'react/jsx-runtime']
@@ -48,7 +59,11 @@ const result = await build({
   // shim, so the bundle never imports react-dom (not in the loader's map).
   alias: { 'react-dom': './src/shims/react-dom.ts' },
   loader: { '.css': 'text' },
-  define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env': '{"MODE":"production"}' },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    'import.meta.env': '{"MODE":"production"}',
+    __SESSION_TREE_TEST_STYLES__: testStyles ? 'true' : 'false'
+  },
   // Syntax-only minification drops the development branches of zustand and
   // use-sync-external-store. Identifiers and whitespace stay readable.
   minifySyntax: true,
@@ -93,4 +108,4 @@ if (process.argv.includes('--licenses')) {
   }
 }
 
-console.log(`desktop/plugin.js: ${bytes} bytes from ${inputs.length} inputs`)
+console.log(`${testStyles ? `${outfile} (test styles)` : 'desktop/plugin.js'}: ${bytes} bytes from ${inputs.length} inputs`)

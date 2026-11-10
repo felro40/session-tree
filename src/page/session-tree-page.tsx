@@ -3,64 +3,85 @@
  * projects (`projects.tree`), builds the graph model, lays it out with the active style and
  * draws it in the shared canvas shell, with the toolbar and the style's side panel.
  *
- * Positions live in memory, per style + profile + scope (card 4 persists them).
+ * Card 4: block positions, the view style and snap come from the synced layout store
+ * (`LayoutSync`, per style + profile + scope, saved on drop); Show all, Show archived, the
+ * profile filter, the style override, the panel and the zoom + pan stay on this device
+ * (`DevicePrefs`). Re-arrange can be undone; an unreachable backend shows the cached layout.
  */
-import { EmptyState, host, useQuery, useValue } from '@hermes/plugin-sdk'
+import { Button, EmptyState, ErrorState, host, useQuery, useValue } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { Viewport } from '@xyflow/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { fetchHealth, fetchProfiles, fetchProjects, fetchSessions } from '../api.ts'
 import { applyOverrides } from '../model/actions.ts'
+import { viewportKey } from '../model/device-prefs.ts'
 import { ALL_PROFILES, ALL_PROJECTS, buildGraph } from '../model/graph.ts'
 import type { GraphNode } from '../model/graph.ts'
 import { laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
-import { LayoutMemory } from '../model/layout-memory.ts'
+import type { LayoutRef } from '../model/layout-sync.ts'
 import { visibleRows } from '../model/sessions.ts'
 import { liveStatus } from '../model/status.ts'
 import type { HostStatusSnapshot } from '../model/status.ts'
-import { DEFAULT_STYLE_ID, getStyle } from '../styles/registry.ts'
+import { getStyle, registeredStyles, resolveStyleId } from '../styles/registry.ts'
 import { GraphCanvas, MAX_ZOOM, MIN_ZOOM } from './graph-canvas.tsx'
 import { PluginCtx } from './plugin-context.ts'
 import { useRowOverrides, useSessionActionsController } from './session-actions.tsx'
 import { SessionActionsCtx } from './session-actions-context.ts'
+import { usePrefsVersion, useSyncVersion } from './services.ts'
+import type { Services } from './services.ts'
 import { Toolbar } from './toolbar.tsx'
 import { useLiveRefresh } from './use-live-refresh.ts'
 
 export const BACKEND_OFF_MESSAGE =
   "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway."
+export const OFFLINE_MESSAGE = 'offline: showing last saved layout'
+/** How long the Re-arrange toast (with Undo) stays. */
+export const UNDO_TOAST_MS = 10_000
 
 const FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }
 const EMPTY_LAYOUT: LayoutResult = { positions: new Map(), labels: [] }
 /** No SDK source for "needs input" yet (pre-check 10). */
 const NO_NEEDS_INPUT: ReadonlySet<string> = new Set()
 
-export function SessionTreePage({ ctx }: { ctx: PluginContext }) {
+export function SessionTreePage({ ctx, services }: { ctx: PluginContext; services: Services }) {
   return (
     <PluginCtx.Provider value={ctx}>
       <ReactFlowProvider>
-        <PageBody ctx={ctx} />
+        <PageBody ctx={ctx} services={services} />
       </ReactFlowProvider>
     </PluginCtx.Provider>
   )
 }
 
-function PageBody({ ctx }: { ctx: PluginContext }) {
+interface UndoToast {
+  id: number
+  message: string
+  undo(): void
+}
+
+function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; services: Services }) {
   const activeProfile = useValue(host.state.profile) || 'default'
-  const [profileChoice, setProfileChoice] = useState<null | string>(null)
-  const profile = profileChoice ?? activeProfile
+  const syncVersion = useSyncVersion(sync)
+
+  usePrefsVersion(prefs)
+  const device = prefs.get()
+  const profile = device.profile ?? activeProfile
+  const showAll = device.showAll
+  const showArchived = device.showArchived
   const [scopeChoice, setScope] = useState(ALL_PROJECTS)
-  const [showAll, setShowAll] = useState(false)
-  const [showArchived, setShowArchived] = useState(false)
-  const [snap, setSnap] = useState(false)
   const [selectedChoice, setSelectedId] = useState<null | string>(null)
-  const [memory] = useState(() => new LayoutMemory())
-  const [layoutVersion, setLayoutVersion] = useState(0)
   const [fitRequest, setFitRequest] = useState(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
-  const style = getStyle(DEFAULT_STYLE_ID)
+  const [toast, setToast] = useState<UndoToast>()
+  const settings = sync.settings(profile)
+  const style = getStyle(resolveStyleId(device.styleOverride, settings.style))
+  const snap = settings.snap
   const flow = useReactFlow()
+
+  useEffect(() => sync.watch(profile), [sync, profile])
 
   const health = useQuery({
     queryKey: ['session-tree', 'health', activeProfile],
@@ -91,16 +112,20 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
 
     names.add(activeProfile)
 
+    if (profile !== ALL_PROFILES) {
+      names.add(profile)
+    }
+
     return [...names].sort((a, b) => (a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b)))
-  }, [profiles.data, activeProfile])
+  }, [profiles.data, activeProfile, profile])
 
   const projectProfiles = profile === ALL_PROFILES ? profileNames : [profile]
 
   const projects = useQuery({
     queryKey: ['session-tree', 'projects', projectProfiles.join(',')],
-    queryFn: () => fetchProjects(projectProfiles),
+    queryFn: () => fetchProjects(projectProfiles, ctx),
     // The gateway socket may still be connecting on a cold page load.
-    retry: 4,
+    retry: 3,
     retryDelay: 750,
     refetchOnWindowFocus: false
   })
@@ -125,15 +150,17 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
   )
 
   const spec = useMemo(() => style.layoutSpec({ showAll }), [style, showAll])
-  const layoutKey = `${style.id}|${profile}|${scope}`
+  const ref = useMemo<LayoutRef>(() => ({ profile, style: style.id, scope }), [profile, style, scope])
   // Lay out only complete data: a layout made before the projects arrive would group every
-  // block under "no project", and the memory would keep those positions.
-  const ready = Boolean(sessions.data) && !projects.isPending
+  // block under "no project", and one made before the stored positions arrive would be saved
+  // over nothing (and shown, then moved).
+  const ready = Boolean(sessions.data) && !projects.isPending && sync.settled(profile)
   const layout = useMemo(
-    () => (ready ? memory.place(layoutKey, previous => style.layout(model, previous, spec)) : EMPTY_LAYOUT),
-    // `layoutVersion` re-runs the merge after a drop or a Re-arrange changed the memory.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the memory's change signal
-    [ready, memory, layoutKey, style, model, spec, layoutVersion]
+    // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
+    () => (ready ? sync.place(ref, previous => style.layout(model, previous, spec), { save: style.savesLayout && !projects.isError }) : EMPTY_LAYOUT),
+    // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
+    [ready, sync, ref, style, model, spec, syncVersion, projects.isError]
   )
 
   const busy = useValue(host.state.busy)
@@ -167,7 +194,7 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
     void flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : undefined })
   }, [flow, model, spec, scope])
 
-  // A new layout (scope, profile, Show all, Re-arrange) is framed once; refreshes are not.
+  // A new layout (Show all, Re-arrange) is framed once; refreshes are not.
   useEffect(() => {
     if (fitRequest > 0) {
       fit()
@@ -175,7 +202,44 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on an explicit request
   }, [fitRequest])
 
-  const requestFit = useCallback(() => setFitRequest(count => count + 1), [])
+  const requestFit = useCallback(() => setFitRequest(count => count + 1), [setFitRequest])
+
+  // R16: zoom and pan per style + profile + scope, on this device. A view seen before comes back
+  // where it was left; a new one is framed.
+  const vpKey = viewportKey(style.id, profile, scope)
+  const vpKeyRef = useRef(vpKey)
+  const canvasShown = ready && model.nodes.length > 0 && !sessions.isError
+  const appliedKey = useRef<null | string>(null)
+
+  useEffect(() => {
+    vpKeyRef.current = vpKey
+
+    if (!canvasShown) {
+      appliedKey.current = null
+
+      return
+    }
+
+    if (appliedKey.current === null) {
+      // The canvas just mounted with this key's viewport (or framed itself).
+      appliedKey.current = vpKey
+
+      return
+    }
+
+    if (appliedKey.current !== vpKey) {
+      appliedKey.current = vpKey
+      const saved = prefs.viewport(vpKey)
+
+      if (saved) {
+        void flow.setViewport(saved, { duration: 0 })
+      } else {
+        fit()
+      }
+    }
+  }, [vpKey, canvasShown, prefs, flow, fit])
+
+  const onViewport = useCallback((viewport: Viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs])
 
   const onSelect = useCallback(
     (id: null | string, reveal = false) => {
@@ -195,23 +259,37 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
         void flow.setCenter(point.x + style.nodeSize.width / 2, point.y + style.nodeSize.height / 2, { zoom, duration: 0 })
       }
     },
-    [model, layout, flow, style]
+    [model, layout, flow, style, setSelectedId]
   )
 
-  const onMove = useCallback(
-    (moves: ReadonlyMap<string, Point>) => {
-      memory.move(layoutKey, moves)
-      setLayoutVersion(version => version + 1)
-    },
-    [memory, layoutKey]
-  )
+  const onMove = useCallback((moves: ReadonlyMap<string, Point>) => sync.drop(ref, moves), [sync, ref])
+  const onDragging = useCallback((ids: null | string[]) => sync.setDragging(ids), [sync])
+
+  const dismissToast = useCallback(() => setToast(undefined), [setToast])
 
   const onRearrange = useCallback(() => {
-    // Card 2: recompute the auto-layout for this style + scope (card 4 adds Undo and persistence).
-    memory.reset(layoutKey)
-    setLayoutVersion(version => version + 1)
+    const previous = sync.rearrange(ref)
+    const id = Date.now()
+
     requestFit()
-  }, [memory, layoutKey, requestFit])
+    setToast({
+      id,
+      message: 'Layout re-arranged',
+      undo: () => {
+        sync.restore(ref, previous)
+        setToast(undefined)
+        requestFit()
+      }
+    })
+  }, [sync, ref, requestFit, setToast])
+
+  useEffect(() => {
+    if (!toast) {
+      return
+    }
+
+    return ctx.setTimeout(() => setToast(current => (current?.id === toast.id ? undefined : current)), UNDO_TOAST_MS)
+  }, [ctx, toast])
 
   const onOpen = useCallback(
     (node: GraphNode) => {
@@ -256,16 +334,27 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
     refreshSessions: () => void sessions.refetch(),
     refreshProjects: () => void projects.refetch(),
     onBranched: id => setPendingSelect(id),
-    onMoved: id => {
-      memory.forget(id)
-      setLayoutVersion(version => version + 1)
-    },
+    onMoved: id => sync.forget(profile, id),
     onRemoved: id => setSelectedId(current => (current === id ? null : current))
   })
 
   const visibleCount = useMemo(() => visibleRows(rows).length, [rows])
   const onCanvas = useMemo(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec])
   const Panel = style.Panel
+  const panelOpen = prefs.panelOpen(style.id)
+  const offline = sync.offline(profile)
+
+  const onStyle = useCallback(
+    (id: string) => {
+      // R18: the switcher changes this device's override when one is set, else the synced style.
+      if (prefs.get().styleOverride) {
+        prefs.set({ styleOverride: id })
+      } else {
+        sync.setSettings(profile, { style: id })
+      }
+    },
+    [prefs, sync, profile]
+  )
 
   if (health.isError) {
     return (
@@ -279,13 +368,22 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
 
   let body
 
-  if (sessions.isError) {
+  if (sessions.isError || projects.isError) {
+    // Carry-forward (card 3 review): a failed load is an error with Retry, never an endless
+    // spinner. `projects.tree` too: a row the gateway cannot serialise (an infinite cost) leaves
+    // that RPC unanswered, so each attempt times out (`PROJECTS_TIMEOUT_MS`) and ends here.
+    const failed = sessions.isError ? sessions : projects
+
     body = (
-      <div className="session-tree__state" data-testid="session-tree-error">
-        <EmptyState title="Could not load sessions" description={errorText(sessions.error)} />
+      <div className="session-tree__state" data-testid="session-tree-error" data-failed={sessions.isError ? 'sessions' : 'projects'}>
+        <ErrorState title={sessions.isError ? 'Could not load sessions' : 'Could not load projects'} description={errorText(failed.error)}>
+          <Button variant="outline" data-testid="session-tree-retry" disabled={failed.isFetching} onClick={() => void failed.refetch()}>
+            {failed.isFetching ? 'Retrying…' : 'Retry'}
+          </Button>
+        </ErrorState>
       </div>
     )
-  } else if (health.isPending || sessions.isPending || projects.isPending) {
+  } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile)) {
     body = (
       <div className="session-tree__state" data-testid="session-tree-loading">
         <EmptyState title="Loading sessions…" />
@@ -298,6 +396,8 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
       </div>
     )
   } else {
+    const saved = prefs.viewport(vpKey)
+
     body = (
       <>
         <GraphCanvas
@@ -309,10 +409,13 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
           selectedId={selectedId}
           onSelect={onSelect}
           onMove={onMove}
+          onDragging={onDragging}
           onOpen={onOpen}
           statusOf={statusOf}
           snap={snap}
           nowMs={nowMs}
+          initialViewport={saved}
+          onViewport={onViewport}
         />
         {onCanvas === 0 && (
           <div className="session-tree__hint" data-testid="session-tree-no-branches">
@@ -331,6 +434,8 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
         data-profile={profile}
         data-scope={scope}
         data-style={style.id}
+        data-sync={sync.status(profile)}
+        data-sync-rev={sync.revision(profile) ?? undefined}
         data-row-count={sessions.data ? visibleCount : undefined}
         data-node-count={sessions.data ? model.nodes.length : undefined}
         data-canvas-count={sessions.data ? onCanvas : undefined}
@@ -340,39 +445,58 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
         <Toolbar
           projects={projectList}
           scope={scope}
-          onScope={next => {
-            setScope(next)
-            requestFit()
-          }}
+          onScope={setScope}
           profiles={profileNames}
           profile={profile}
           onProfile={next => {
-            setProfileChoice(next)
+            prefs.set({ profile: next === activeProfile ? null : next })
             setScope(ALL_PROJECTS)
             setSelectedId(null)
-            requestFit()
           }}
           showAll={showAll}
           onShowAll={on => {
-            setShowAll(on)
+            prefs.set({ showAll: on })
             requestFit()
           }}
           showArchived={showArchived}
-          onShowArchived={setShowArchived}
+          onShowArchived={on => prefs.set({ showArchived: on })}
           snap={snap}
-          onSnap={setSnap}
+          onSnap={on => sync.setSettings(profile, { snap: on })}
           minZoom={MIN_ZOOM}
           maxZoom={MAX_ZOOM}
           onFit={fit}
           onRearrange={onRearrange}
           singlesCount={model.singles.length}
+          styles={registeredStyles().map(each => ({ id: each.id, label: each.label }))}
+          styleId={style.id}
+          styleSource={device.styleOverride ? 'device' : 'synced'}
+          onStyle={onStyle}
+          hasPanel={Boolean(Panel)}
+          panelOpen={panelOpen}
+          onPanel={open => prefs.setPanelOpen(style.id, open)}
         />
+        {offline && (
+          <div className="session-tree__banner" role="status" data-testid="session-tree-offline">
+            {OFFLINE_MESSAGE}
+          </div>
+        )}
         <div className="session-tree__main">
           <div className="session-tree__stage">{body}</div>
-          {Panel && sessions.data && (
+          {Panel && panelOpen && sessions.data && (
             <Panel model={model} selectedId={selectedId} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
           )}
         </div>
+        {toast && (
+          <div className="session-tree__toast" role="status" data-testid="session-tree-toast">
+            <span>{toast.message}</span>
+            <button type="button" className="st-toast-btn" data-testid="session-tree-undo" onClick={toast.undo}>
+              Undo
+            </button>
+            <button type="button" className="st-toast-btn" aria-label="Dismiss" onClick={dismissToast}>
+              ×
+            </button>
+          </div>
+        )}
         {dialogs}
       </div>
     </SessionActionsCtx.Provider>

@@ -63,4 +63,23 @@ describe('desktop/plugin.js static guards', () => {
     assert.ok(bytes < SIZE_BUDGET_BYTES, `bundle is ${bytes} bytes`)
     assert.ok(bytes < LOADER_CAP_BYTES)
   })
+
+  it('cannot enable the test-only style (card 4): its code, id and label are not in the committed bundle', () => {
+    // `__SESSION_TREE_TEST_STYLES__` is a build-time constant: `npm run build` defines it false, so
+    // esbuild folds the registry's branch away and drops `makeE2eAltStyle`. Nothing at runtime
+    // (storage, a URL, a setting) can bring back code that is not there.
+    assert.doesNotMatch(source, /makeE2eAltStyle/)
+    assert.doesNotMatch(source, /["'`]e2e-alt["'`]/)
+    assert.doesNotMatch(source, /E2E alt/)
+    assert.doesNotMatch(source, /__SESSION_TREE_TEST_STYLES__/)
+    // The registry holds exactly the shipped styles.
+    assert.match(source, /STYLES = \/\* @__PURE__ \*\/ new Map\(\[\s*\[denseStyle\.id, denseStyle\]\s*\]\)/)
+  })
+
+  it('the build refuses a test-style build into desktop/ (only the e2e build, elsewhere, has it)', () => {
+    const build = readFileSync(join(root, 'scripts', 'build.mjs'), 'utf8')
+
+    assert.match(build, /__SESSION_TREE_TEST_STYLES__: testStyles \? 'true' : 'false'/)
+    assert.match(build, /--test-styles needs an --outfile outside desktop\//)
+  })
 })

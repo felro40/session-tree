@@ -39,7 +39,9 @@ import type { Dispatch, ReactNode, SetStateAction } from 'react'
 
 import { fetchExport, fetchMutationSnapshot, postArchive, postDelete, postReadState, postRename } from '../api.ts'
 import {
+  BRANCH_COOLDOWN_MS,
   branchNote,
+  createBranchCooldown,
   createBranchFlights,
   createFencedMutation,
   decodeExportEnvelope,
@@ -115,6 +117,7 @@ export function useSessionActionsController(options: SessionActionsOptions): {
   const [branchFlights] = useState(() =>
     createBranchFlights(<T,>(method: string, params: Record<string, unknown>) => host.request<T>(method, params), randomUuid)
   )
+  const [branchCooldown] = useState(() => createBranchCooldown(BRANCH_COOLDOWN_MS))
   const latest = useRef({ options, labels, colors })
   const menuHost = useRef<HTMLElement | null>(null)
   const requestedMenuNode = useRef<null | string>(null)
@@ -211,6 +214,11 @@ export function useSessionActionsController(options: SessionActionsOptions): {
         const row = rowOf(node)
         let joined = false
 
+        // The second click of a double-click lands on the child the first one just selected.
+        if (branchCooldown.blocks(row.id)) {
+          return
+        }
+
         try {
           // One request per parent at a time: a double-submit joins the flight in progress
           // (one idempotency key per attempt), and only the first caller places the child
@@ -236,6 +244,7 @@ export function useSessionActionsController(options: SessionActionsOptions): {
             await host.request('session.close', { session_id: result.session_id }).catch(() => undefined)
           }
 
+          branchCooldown.branched(child)
           latest.current.options.onBranched(child)
           latest.current.options.refreshSessions()
           host.notify({ kind: 'success', message: `Branched “${node.title}”`, durationMs: 2000 })
@@ -353,7 +362,7 @@ export function useSessionActionsController(options: SessionActionsOptions): {
         dialogFromMenu.current = true
       }
     }
-  }, [branchFlights, mutate, setOverrides])
+  }, [branchFlights, branchCooldown, mutate, setOverrides])
 
   const backendRename = async (node: GraphNode, title: string): Promise<null | string | undefined> => {
     const row = node.row!

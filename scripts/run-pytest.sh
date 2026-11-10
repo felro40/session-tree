@@ -11,7 +11,7 @@ set -e
 repo=$(cd "$(dirname "$0")/.." && pwd)
 e2e=${SESSION_TREE_E2E_ROOT:-$HOME/.cache/session-tree-e2e}
 role=${SESSION_TREE_ROLE:-coder}
-card=${SESSION_TREE_CARD:-3}
+card=${SESSION_TREE_CARD:-4}
 root="$e2e/c$card-$role"
 NODE=${NODE:-node}
 command -v "$NODE" >/dev/null 2>&1 || NODE=/home/david/.hermes/tools/node-26.12.1-linux-x64/bin/node

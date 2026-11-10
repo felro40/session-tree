@@ -829,3 +829,56 @@ g.is-dimmed {
   display: flex;
   flex-direction: column;
 }
+
+/* --- card 4: synced layout (offline banner, Re-arrange toast, settings note) ------------ */
+
+.session-tree__banner {
+  flex: none;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  background: var(--ui-bg-tertiary);
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+}
+
+.session-tree__toast {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 7px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-primary);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ui-text-primary) 18%, transparent);
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+.st-toast-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.st-toast-btn:hover {
+  background: var(--ui-bg-tertiary);
+}
+
+.st-style select {
+  max-width: 150px;
+}
+
+.session-tree__settings-note {
+  margin: 8px 0 0;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}

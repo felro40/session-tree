@@ -1,7 +1,8 @@
 /**
- * In-memory block positions per layout key (style + profile + scope). Card 4 persists them;
- * here they live as long as the page. `place` stores what a merge placed, so a later refresh
- * merges against it and never re-places (moves) a block.
+ * In-memory block positions per layout key (style + profile + scope), as cards 2–3 used them.
+ * Card 4 replaced it in the page with the synced store (`layout-sync.ts`, same `place` contract:
+ * a merge keeps every stored position and stores what it placed); kept for its unit tests of the
+ * merge-across-refreshes rules (`tests/js/layout.test.ts`).
  */
 import type { LayoutResult, Point } from './layout.ts'
 

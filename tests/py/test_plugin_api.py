@@ -253,12 +253,16 @@ def test_reads_never_write_the_session_store(client, hermes_home):
 
 
 def test_router_mutations_are_only_the_fenced_session_actions(plugin_api):
-    # Card 3: the only writes are rename, read state, archive and delete, each through the core's
-    # own fenced mutation path (``_mutate_session_request`` / ``delete_session_endpoint``).
+    # Card 3: the only state.db writes are rename, read state, archive and delete, each through the
+    # core's own fenced mutation path (``_mutate_session_request`` / ``delete_session_endpoint``).
+    # Card 4 adds the layout store's writes, which touch only the plugin's own state.json
+    # (``test_state_api.py::test_layout_writes_never_touch_the_session_store``).
     writes = sorted((route.path, method) for route in plugin_api.router.routes
                     for method in getattr(route, "methods", set()) if method not in {"GET", "HEAD"})
     assert writes == [("/sessions/{session_id}/archive", "POST"), ("/sessions/{session_id}/delete", "POST"),
-                      ("/sessions/{session_id}/read", "POST"), ("/sessions/{session_id}/rename", "POST")]
+                      ("/sessions/{session_id}/read", "POST"), ("/sessions/{session_id}/rename", "POST"),
+                      ("/settings", "PATCH"), ("/state/forget", "POST"), ("/state/layout", "DELETE"),
+                      ("/state/layout", "PUT"), ("/state/positions", "PATCH")]
 
 
 # --- session actions: rename, read state, export (card 3) -------------------------------------

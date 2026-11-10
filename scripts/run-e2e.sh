@@ -6,7 +6,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 NODE=${NODE:-node}
 command -v "$NODE" >/dev/null 2>&1 || NODE=/home/david/.hermes/tools/node-26.12.1-linux-x64/bin/node
 status=0
-for suite in e2e-foundation e2e-core-dense e2e-actions; do
+for suite in e2e-foundation e2e-core-dense e2e-actions e2e-sync; do
   echo "== $suite"
   "$NODE" "$repo/scripts/$suite.ts" || status=1
 done

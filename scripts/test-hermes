@@ -1,6 +1,6 @@
 #!/bin/sh
 # Manage the isolated test Hermes (start | stop | status | ...). See scripts/e2e/test-hermes-cli.ts.
-# Never touches ~/.hermes: the test home is ~/.cache/session-tree-e2e/c<card>-<role>/home (SESSION_TREE_CARD, default 3).
+# Never touches ~/.hermes: the test home is ~/.cache/session-tree-e2e/c<card>-<role>/home (SESSION_TREE_CARD, default 4).
 set -e
 here=$(dirname "$0")
 NODE=${NODE:-node}

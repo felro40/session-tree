@@ -63,6 +63,16 @@ export interface ToolbarProps {
   onFit(): void
   onRearrange(): void
   singlesCount: number
+  /** R18 quick switcher: the registered styles and the one shown. */
+  styles: { id: string; label: string }[]
+  styleId: string
+  /** Where the shown style comes from: this device's override, or the synced choice. */
+  styleSource: 'device' | 'synced'
+  onStyle(id: string): void
+  /** The style's side panel (Dense: the inspector), open or closed on this device. */
+  hasPanel: boolean
+  panelOpen: boolean
+  onPanel(open: boolean): void
 }
 
 export const ZOOM_STEP = 1.2
@@ -134,6 +144,34 @@ export function Toolbar(props: ToolbarProps) {
           <option value={ALL_PROFILES}>All profiles</option>
         </select>
       </label>
+      <label
+        className="st-profile st-style"
+        title={props.styleSource === 'device' ? 'View style (this device only — Settings → Plugins → Session Tree)' : 'View style (synced to every device)'}
+      >
+        <Codicon name="layout" size={12} />
+        <select
+          data-testid="session-tree-style"
+          data-source={props.styleSource}
+          aria-label="View style"
+          value={props.styleId}
+          onChange={event => {
+            // Like the profile select: hand the keyboard back so Space pans (R3).
+            event.currentTarget.blur()
+            props.onStyle(event.target.value)
+          }}
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.currentTarget.blur()
+            }
+          }}
+        >
+          {props.styles.map(style => (
+            <option key={style.id} value={style.id}>
+              {style.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <span className="st-spacer" />
       <ToolButton
         testId="session-tree-show-all"
@@ -180,6 +218,19 @@ export function Toolbar(props: ToolbarProps) {
         <Codicon name="screen-full" size={13} />
         Fit
       </ToolButton>
+      {props.hasPanel && (
+        <>
+          <span className="st-sep" />
+          <ToolButton
+            testId="session-tree-panel"
+            title={props.panelOpen ? 'Hide the side panel' : 'Show the side panel'}
+            pressed={props.panelOpen}
+            onClick={() => props.onPanel(!props.panelOpen)}
+          >
+            <Codicon name="layout-sidebar-right" size={13} />
+          </ToolButton>
+        </>
+      )}
     </div>
   )
 }

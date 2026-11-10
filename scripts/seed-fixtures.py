@@ -26,6 +26,8 @@ e2e to provoke ``sessions.changed``). ``--branch NEW_ID PARENT_ID [TITLE]`` adds
 of a seeded session through the same API (the live-refresh check); ``--unowned-branch`` does the same
 without the owner stamp (the actions e2e's real ``permission_denied`` refusal); ``--whole-cost-branch``
 adds an owned ``/branch`` child with ``estimated_cost_usd=2.0`` (a whole-number float: the byte-exact export check).
+``--inf-cost-branch`` adds one with an infinite cost (card 4: the core JSON answer for such a row fails,
+the page must end in an error state with Retry); ``--delete ID`` removes a row through ``delete_session``.
 ``--activate ID`` re-opens a
 session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
 so the core list's 300 s ``is_active`` heuristic reports it. Prints a JSON manifest of what it created.
@@ -260,7 +262,8 @@ def add_branch(new_id: str, parent: str, title: str, *, owned: bool = True, cost
         project = Path(parent_row["git_repo_root"]).name if parent_row.get("git_repo_root") else None
         Seeder(db, "default").branch(new_id, title, parent, project=project, age_h=0.02, messages=2,
                                      owner=OWNER if owned else None, cost=cost)
-        return {"branch": new_id, "parent": parent, "created": True, "owned": owned, "cost": cost}
+        # An infinite cost is reported as text: the manifest is strict JSON.
+        return {"branch": new_id, "parent": parent, "created": True, "owned": owned, "cost": cost if cost != float("inf") else "inf"}
     finally:
         db.close()
 
@@ -285,14 +288,24 @@ def main() -> None:
     if "--touch" in sys.argv:
         print(json.dumps(touch()))
         return
-    if "--branch" in sys.argv or "--unowned-branch" in sys.argv or "--whole-cost-branch" in sys.argv:
-        flag = next(f for f in ("--branch", "--unowned-branch", "--whole-cost-branch") if f in sys.argv)
+    if "--branch" in sys.argv or "--unowned-branch" in sys.argv or "--whole-cost-branch" in sys.argv or "--inf-cost-branch" in sys.argv:
+        flag = next(f for f in ("--branch", "--unowned-branch", "--whole-cost-branch", "--inf-cost-branch") if f in sys.argv)
         args = sys.argv[sys.argv.index(flag) + 1:]
         if len(args) < 2:
             sys.exit(f"usage: {flag} NEW_ID PARENT_ID [TITLE]")
         title = args[2] if len(args) > 2 else f"Live branch {args[0]}"
-        print(json.dumps(add_branch(args[0], args[1], title, owned=flag != "--unowned-branch",
-                                    cost=2.0 if flag == "--whole-cost-branch" else 0.12)))
+        cost = {"--whole-cost-branch": 2.0, "--inf-cost-branch": float("inf")}.get(flag, 0.12)
+        print(json.dumps(add_branch(args[0], args[1], title, owned=flag != "--unowned-branch", cost=cost)))
+        return
+    if "--delete" in sys.argv:
+        args = sys.argv[sys.argv.index("--delete") + 1:]
+        if not args:
+            sys.exit("usage: --delete ID")
+        db = SessionDB(db_path=HOME / "state.db")
+        try:
+            print(json.dumps({"deleted": args[0], "ok": bool(db.delete_session(args[0]))}))
+        finally:
+            db.close()
         return
     if "--activate" in sys.argv:
         args = sys.argv[sys.argv.index("--activate") + 1:]

@@ -18,6 +18,7 @@ export const denseStyle: StyleDefinition = {
   layoutSpec: denseLayoutSpec,
   layout: (model, previous, spec) => mergeLayout(previous, model, spec),
   draggable: true,
+  savesLayout: true,
   singles: 'inspector-list',
   router: curveRouter,
   ports: densePorts,

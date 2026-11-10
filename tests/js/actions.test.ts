@@ -4,6 +4,7 @@ import { describe, it } from 'node:test'
 import {
   applyOverrides,
   branchNote,
+  createBranchCooldown,
   createBranchFlights,
   createFencedMutation,
   decodeExportEnvelope,
@@ -176,6 +177,23 @@ describe('restErrorText (ctx.rest refusals → words)', () => {
   })
 })
 
+describe('createBranchCooldown (card-3 review: a second Branch click at human speed makes no grandchild)', () => {
+  it('after a Branch selected its child, a Branch on that child within the window is ignored', () => {
+    let now = 1000
+    const cooldown = createBranchCooldown(800, () => now)
+
+    assert.equal(cooldown.blocks('parent'), false)
+    cooldown.branched('child')
+    now += 150
+    assert.equal(cooldown.blocks('child'), true, '150 ms later: the second click of a double-click')
+    now += 150
+    assert.equal(cooldown.blocks('child'), true, '300 ms later')
+    assert.equal(cooldown.blocks('other'), false, 'another session is not held back')
+    now += 600
+    assert.equal(cooldown.blocks('child'), false, 'a deliberate Branch later on is a new branch')
+  })
+})
+
 describe('isAlreadyAbsent (NB3: the core delete is idempotent)', () => {
   it('the core already_absent answer and the backend fence-read 404 count as deleted; other refusals do not', () => {
     assert.equal(isAlreadyAbsent({ ok: true, already_absent: true }), true)
@@ -183,6 +201,16 @@ describe('isAlreadyAbsent (NB3: the core delete is idempotent)', () => {
     assert.equal(isAlreadyAbsent({ ok: true, deleted_ids: ['a'] }), false)
     assert.equal(isAlreadyAbsent(new Error('404: {"detail":"Unknown profile: nope"}')), false)
     assert.equal(isAlreadyAbsent(new Error('409: {"detail":"session_busy"}')), false)
+  })
+
+  it('card-3 review: the core\'s 404 not_found (a row that exists but could not be restored) is NOT deleted', () => {
+    // hermes_cli/web_routers/sessions.py:862-871: the core answers `not_found` for an existing
+    // cold row it cannot restore; hiding that live row until a reload would be wrong.
+    assert.equal(isAlreadyAbsent(new Error('404: {"detail":"not_found"}')), false)
+    assert.equal(isAlreadyAbsent(new Error('404: {"detail":"not_found","reason":"cold row"}')), false)
+    assert.equal(isAlreadyAbsent(new Error('404: {"detail":"Plugin not found"}')), false)
+    assert.equal(isAlreadyAbsent(new Error('500: {"detail":"Session not found"}')), false)
+    assert.equal(isAlreadyAbsent(new Error('404: {"detail": "Session not found"}')), true)
   })
 })
 

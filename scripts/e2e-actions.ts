@@ -729,6 +729,39 @@ async function main(): Promise<void> {
       return { child: child.id, branchedFrom: child._branched_from, overlaps: await overlapsOf(page, child.id) }
     })
 
+    // Card-3 review carry-forward 1: the second click of a double-click lands on the child the
+    // first click just selected (the request takes ~140 ms) and made a grandchild.
+    for (const [gap, parent] of [
+      [150, 'st-hp-mockup'],
+      [300, 'st-md-katex']
+    ] as const) {
+      await check(`Branch: two real clicks on the inspector's Branch ${gap} ms apart make one child and no grandchild`, async () => {
+        const before = new Set((await rowsOf(s)).keys())
+
+        await select(page, parent)
+        const button = page.locator('[data-testid="session-tree-inspector-actions"] [data-action="branch"]')
+        const box = await button.boundingBox()
+
+        assert(box, 'no Branch button')
+        const x = box.x + box.width / 2
+        const y = box.y + box.height / 2
+
+        await page.mouse.click(x, y)
+        await page.waitForTimeout(gap)
+        await page.mouse.click(x, y)
+        await page.waitForTimeout(4000)
+        const rows = await rowsOf(s)
+        const created = [...rows.values()].filter(row => !before.has(row.id))
+        const child = created.find(row => row._branched_from === parent)
+
+        assert(created.length === 1 && child, `new rows: ${JSON.stringify(created.map(row => [row.id, row._branched_from]))}`)
+        assert(![...rows.values()].some(row => row._branched_from === child.id), 'a grandchild was made')
+        await page.locator(`[data-testid="session-tree-inspector"][data-selected-id="${child.id}"]`).waitFor({ timeout: 10_000 })
+
+        return { gapMs: gap, parent, child: child.id, created: created.length }
+      })
+    }
+
     await check('Archive from the menu: hidden; Show archived shows it greyed with Unarchive, which restores it', async () => {
       await openMenu(page, 'st-hp-routing')
       await choose(page, 'archive')

@@ -10,7 +10,7 @@ import {
   BackgroundVariant,
   ReactFlow
 } from '@xyflow/react'
-import type { Edge, Node, NodeChange, NodeMouseHandler, OnNodeDrag } from '@xyflow/react'
+import type { Edge, Node, NodeChange, NodeMouseHandler, OnNodeDrag, Viewport } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { GraphModel, GraphNode } from '../model/graph.ts'
@@ -45,10 +45,16 @@ export interface GraphCanvasProps {
   selectedId: null | string
   onSelect(id: null | string): void
   onMove(moves: ReadonlyMap<string, Point>): void
+  /** The blocks being dragged (card 4: nothing is saved meanwhile), `null` when the drag ends. */
+  onDragging(ids: null | string[]): void
   onOpen(node: GraphNode): void
   statusOf(node: GraphNode): LiveStatus | undefined
   snap: boolean
   nowMs: number
+  /** This view's zoom + pan from an earlier visit on this device; framed (fit) when absent. */
+  initialViewport?: Viewport
+  /** After every pan or zoom: remembered per style + profile + scope on this device. */
+  onViewport(viewport: Viewport): void
 }
 
 interface Tooltip {
@@ -66,7 +72,9 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onOpen, statusOf, snap, nowMs } = props
+  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport } = props
+  // Read once: the canvas frames itself (or restores this view) on mount only.
+  const [mountViewport] = useState(initialViewport)
   const ctx = usePluginCtx()
   const wrapper = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<ReadonlyMap<string, Point>>()
@@ -242,9 +250,13 @@ export function GraphCanvas(props: GraphCanvasProps) {
     }
   }, [])
 
-  const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(() => {
-    hideTooltip()
-  }, [hideTooltip])
+  const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(
+    (_event, _node, dragged) => {
+      hideTooltip()
+      onDragging(dragged.map(item => item.id).filter(id => !id.startsWith(GROUP_PREFIX)))
+    },
+    [hideTooltip, onDragging]
+  )
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
     (_event, _node, dragged) => {
@@ -261,8 +273,11 @@ export function GraphCanvas(props: GraphCanvasProps) {
       if (moves.size > 0) {
         onMove(moves)
       }
+
+      // After the drop is recorded: the save (debounced) may go out now.
+      onDragging(null)
     },
-    [onMove]
+    [onMove, onDragging]
   )
 
   const graphNode = useCallback((flowNode: FlowNode): GraphNode | undefined => model.nodeById.get(flowNode.id), [model])
@@ -293,6 +308,8 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // The menu itself is the SDK ContextMenu around the canvas (SessionMenu); it decides on the
   // same event whether a block gets one (R5, R7). Here: just no tooltip over it.
   const onNodeContextMenu = useCallback<NodeMouseHandler<FlowNode>>(() => hideTooltip(), [hideTooltip])
+
+  const onMoveEnd = useCallback((_event: unknown, viewport: Viewport) => onViewport(viewport), [onViewport])
 
   const onMenuOpen = useCallback(
     (node: GraphNode) => {
@@ -492,8 +509,10 @@ export function GraphCanvas(props: GraphCanvasProps) {
           minZoom={MIN_ZOOM}
           maxZoom={MAX_ZOOM}
           onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
-          fitView
+          fitView={!mountViewport}
           fitViewOptions={{ padding: 0.08, maxZoom: 1.25 }}
+          defaultViewport={mountViewport}
+          onMoveEnd={onMoveEnd}
           proOptions={{ hideAttribution: true }}
         >
           {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}

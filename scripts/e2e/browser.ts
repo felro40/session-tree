@@ -177,3 +177,22 @@ export async function close(session: Session): Promise<void> {
   await session.context.close().catch(() => undefined)
   await session.browser.close().catch(() => undefined)
 }
+
+/**
+ * Card 4: a second, independent browser context in the same browser (its own cookies,
+ * sessionStorage and localStorage): another device for the sync checks.
+ */
+export async function addContext(session: Session, { colorScheme = 'light' }: { colorScheme?: 'dark' | 'light' } = {}): Promise<Session> {
+  const context = await session.browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme })
+  const page = await context.newPage()
+  const errors: string[] = []
+
+  page.on('pageerror', error => errors.push(`pageerror: ${error.message}`))
+  page.on('console', message => {
+    if (message.type() === 'error' && /session-tree|plugin/i.test(message.text())) {
+      errors.push(`console: ${message.text()}`)
+    }
+  })
+
+  return { browser: session.browser, context, page, errors }
+}

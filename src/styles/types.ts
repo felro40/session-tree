@@ -14,7 +14,8 @@ import type { ProjectInfo } from '../model/projects.ts'
 import type { LinkRouter, Port, Route } from '../model/route.ts'
 import type { LiveStatus } from '../model/status.ts'
 
-export type StyleId = 'dense' | 'rich' | 'subway' | 'swimlanes'
+/** R1's four styles, plus `e2e-alt`: a test-only style that only the e2e build registers. */
+export type StyleId = 'dense' | 'e2e-alt' | 'rich' | 'subway' | 'swimlanes'
 
 /** Where a style keeps singles (R8) while "Show all" is off. */
 export type SinglesContainer = 'depot' | 'drawer' | 'inspector-list' | 'lane-chip'
@@ -71,6 +72,8 @@ export interface StyleDefinition {
   /** Positions for the model, keeping `previous` (see `mergeLayout`). */
   layout(model: GraphModel, previous: ReadonlyMap<string, Point> | undefined, spec: LayoutSpec): LayoutResult
   draggable: boolean
+  /** Whether block positions are saved to the synced layout store (Swimlanes: no, R12). */
+  savesLayout: boolean
   singles: SinglesContainer
   router: LinkRouter
   /** Where a link of `kind` leaves its source block and enters its target block. */

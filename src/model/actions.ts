@@ -89,6 +89,27 @@ export interface BranchResult {
 export type GatewayRequest = <T>(method: string, params: Record<string, unknown>) => Promise<T>
 
 /**
+ * After a Branch moved the selection to its new child, a Branch on that child is ignored for a
+ * short window (card-3 review): the second click of a double-click on the inspector's Branch
+ * button lands on the child, 150 ms or more later, and would make a grandchild.
+ */
+export function createBranchCooldown(windowMs: number, now: () => number = Date.now) {
+  let last: { id: string; at: number } | undefined
+
+  return {
+    branched(childId: string): void {
+      last = { id: childId, at: now() }
+    },
+    blocks(id: string): boolean {
+      return Boolean(last && last.id === id && now() - last.at < windowMs)
+    }
+  }
+}
+
+/** A Branch on the child it just made is ignored this long. */
+export const BRANCH_COOLDOWN_MS = 800
+
+/**
  * `session.branch_stored`, one request per parent at a time (the app's `branchCreateFlightsRef`
  * in `use-session-actions`): a second Branch on the same parent while the first is in flight
  * joins it (`joined: true`) instead of sending another create. Each attempt mints one
@@ -307,11 +328,24 @@ function validationText(item: unknown): string {
 /**
  * Delete is idempotent in the core (`delete_session_endpoint`: an id that is already gone answers
  * `{ok: true, already_absent: true}`). The page treats a row that vanished before the delete —
- * the backend's 404 "Session not found" on the fence read, or that answer — as deleted.
+ * that answer, or the backend's own fence read refusing with 404 "Session not found" — as
+ * deleted. Not the core's 404 `not_found`: the core raises that only for a row that still exists
+ * but could not be restored (`hermes_cli/web_routers/sessions.py:862-871`), so hiding it would
+ * hide a live row until a reload (card-3 review).
  */
 export function isAlreadyAbsent(outcome: unknown): boolean {
   if (outcome instanceof Error) {
-    return /^404: /.test(outcome.message) && /Session not found|"not_found"/.test(outcome.message)
+    const match = /^404: (.*)$/s.exec(outcome.message)
+
+    if (!match) {
+      return false
+    }
+
+    try {
+      return (JSON.parse(match[1]) as { detail?: unknown }).detail === 'Session not found'
+    } catch {
+      return false
+    }
   }
 
   return Boolean(outcome && typeof outcome === 'object' && (outcome as { already_absent?: unknown }).already_absent === true)

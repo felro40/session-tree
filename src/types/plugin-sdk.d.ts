@@ -132,6 +132,20 @@ declare module '@hermes/plugin-sdk' {
   }): UseQueryResult<T>
 
   export const EmptyState: ComponentType<{ title: string; description?: string; className?: string }>
+  /** Centered full-surface failure: title, description and an optional actions stack (children). */
+  export const ErrorState: ComponentType<{ title: ReactNode; description?: ReactNode; className?: string; icon?: ReactNode; children?: ReactNode }>
+  /** THE on/off settings row (a Switch labelled `label`). */
+  export const ToggleRow: ComponentType<{
+    checked: boolean
+    label: string
+    description?: ReactNode
+    hint?: ReactNode
+    below?: ReactNode
+    disabled?: boolean
+    id?: string
+    wide?: boolean
+    onChange: (on: boolean) => void
+  }>
   export const Codicon: ComponentType<{ name: string; size?: number | string; className?: string; style?: CSSProperties }>
   export const ListRow: ComponentType<{
     title: ReactNode
