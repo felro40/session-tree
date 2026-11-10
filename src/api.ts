@@ -12,6 +12,7 @@ import { mergeProjects, parseProjectsTree } from './model/projects.ts'
 import { withTimeout } from './model/timeout.ts'
 import type { ProjectInfo } from './model/projects.ts'
 import type { SessionsResponse } from './model/sessions.ts'
+import type { DetailsAnswer } from './styles/rich/details.ts'
 
 export interface HealthResponse {
   ok: boolean
@@ -140,3 +141,18 @@ export function stateTransport(ctx: PluginContext): SyncTransport {
 
 /** The backend's push for a layout change (`broadcast_plugin_event`, card 1 pre-check 5). */
 export const LAYOUT_CHANGED_EVENT = 'plugin.session-tree.layout.changed'
+
+// --- Rich cards details (card 6): excerpt + 7-day activity per session ------------------------
+
+/**
+ * `POST /sessions/details`: per stored id of `profile` (≤ 100), the last-message excerpt and the
+ * messages per local day of the last 7 days. The profile rides in the body: the query's
+ * `profile` is the gateway's routing key, which the transport fills.
+ */
+export function fetchDetails(ctx: PluginContext, profile: string, ids: string[], tzOffsetMinutes: number): Promise<DetailsAnswer> {
+  return ctx.rest<DetailsAnswer>('/sessions/details', {
+    method: 'POST',
+    body: { profile, ids, tz_offset_minutes: Math.max(-840, Math.min(840, Math.round(tzOffsetMinutes))) },
+    timeoutMs: 15000
+  })
+}

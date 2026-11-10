@@ -33,7 +33,9 @@ a continuation row takes over; card-4 review B2). ``--append ID [PROFILE]`` appe
 message pair to ID through ``append_message`` (a chat turn; card-5 review r2 B1-r2).
 ``--activate ID`` re-opens a
 session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
-so the core list's 300 s ``is_active`` heuristic reports it. Prints a JSON manifest of what it created.
+so the core list's 300 s ``is_active`` heuristic reports it. ``--rich`` (card 6) adds the Rich cards
+family ``st-rich-*`` whose last messages hold Markdown, a code block, HTML-looking text, a very long
+message, a tool call and a long tool run (``seed_rich``). Prints a JSON manifest of what it created.
 
 Every row carries the owner stamp a signed-in Webapp tab gives the rows it creates (``user_id`` = the
 host owner's subject, see ``OWNER``), so the core accepts that login's sidebar edits of them.
@@ -219,6 +221,58 @@ def seed_default(db: SessionDB) -> dict:
     return m
 
 
+#: Card 6 (Rich cards): last messages the details endpoint turns into plain-text excerpts.
+RICH_MARKDOWN = ("## Plan\n\n**Bold** move: see [the docs](https://example.com/docs) and run `npm test`.\n\n"
+                 "- first item\n- second _item_\n\n> quoted line")
+RICH_CODE = "Here is the fix:\n\n```python\ndef add(a, b):\n    return a + b\n```\n\nDone."
+RICH_HTML = ('<script>alert("x")</script><b>Bold</b> &amp; <i>italic</i> &lt;img src=x onerror=alert(1)&gt; '
+             '<a href="https://example.com">link</a> 2 < 3 > 1')
+RICH_LONG = " ".join(f"word{i:03d}" for i in range(400))
+RICH_TOOL_PROMPT = "Run the full test suite and fix every failure"
+#: Tool-call rounds in the tool-run fixture: 2 rows each, more than the excerpt's paged read.
+RICH_TOOL_ROUNDS = 35
+
+
+def seed_rich(db: SessionDB, *, age_h: float = 30) -> dict:
+    """``--rich``: one hermes-plugins family whose children end with Markdown, a code block, HTML-
+    looking text, a very long message, a tool call with text and a long tool run (no text in the
+    newest messages: the card falls back to the first prompt). Through ``append_message``."""
+    s = Seeder(db, "default")
+    root = s.session("st-rich-root", "Rich cards fixtures", project="hermes-plugins", age_h=age_h, messages=2)
+    out: dict = {"root": root, "children": {}}
+
+    def child(sid: str, title: str, last: list[tuple[str, dict]]) -> None:
+        s.branch(sid, title, root, project="hermes-plugins", age_h=age_h - 1, messages=2)
+        stamp = NOW - (age_h - 1) * HOUR
+        for i, (role, fields) in enumerate(last):
+            db.append_message(sid, role, timestamp=stamp + i, **fields)
+        out["children"][sid] = title
+
+    child("st-rich-markdown", "Markdown reply", [("assistant", {"content": RICH_MARKDOWN})])
+    child("st-rich-code", "Code block reply", [("assistant", {"content": RICH_CODE})])
+    child("st-rich-html", "HTML-looking prompt", [("user", {"content": RICH_HTML})])
+    child("st-rich-long", "Very long reply", [("assistant", {"content": RICH_LONG})])
+    child("st-rich-toolcall", "Tool call with text", [
+        ("assistant", {"content": "I'll run the tests. <tool_call>{\"name\": \"terminal\"}</tool_call>",
+                       "tool_calls": [{"id": "call_1", "type": "function",
+                                       "function": {"name": "terminal", "arguments": "{\"command\": \"npm test\"}"}}]}),
+        ("tool", {"content": "{\"exit_code\": 0, \"output\": \"242 passed\"}", "tool_call_id": "call_1", "tool_name": "terminal"}),
+    ])
+    # A long tool run: the prompt, then only tool calls and results (no text in the newest rows).
+    s.branch("st-rich-toolrun", "Long tool run", root, project="hermes-plugins", age_h=age_h - 1, messages=0,
+             first_prompt=RICH_TOOL_PROMPT)
+    stamp = NOW - (age_h - 1) * HOUR
+    db.append_message("st-rich-toolrun", "user", RICH_TOOL_PROMPT, timestamp=stamp)
+    for i in range(RICH_TOOL_ROUNDS):
+        call = f"call_{i}"
+        db.append_message("st-rich-toolrun", "assistant", "", timestamp=stamp + 1 + 2 * i,
+                          tool_calls=[{"id": call, "type": "function", "function": {"name": "terminal", "arguments": "{}"}}])
+        db.append_message("st-rich-toolrun", "tool", f"ok {i}", tool_call_id=call, tool_name="terminal", timestamp=stamp + 2 + 2 * i)
+    out["children"]["st-rich-toolrun"] = "Long tool run"
+    out["tool_prompt"] = RICH_TOOL_PROMPT
+    return out
+
+
 def seed_profile(name: str, count: int, *, families: int = 0) -> dict:
     home = HOME / "profiles" / name
     if not home.is_dir():
@@ -338,6 +392,16 @@ def append_turn(sid: str, profile: str | None = None) -> dict:
 
 
 def main() -> None:
+    if "--rich" in sys.argv:
+        db = SessionDB(db_path=HOME / "state.db")
+        try:
+            if db.get_session("st-rich-root") is not None:
+                print(json.dumps({"rich": "st-rich-root", "created": False}))
+                return
+            print(json.dumps({**seed_rich(db), "created": True}))
+        finally:
+            db.close()
+        return
     if "--touch" in sys.argv:
         print(json.dumps(touch()))
         return

@@ -230,7 +230,15 @@ export function orthogonalRoute(
   options: GridRouteOptions = DEFAULT_GRID
 ): Point[] | null {
   const m = options.margin
-  const inflated = obstacles.map(r => ({ x: r.x - m, y: r.y - m, width: r.width + 2 * m, height: r.height + 2 * m }))
+  // The grid lives on 0.01 px (`round`); the inflated rectangles do too, so a stub that ends on a
+  // block's own inflated edge is on that edge, never 0.005 px inside it (card 6: a real drop gives
+  // fractional block coordinates, and the detour used to fail there).
+  const inflated = obstacles.map(r => {
+    const x = round(r.x - m)
+    const y = round(r.y - m)
+
+    return { x, y, width: round(r.x + r.width + m) - x, height: round(r.y + r.height + m) - y }
+  })
   const start = { x: round(from.x + VEC[from.dir].x * m), y: round(from.y + VEC[from.dir].y * m) }
   const goal = { x: round(to.x + VEC[to.dir].x * m), y: round(to.y + VEC[to.dir].y * m) }
 

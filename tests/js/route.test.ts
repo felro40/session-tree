@@ -311,3 +311,35 @@ describe('orthogonal router (Swimlanes): elbows with rounded corners, detour on 
     assert.deepEqual(intrusions(routes, links, rects), [])
   })
 })
+
+describe('detours with fractional block coordinates (card 6: a real drop)', () => {
+  // Measured in the Rich cards e2e: a card dropped between a parent and its child, every
+  // coordinate as the drag left it. The goal stub (12 px above the child's top) rounded to the
+  // 0.01 px grid used to land 0.001 px inside the child's own inflated rectangle: no detour.
+  const card = (x: number, y: number): Rect => ({ x, y, width: 280, height: 164 })
+  const parent = card(1590, 44)
+  const child = card(1420, 611.9893617021277)
+  const blocker = card(1445.851063829787, 393.71276595744695)
+  const others = [card(1760, 308), card(1020, 308), card(1020, 44)]
+  const from: Port = { x: 1730, y: 208, dir: 'down' }
+  const to: Port = { x: 1560, y: 611.9893617021277, dir: 'up' }
+
+  it('a down → up link around a dropped card detours, and never enters a card', () => {
+    const route = curveRouter.route({ from, to, obstacles: [blocker, ...others], ends: [parent, child] })
+    const samples = samplePath(route.path, 48)
+
+    assert.equal(route.detoured, true)
+    assert.ok(samples.every(point => ![blocker, ...others].some(rect => insideRect(point, rect, 0.5))))
+  })
+
+  it('a stub ending on its own block\'s inflated edge is not inside it, at every margin', () => {
+    for (const margin of DETOUR_MARGINS) {
+      assert.ok(orthogonalRoute(from, to, [parent, child], { margin, bendPenalty: 40 }), `margin ${margin}`)
+    }
+
+    // The same with a left-entering (Dense-style) port at a fractional x.
+    const target = { x: 400.98765, y: 100, width: 168, height: 26 }
+
+    assert.ok(orthogonalRoute({ x: 168, y: 113, dir: 'right' }, { x: target.x, y: 113, dir: 'left' }, [{ x: 0, y: 100, width: 168, height: 26 }, target], { margin: 12, bendPenalty: 40 }))
+  })
+})

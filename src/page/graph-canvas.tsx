@@ -12,12 +12,14 @@ import {
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, NodeMouseHandler, OnNodeDrag, Viewport } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import { lineageOf } from '../model/graph.ts'
 import { GROUP_PREFIX, LABEL_WIDTH } from '../model/layout.ts'
 import type { GroupLabel, LayoutSpec, Point, Rect } from '../model/layout.ts'
 import type { LiveStatus } from '../model/status.ts'
+import { registeredStyles } from '../styles/registry.ts'
 import { blockHandles } from '../styles/shared.tsx'
 import type { BlockData, FrameLayout, GroupLabelData, LinkData, StyleDefinition } from '../styles/types.ts'
 import { createCanvasRouting } from './canvas-routing.ts'
@@ -61,6 +63,9 @@ export interface GraphCanvasProps {
   frameLayout?: FrameLayout
   /** A framed style's lane header was clicked. */
   onToggleLane?(key: string): void
+  /** The style's panel / drawer open on this device, and its toggle (card 6: the Rich drawer). */
+  panelOpen?: boolean
+  onPanel?(open: boolean): void
 }
 
 interface Tooltip {
@@ -77,8 +82,27 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return Boolean(element?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
 }
 
+/**
+ * Every registered style's Provider, always, in registry order: the tree above the flow keeps its
+ * shape across a style switch, so switching never remounts React Flow (its viewport, measured
+ * nodes). A Provider only supplies context to its own style's blocks; it is cheap for the others.
+ */
+function StyleProviders({ model, children }: { model: GraphModel; children: ReactNode }) {
+  return registeredStyles().reduceRight<ReactNode>((inner, each) => {
+    const Provider = each.Provider
+
+    return Provider ? (
+      <Provider key={each.id} model={model}>
+        {inner}
+      </Provider>
+    ) : (
+      inner
+    )
+  }, children)
+}
+
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props
+  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel } = props
   // Read once: the canvas frames itself (or restores this view) on mount only.
   const [mountViewport] = useState(initialViewport)
   const ctx = usePluginCtx()
@@ -495,6 +519,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
   const Under = frame?.Under
   const Over = frame?.Over
+  const Layer = style.Layer
 
   return (
     <SessionMenu model={model} onOpenFor={onMenuOpen} onRestoreFocus={restoreFocus}>
@@ -510,6 +535,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
       >
         <FrameUiCtx.Provider value={frameUi}>
           {Under && frameLayout && <Under layout={frameLayout} nowMs={nowMs} />}
+          <StyleProviders model={model}>
           <ReactFlow<FlowNode, FlowEdge>
             nodes={nodes}
             edges={edges}
@@ -552,7 +578,23 @@ export function GraphCanvas(props: GraphCanvasProps) {
             proOptions={{ hideAttribution: true }}
           >
             {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}
+            {Layer && (
+              <Layer
+                model={model}
+                positions={positions}
+                shown={shown}
+                nodeSize={style.nodeSize}
+                showAll={spec.includeSingles}
+                selectedId={selectedId}
+                onSelect={onSelect}
+                onOpen={onOpen}
+                nowMs={nowMs}
+                panelOpen={panelOpen}
+                onPanel={open => onPanel?.(open)}
+              />
+            )}
           </ReactFlow>
+          </StyleProviders>
           {Over && frameLayout && (
             <Over
               layout={frameLayout}

@@ -67,7 +67,7 @@ export function laidOutFamilies(model: GraphModel, spec: Pick<LayoutSpec, 'inclu
 }
 
 /** Family-local positions (origin 0,0) and the family's height. */
-function layoutFamily(model: GraphModel, family: Family, spec: LayoutSpec): { positions: Map<string, Point>; height: number } {
+export function layoutFamily(model: GraphModel, family: Family, spec: LayoutSpec): { positions: Map<string, Point>; height: number } {
   const step = spec.nodeHeight + spec.rowGap
   const column = spec.nodeWidth + spec.columnGap
   const members = new Set(family.nodeIds)
@@ -138,7 +138,7 @@ function layoutFamily(model: GraphModel, family: Family, spec: LayoutSpec): { po
 }
 
 /** Groups in display order: the scoped project first, then `projects.tree` order, no project last. */
-function groupOrder(model: GraphModel, families: readonly Family[]): (string | undefined)[] {
+export function groupOrder(model: GraphModel, families: readonly Family[]): (string | undefined)[] {
   const present = new Set(families.map(family => family.projectId ?? NO_PROJECT_ID))
   const order: string[] = []
   const scope = model.options.scope

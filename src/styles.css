@@ -1369,3 +1369,555 @@ g.is-dimmed {
   color: var(--ui-text-primary);
   font-weight: 600;
 }
+
+/* --- Rich cards (card 6) --------------------------------------------------------------------
+   Mockup variants/rich-cards/. Status hues come from the theme's semantic colours (--ui-green
+   running, --ui-yellow needs input); everything else from --ui-* and the project colour. */
+
+@property --st-rc-ang {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.session-tree__block.st-rich {
+  display: block;
+  padding: 0;
+  overflow: visible;
+  border-radius: 16px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--ui-text-primary) 12%, transparent);
+  font-size: 12px;
+  line-height: 1.3;
+  transition: opacity 0.2s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.session-tree__block.st-rich::before {
+  display: none;
+}
+
+.st-rc-body {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 13px 16px 12px;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.session-tree__block.st-rich.is-selected {
+  border-color: var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 7%, var(--ui-bg-elevated));
+}
+
+.session-tree__block.st-rich.is-open {
+  border-color: var(--ui-accent);
+  box-shadow:
+    0 0 0 2px var(--ui-accent),
+    0 0 26px 2px color-mix(in srgb, var(--ui-accent) 38%, transparent);
+}
+
+/* Running: a rotating conic shimmer on the border. */
+.session-tree__block.st-rich.is-running::after {
+  position: absolute;
+  inset: -1.5px;
+  z-index: 0;
+  padding: 1.5px;
+  border-radius: 17px;
+  background: conic-gradient(
+    from var(--st-rc-ang),
+    transparent 0 55%,
+    color-mix(in srgb, var(--ui-green) 55%, transparent) 70%,
+    var(--ui-green) 84%,
+    transparent 100%
+  );
+  animation: st-rc-spin 2.6s linear infinite;
+  content: '';
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+@keyframes st-rc-spin {
+  to {
+    --st-rc-ang: 360deg;
+  }
+}
+
+.session-tree__block.st-rich.is-archived {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.session-tree__block.st-rich.is-out-of-scope {
+  opacity: 0.16;
+}
+
+/* Compacted ×N: ghost cards stacked behind (offset down), plus the tag. */
+.st-rc-ghost {
+  position: absolute;
+  z-index: -1;
+  right: calc(var(--st-g) * 6px);
+  bottom: calc(var(--st-g) * -9px);
+  left: calc(var(--st-g) * 6px);
+  height: 40px;
+  border: 1px solid color-mix(in srgb, var(--ui-text-primary) 18%, var(--ui-stroke-secondary));
+  border-radius: 0 0 14px 14px;
+  background: color-mix(in srgb, var(--ui-text-primary) 3%, var(--ui-bg-elevated));
+}
+
+.st-rc-ctag {
+  position: absolute;
+  right: 14px;
+  bottom: -30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-bg-elevated));
+  color: var(--ui-text-primary);
+  font-size: 10.5px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Needs input: an amber banner strip on top of the card. */
+.st-rc-banner {
+  position: absolute;
+  right: -1px;
+  bottom: 100%;
+  left: -1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border-radius: 15px 15px 0 0;
+  background: var(--ui-yellow);
+  color: color-mix(in srgb, var(--ui-yellow) 12%, #000);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.st-rc-banner span {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.session-tree__block.st-rich.is-asking {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.st-rc-hd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 20px;
+}
+
+.st-rc-proj {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  max-width: 120px;
+  padding: 1px 8px 1px 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--st-pc, var(--ui-text-quaternary)) 16%, transparent);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-rc-arch {
+  --st-pc: var(--ui-text-quaternary);
+}
+
+.st-rc-udot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 22%, transparent);
+}
+
+.st-rc-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ui-green);
+  font-size: 11px;
+}
+
+.st-rc-run::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-green);
+  animation: st-pulse 1.6s infinite;
+  content: '';
+}
+
+.st-rc-grow {
+  flex: 1;
+}
+
+.st-rc-spark {
+  display: inline-block;
+  flex: none;
+  width: 50px;
+  height: 18px;
+}
+
+.st-rc-spark svg {
+  display: block;
+  overflow: visible;
+}
+
+.st-rc-spark polyline {
+  fill: none;
+  stroke: var(--ui-accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.st-rc-spark path {
+  fill: color-mix(in srgb, var(--ui-accent) 16%, transparent);
+}
+
+.st-rc-spark circle {
+  fill: var(--ui-accent);
+}
+
+.st-rc-spark.is-loading {
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ui-text-primary) 7%, transparent);
+}
+
+.session-tree__block.st-rich .st-more.st-rc-more {
+  position: static;
+  display: inline-flex;
+  width: 0;
+  overflow: hidden;
+  transform: none;
+  transition: width 0.12s;
+}
+
+.session-tree__block.st-rich:hover .st-more.st-rc-more,
+.session-tree__block.st-rich.is-selected .st-more.st-rc-more {
+  width: 20px;
+}
+
+.st-rc-ttl {
+  display: -webkit-box;
+  height: 37.7px;
+  margin-top: 9px;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 520;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.session-tree__block.st-rich.is-unread .st-rc-ttl {
+  font-weight: 750;
+}
+
+.st-rc-pv {
+  display: -webkit-box;
+  height: 34.8px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.st-rc-pv b,
+.st-rc-single-p b {
+  color: var(--ui-text-primary);
+  font-weight: 600;
+}
+
+.st-rc-pv.is-loading {
+  display: block;
+}
+
+.st-rc-sk {
+  display: block;
+  height: 9px;
+  margin-top: 7px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ui-text-primary) 7%, transparent) 30%,
+    color-mix(in srgb, var(--ui-text-primary) 14%, transparent) 50%,
+    color-mix(in srgb, var(--ui-text-primary) 7%, transparent) 70%
+  );
+  background-size: 300% 100%;
+  animation: st-rc-sk 2.4s ease-in-out infinite;
+}
+
+@keyframes st-rc-sk {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.st-rc-none {
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+}
+
+.st-rc-ft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-rc-model {
+  flex: none;
+  max-width: 80px;
+  padding: 1px 7px;
+  overflow: hidden;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 6px;
+  color: var(--ui-text-primary);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+.st-rc-tok {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.st-rc-bar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+}
+
+.st-rc-bar b {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+}
+
+/* The stand-in: a dashed skeleton card. */
+.session-tree__block.st-rich.is-standin {
+  border: 1.5px dashed color-mix(in srgb, var(--ui-text-tertiary) 50%, transparent);
+  background: color-mix(in srgb, var(--ui-bg-elevated) 70%, transparent);
+  box-shadow: none;
+  opacity: 0.8;
+}
+
+.session-tree__block.st-rich.is-standin .st-rc-ttl {
+  height: auto;
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.session-tree__block.st-rich.is-standin .st-rc-pv {
+  height: auto;
+}
+
+.session-tree__block.st-rich.is-standin.is-out-of-scope {
+  opacity: 0.16;
+}
+
+/* Links: soft curves; "continued as" dashed accent with a pill. */
+.session-tree__link.st-rich-link {
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 55%, transparent);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+}
+
+.session-tree__link.st-rich-link.session-tree__link--reset {
+  stroke: var(--ui-accent);
+  stroke-dasharray: 7 6;
+}
+
+.session-tree__link.st-rich-link.session-tree__link--standin {
+  stroke-dasharray: 2 6;
+}
+
+.session-tree__link.st-rich-link.is-highlighted {
+  stroke: var(--ui-accent);
+  stroke-width: 2.6;
+}
+
+.st-rich-link-end {
+  fill: var(--ui-bg-elevated);
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 70%, transparent);
+  stroke-width: 2;
+}
+
+.st-rich-link-end.is-reset,
+.st-rich-link-end.is-highlighted {
+  stroke: var(--ui-accent);
+}
+
+.session-tree__link-label.st-rich-pill {
+  padding: 2px 9px;
+  border: 1px dashed color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The singles drawer (R8): slides in from the right edge, behind its grip. */
+.st-rc-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 300px;
+  border-left: 1px solid var(--ui-stroke-secondary);
+  background: color-mix(in srgb, var(--ui-bg-elevated) 96%, transparent);
+  box-shadow: -14px 0 30px color-mix(in srgb, var(--ui-text-primary) 14%, transparent);
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: none;
+}
+
+.st-rc-drawer.is-open {
+  transform: none;
+}
+
+.st-rc-grip {
+  position: absolute;
+  top: 50%;
+  left: -32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 32px;
+  padding: 12px 0;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: var(--ui-bg-elevated);
+  box-shadow: -4px 0 12px color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+}
+
+.st-rc-grip:hover {
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-bg-elevated));
+}
+
+.st-rc-grip b {
+  color: var(--ui-accent);
+}
+
+.st-rc-dr-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 16px 8px;
+  font-weight: 650;
+}
+
+.st-rc-dr-h small {
+  color: var(--ui-text-tertiary);
+  font-weight: 400;
+}
+
+.st-rc-dr-list {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0 10px 12px;
+  overflow: auto;
+}
+
+.st-rc-single {
+  display: grid;
+  box-sizing: border-box;
+  grid-template-columns: 8px 1fr auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 3px 9px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: default;
+}
+
+.st-rc-single:hover {
+  background: color-mix(in srgb, var(--ui-text-primary) 6%, transparent);
+}
+
+.st-rc-single.is-selected {
+  background: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+}
+
+.st-rc-single.is-archived {
+  opacity: 0.55;
+}
+
+.st-rc-single-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--st-pc);
+}
+
+.st-rc-single-t {
+  overflow: hidden;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-rc-single-a {
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-rc-single-p {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

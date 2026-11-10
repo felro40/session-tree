@@ -8,7 +8,7 @@ one conversation fold into one block, and `/new` resets show as a dashed "contin
 page is reached from the sidebar ("Session Tree"), from ⌘K ("Open Session Tree") and at the route
 `/session-tree`; double-clicking a block opens that session in a new tab.
 
-**Status: 5/7 Project swimlanes.** The page draws the session families as a real graph in the
+**Status: 6/7 Rich cards.** The page draws the session families as a real graph in the
 *Dense + inspector* style: tidy-tree auto-layout grouped by project, `/branch` links,
 "compacted ×N" blocks, dashed "continued as" links, "Parent not loaded" stand-ins, singles in the
 inspector's list (or on the canvas with **Show all**), archived on request, a project scope with
@@ -24,7 +24,13 @@ per project with a fixed header column (counts, tokens, collapse per device), a 
 (9-day window, an "earlier" zone, a now marker), trees left to right, lane chips with the singles,
 and a project scope that collapses the other lanes and shows a cross-project parent as a read-only
 ghost; it is laid out from the data on every render and never saves positions (see
-`docs/swimlanes.md`). Rich cards and Subway map come in cards 6–7.
+`docs/swimlanes.md`). Card 6 adds the *Rich cards* style: airy 280 px cards in top-down trees with
+a project chip, a two-line title, a two-line excerpt of the last message (or the first prompt), a
+7-day activity sparkline, a model chip, last used, messages and a token bar scaled to the largest
+session in scope; ghost cards for ×N, status as an animated border / amber banner / bold title /
+pin / accent glow; soft curved links; singles in a right slide-out drawer; draggable with its own
+saved positions. Excerpts and activity come from `POST /sessions/details`, fetched only for the
+cards near the viewport (see `docs/rich-cards.md`). Subway map comes in card 7.
 
 ### Source map
 
@@ -34,10 +40,10 @@ ghost; it is laid out from the data on every render and never saves positions (s
 | `src/model/graph.ts` | Rows + `projects.tree` → nodes, edges, families, singles, stand-ins, scope (`buildGraph`). |
 | `src/model/layout.ts`, `layout-memory.ts` | Deterministic tidy-tree layout and the merge that places new sessions inside their own project group's band without moving placed blocks; the cards 2–3 in-memory positions (now only unit-tested). |
 | `src/model/layout-sync.ts`, `device-prefs.ts` | Card 4: the synced layout store client (snapshot + queued changes, debounced batched saves, never during a drag, offline cache and retry, push/poll refresh, Re-arrange/Undo) and the per-device preferences (`ctx.storage`). |
-| `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense: `curveRouter`; Swimlanes: `orthogonalRouter`, elbows with rounded corners); on-drop detours on a sparse orthogonal grid (A*). |
+| `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense, Rich cards: `curveRouter`; Swimlanes: `orthogonalRouter`, elbows with rounded corners); on-drop detours on a sparse orthogonal grid (A*, on a 0.01 px lattice obstacles included). |
 | `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
 | `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
-| `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
+| `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
 | `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`, with a framed style's layers), toolbar (with the style switcher), the block menu (`session-menu.tsx`, SDK ContextMenu), the actions controller with its dialogs (`session-actions.tsx`) and the shared services (`services.ts`: layout store, device prefs, push + poll). |
 
 ## Package layout (one unified Hermes package)
@@ -47,6 +53,7 @@ ghost; it is laid out from the data on every render and never saves positions (s
 | `plugin.yaml`, `__init__.py` | Agent half. No tools; it exists so `plugins.enabled` can mount the backend. |
 | `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`: the session rows, the session actions the SDK has no verb for (rename, read state, archive, delete, export), each through the core endpoint's own code path, and the synced layout store. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
 | `dashboard/layout_store.py` | The synced layout store (standard library only): `<HERMES_HOME>/session-tree/state.json`, atomic writes under a thread lock + `fcntl.flock`, caps, corrupt-file backup, prune (`docs/layout-sync.md`). |
+| `dashboard/session_details.py` | Card 6: the Rich cards details (plain-text excerpt of the last message, 7-day activity) read through a read-only `SessionDB`, bounded per id (`docs/rich-cards.md`). |
 | `desktop/plugin.js` | Desktop half. **Built output** of `src/` (`npm run build`), committed so the package installs without a build. |
 | `src/` | TypeScript + JSX source: `plugin.tsx` (registration), `page/`, `settings/`, `model/` (pure graph rules), `shims/react-dom.ts`. |
 | `tests/js/` | node:test unit tests and the static bundle guards. |
@@ -54,6 +61,7 @@ ghost; it is laid out from the data on every render and never saves positions (s
 | `scripts/` | build, the test-Hermes harness, the fixture seeder, e2e suites. |
 | `docs/measured-facts.md` | Pre-check results and other measured facts. |
 | `docs/layout-sync.md` | Card 4: the synced layout store, its endpoints, the page's sync rules, the test-only style. |
+| `docs/swimlanes.md`, `docs/rich-cards.md` | Cards 5 and 6: the Project swimlanes and Rich cards styles. |
 
 ### Backend API
 
@@ -92,6 +100,14 @@ They write only `<HERMES_HOME>/session-tree/state.json` and push `plugin.session
 lineage root, so a compaction does not move it); a `state.json` of a newer schema is served
 read-only and never written (409 `newer_schema`).
 
+Rich cards details (card 6; see `docs/rich-cards.md`): `POST /sessions/details`
+`{profile, ids: [≤ 100], tz_offset_minutes}` → `{profile, tz_offset_minutes, days, details: {id:
+{excerpt, excerpt_role, activity: [7]}}}`. `excerpt` is the last user / assistant message as plain
+text (Markdown stripped, tags removed, tool-call payloads dropped), ≤ 240 characters, or `null`;
+`activity` the user + assistant messages per local day of the last 7 days, oldest first. Unknown
+ids are omitted; a 101st id is a 422. Read-only, bounded per id (one paged read + one indexed
+count), about 1.8 ms per id on a 5,000-message session.
+
 Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (Pin, Appearance),
 `session.branch_stored` (Branch), `session.workspace.move` (Move to project), `session.title`
 (Rename of the session focused in the app), clipboard through the SDK `CopyButton`.
@@ -111,7 +127,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style) and `scripts/e2e-swimlanes.ts` (card 5). The actions, sync and swimlanes suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` on the same ports, the previous one moved to the e2e trash. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5) and `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook). The actions, sync, swimlanes and rich suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` on the same ports, the previous one moved to the e2e trash. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
 ### The isolated test Hermes
@@ -129,10 +145,10 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
 ```
 
 - Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
-  current card, 5): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
-  (+0..+4 coder, +5..+9 reviewer). Card 5: coder home `c5-coder/home`, ports 19350–19354 (the
-  Webapp on 19350); reviewer `c5-reviewer`, ports 19355–19359. The actions, sync and swimlanes suites' own
-  homes are `c5-<role>-actions`, `c5-<role>-sync` and `c5-<role>-swim` (same ports, never running at the same time as
+  current card, 6): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
+  (+0..+4 coder, +5..+9 reviewer). Card 6: coder home `c6-coder/home`, ports 19360–19364 (the
+  Webapp on 19360); reviewer `c6-reviewer`, ports 19365–19369. The actions, sync, swimlanes and rich suites' own
+  homes are `c6-<role>-actions`, `c6-<role>-sync`, `c6-<role>-swim` and `c6-<role>-rich` (same ports, never running at the same time as
   the other suites). Setup moves the shared home's layout store aside first
   (`<root>/layout-store-old/`), so synced positions and Snap from an earlier run do not carry over.
 - Setup writes the test config with `hermes config set` (`webapp.enabled true`, `webapp.host
@@ -149,7 +165,8 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
   and `--activate ID` (used by the card-2 e2e) add a live branch and stamp a session active now;
   `--unowned-branch NEW PARENT [TITLE]` adds one without the owner stamp (card 3's real refusal);
   `--inf-cost-branch NEW PARENT [TITLE]` one with an infinite cost and `--delete ID` removes a row
-  (card 4's failed-load check).
+  (card 4's failed-load check); `--rich` adds the card-6 family `st-rich-*` whose last messages hold
+  Markdown, a code block, HTML-looking text, a very long message, a tool call and a long tool run.
 - The desktop half ships disabled; the e2e enables it in Capabilities → Plugins like a user.
 
 ## Dependencies and licenses

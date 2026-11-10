@@ -6,7 +6,7 @@
  * Card 2 registers Dense + inspector; cards 5–7 add the other three; card 4 adds switching.
  */
 import type { EdgeTypes, Node, NodeTypes } from '@xyflow/react'
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 
 import type { Viewport } from '../model/device-prefs.ts'
 import type { EdgeKind, GraphModel, GraphNode } from '../model/graph.ts'
@@ -106,6 +106,24 @@ export interface StyleFrame {
   Over: ComponentType<FrameLayerProps>
 }
 
+/** What a style's canvas layer gets (card 6, Rich cards: the details driver and the drawer). */
+export interface StyleLayerProps {
+  model: GraphModel
+  /** Block top-lefts (flow coordinates) and the blocks on the canvas. */
+  positions: ReadonlyMap<string, Point>
+  shown: ReadonlySet<string>
+  nodeSize: { width: number; height: number }
+  /** "Show all": singles are on the canvas, not in the style's container. */
+  showAll: boolean
+  selectedId: null | string
+  onSelect(id: null | string): void
+  onOpen(node: GraphNode): void
+  nowMs: number
+  /** The style's side panel / drawer open on this device (R16). */
+  panelOpen: boolean
+  onPanel(open: boolean): void
+}
+
 export interface StyleDefinition {
   id: StyleId
   label: string
@@ -135,4 +153,14 @@ export interface StyleDefinition {
   snapUnavailable?: string
   /** A style laid out from the data alone, with its own layers (Swimlanes). */
   frame?: StyleFrame
+  /**
+   * Card 6: wraps the canvas, so the style's blocks can read what is not block data (Rich cards:
+   * the details store and the token scale). Nothing provided here reaches the model, the layout
+   * or the routing chain.
+   */
+  Provider?: ComponentType<{ model: GraphModel; children: ReactNode }>
+  /** Card 6: drawn inside the flow, over it (Rich cards: the details fetcher and the drawer). */
+  Layer?: ComponentType<StyleLayerProps>
+  /** The panel / drawer's open state on a device that never chose (default: open). */
+  panelDefaultOpen?: boolean
 }

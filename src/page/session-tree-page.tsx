@@ -188,6 +188,20 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const busyBySession = useValue(host.state.busyBySession)
   const focusedSessionId = useValue(host.state.focusedSessionId)
   const focusedStoredSessionId = useValue(host.state.focusedStoredSessionId)
+  const [needsInput, setNeedsInput] = useState(NO_NEEDS_INPUT)
+
+  useEffect(() => {
+    // TEST ONLY (card 6): the SDK has no needs-input source (pre-check 10), so the e2e's own
+    // build (`--test-styles`) lets its suite name the ids waiting on the user; `npm run build`
+    // defines the flag false and esbuild drops this branch (tests/js/guards.test.ts).
+    if (typeof __SESSION_TREE_TEST_STYLES__ !== 'undefined' && __SESSION_TREE_TEST_STYLES__) {
+      return ctx.addEventListener(window, 'session-tree:test-needs-input', event => {
+        const ids = (event as CustomEvent<unknown>).detail
+
+        setNeedsInput(new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []))
+      })
+    }
+  }, [ctx])
 
   const hostStatus = useMemo<HostStatusSnapshot>(
     () => ({
@@ -195,9 +209,9 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       busyBySession: busyBySession ?? {},
       focusedSessionId: focusedSessionId ?? null,
       focusedStoredSessionId: focusedStoredSessionId ?? null,
-      needsInput: NO_NEEDS_INPUT
+      needsInput
     }),
-    [busy, busyBySession, focusedSessionId, focusedStoredSessionId]
+    [busy, busyBySession, focusedSessionId, focusedStoredSessionId, needsInput]
   )
 
   const statusOf = useCallback((node: GraphNode) => (node.row ? liveStatus(node.row, hostStatus) : undefined), [hostStatus])
@@ -392,7 +406,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   )
   const onToggleLane = useCallback((key: string) => prefs.toggleLane(key), [prefs])
   const Panel = style.Panel
-  const panelOpen = prefs.panelOpen(style.id)
+  const panelOpen = prefs.panelOpen(style.id, style.panelDefaultOpen ?? true)
+  const onPanel = useCallback((open: boolean) => prefs.setPanelOpen(style.id, open), [prefs, style])
   const offline = sync.offline(profile)
 
   const onStyle = useCallback(
@@ -469,6 +484,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           onViewport={onViewport}
           frameLayout={frameLayout}
           onToggleLane={onToggleLane}
+          panelOpen={panelOpen}
+          onPanel={onPanel}
         />
         {onCanvas === 0 && (
           <div className="session-tree__hint" data-testid="session-tree-no-branches">

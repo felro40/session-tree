@@ -69,8 +69,8 @@ export class DevicePrefs {
     }
   }
 
-  panelOpen(style: string): boolean {
-    return this.toggles.panelOpen[style] ?? true
+  panelOpen(style: string, fallback = true): boolean {
+    return this.toggles.panelOpen[style] ?? fallback
   }
 
   setPanelOpen(style: string, open: boolean): void {

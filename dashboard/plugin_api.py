@@ -590,3 +590,48 @@ def forget_blocks(body: ForgetBody, profile: str = _profile_query()) -> dict[str
     if result["changed"]:
         _changed(result["rev"], name, "forget", result["epoch"])
     return result
+
+
+# --- Rich cards details (card 6, R22) --------------------------------------------------------
+#
+# A card's last-message excerpt and its 7-day activity, which the session rows lack. A read
+# (POST only because the id list is a body): one read-only ``SessionDB`` open per request, a
+# bounded cost per id (``dashboard/session_details.py``). Shaped so a future SDK verb could
+# replace it: plain ids in, plain JSON out.
+
+session_details = _load_sibling("session_details")
+
+
+class DetailsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: One profile name (the page asks per profile in the All profiles view). Not the query's
+    #: ``profile``: the transport fills that with the gateway's routing key.
+    profile: StrictStr = Field(..., min_length=1, max_length=64)
+    #: Stored session ids; at most ``MAX_IDS`` (422 past it). Unknown ids are omitted.
+    ids: list[StrictStr] = Field(..., max_length=session_details.MAX_IDS)
+    #: Minutes added to UTC for the viewer's local time (the activity's day boundaries).
+    tz_offset_minutes: StrictInt = Field(0, ge=-session_details.MAX_TZ_OFFSET, le=session_details.MAX_TZ_OFFSET)
+
+
+@router.post("/sessions/details")
+def details(body: DetailsBody) -> dict[str, Any]:
+    """Per id: ``excerpt`` (the last user or assistant message as plain text, ≤ 240 characters,
+    or ``None``), ``excerpt_role`` and ``activity`` (7 per-local-day message counts, oldest first,
+    ending today). Read-only."""
+    from hermes_cli.web_routers.profiles import _read_profile_db
+
+    name, home = _one_profile(body.profile)
+    ids = list(dict.fromkeys(_checked_session_id(sid) for sid in body.ids))
+    now = time.time()
+    errors: list[dict[str, str]] = []
+    found = _read_profile_db(name, home, errors,
+                             lambda db: session_details.details(db, ids, now, body.tz_offset_minutes))
+    if errors:
+        raise HTTPException(status_code=503, detail=errors[0]["error"])
+    return {
+        "profile": name,
+        "tz_offset_minutes": body.tz_offset_minutes,
+        "days": session_details.activity_days(now, body.tz_offset_minutes),
+        "details": found or {},
+    }

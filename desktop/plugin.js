@@ -66,15 +66,15 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState7 = React2.useState, useEffect8 = React2.useEffect, useLayoutEffect3 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState8 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect3 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
-      var value2 = getSnapshot(), _useState = useState7({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
+      var value2 = getSnapshot(), _useState = useState8({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
       return useLayoutEffect3(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
         [subscribe, value2, getSnapshot]
-      ), useEffect8(
+      ), useEffect10(
         function() {
           return checkIfSnapshotChanged(inst) && forceUpdate({ inst }), subscribe(function() {
             checkIfSnapshotChanged(inst) && forceUpdate({ inst });
@@ -119,14 +119,14 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore2 = shim.useSyncExternalStore, useRef7 = React2.useRef, useEffect8 = React2.useEffect, useMemo6 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore3 = shim.useSyncExternalStore, useRef8 = React2.useRef, useEffect10 = React2.useEffect, useMemo8 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef7(null);
+      var instRef = useRef8(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
       } else inst = instRef.current;
-      instRef = useMemo6(
+      instRef = useMemo8(
         function() {
           function memoizedSelector(nextSnapshot) {
             if (!hasMemo) {
@@ -153,8 +153,8 @@ var require_with_selector_production = __commonJS({
         },
         [getSnapshot, getServerSnapshot, selector2, isEqual]
       );
-      var value2 = useSyncExternalStore2(subscribe, instRef[0], instRef[1]);
-      return useEffect8(
+      var value2 = useSyncExternalStore3(subscribe, instRef[0], instRef[1]);
+      return useEffect10(
         function() {
           inst.hasValue = !0, inst.value = value2;
         },
@@ -7362,7 +7362,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback5, useEffect as useEffect6, useMemo as useMemo5, useRef as useRef6, useState as useState6 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo7, useRef as useRef7, useState as useState7 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -7510,6 +7510,13 @@ function stateTransport(ctx) {
   };
 }
 var LAYOUT_CHANGED_EVENT = "plugin.session-tree.layout.changed";
+function fetchDetails(ctx, profile, ids, tzOffsetMinutes) {
+  return ctx.rest("/sessions/details", {
+    method: "POST",
+    body: { profile, ids, tz_offset_minutes: Math.max(-840, Math.min(840, Math.round(tzOffsetMinutes))) },
+    timeoutMs: 15e3
+  });
+}
 
 // src/model/actions.ts
 init_define_import_meta_env();
@@ -7713,8 +7720,8 @@ var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = { styleOv
     for (let listener of [...this.listeners])
       listener();
   }
-  panelOpen(style2) {
-    return this.toggles.panelOpen[style2] ?? !0;
+  panelOpen(style2, fallback = !0) {
+    return this.toggles.panelOpen[style2] ?? fallback;
   }
   setPanelOpen(style2, open) {
     this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
@@ -8319,7 +8326,10 @@ var DEFAULT_GRID = { margin: 12, bendPenalty: 40 }, Heap = class {
   }
 }, uniqueSorted = (values) => [...new Set(values.map(round))].sort((a, b) => a - b);
 function orthogonalRoute(from, to, obstacles, options = DEFAULT_GRID) {
-  let m = options.margin, inflated = obstacles.map((r) => ({ x: r.x - m, y: r.y - m, width: r.width + 2 * m, height: r.height + 2 * m })), start2 = { x: round(from.x + VEC[from.dir].x * m), y: round(from.y + VEC[from.dir].y * m) }, goal = { x: round(to.x + VEC[to.dir].x * m), y: round(to.y + VEC[to.dir].y * m) };
+  let m = options.margin, inflated = obstacles.map((r) => {
+    let x = round(r.x - m), y = round(r.y - m);
+    return { x, y, width: round(r.x + r.width + m) - x, height: round(r.y + r.height + m) - y };
+  }), start2 = { x: round(from.x + VEC[from.dir].x * m), y: round(from.y + VEC[from.dir].y * m) }, goal = { x: round(to.x + VEC[to.dir].x * m), y: round(to.y + VEC[to.dir].y * m) };
   if (inflated.some((r) => insideRect(start2, r)) || inflated.some((r) => insideRect(goal, r)))
     return null;
   let allX = [start2.x, goal.x, ...inflated.flatMap((r) => [r.x, r.x + r.width])], allY = [start2.y, goal.y, ...inflated.flatMap((r) => [r.y, r.y + r.height])], extraX = [start2.x + VEC[from.dir].x * m, goal.x + VEC[to.dir].x * m, Math.min(...allX) - m, Math.max(...allX) + m], extraY = [start2.y + VEC[from.dir].y * m, goal.y + VEC[to.dir].y * m, Math.min(...allY) - m, Math.max(...allY) + m], xs = uniqueSorted([...allX, ...extraX]), ys = uniqueSorted([...allY, ...extraY]), W = xs.length, H = ys.length, blockedPoint = (x, y) => inflated.some((r) => insideRect({ x, y }, r)), blockedH = (y, x1, x2) => inflated.some((r) => y > r.y && y < r.y + r.height && x1 < r.x + r.width && x2 > r.x), blockedV = (x, y1, y2) => inflated.some((r) => x > r.x && x < r.x + r.width && y1 < r.y + r.height && y2 > r.y), si = xs.indexOf(start2.x), sj = ys.indexOf(start2.y), gi = xs.indexOf(goal.x), gj = ys.indexOf(goal.y), DIRS = [
@@ -9019,6 +9029,744 @@ var denseStyle = {
 // src/styles/e2e-alt/index.ts
 init_define_import_meta_env();
 
+// src/styles/rich/index.ts
+init_define_import_meta_env();
+
+// src/styles/rich/context.tsx
+init_define_import_meta_env();
+import { createContext as createContext4, useContext as useContext4, useEffect as useEffect2, useMemo as useMemo3, useState as useState3, useSyncExternalStore } from "react";
+
+// src/page/plugin-context.ts
+init_define_import_meta_env();
+import { createContext as createContext3, useContext as useContext3 } from "react";
+var PluginCtx = createContext3(null);
+function usePluginCtx() {
+  let ctx = useContext3(PluginCtx);
+  if (!ctx)
+    throw new Error("Session Tree component rendered outside its plugin context");
+  return ctx;
+}
+
+// src/styles/rich/details.ts
+init_define_import_meta_env();
+function detailsSignature(row, nowMs, tzOffsetMinutes) {
+  let day = Math.floor((nowMs / 1e3 + tzOffsetMinutes * 60) / 86400);
+  return `${row.last_active ?? row.started_at ?? 0}|${row.message_count ?? 0}|${day}|${tzOffsetMinutes}`;
+}
+var DetailsStore = class {
+  fetchDetails;
+  timers;
+  tz;
+  entries = /* @__PURE__ */ new Map();
+  pending = /* @__PURE__ */ new Map();
+  /** id → the signature of its request in flight. */
+  inflight = /* @__PURE__ */ new Map();
+  failedAt = /* @__PURE__ */ new Map();
+  listeners = /* @__PURE__ */ new Map();
+  cancelTimer;
+  disposed = !1;
+  /** Every request made (most recent last, capped): tests and the e2e's diagnostics. */
+  log = [];
+  constructor(fetchDetails2, timers, tzOffsetMinutes) {
+    this.fetchDetails = fetchDetails2, this.timers = timers, this.tz = tzOffsetMinutes;
+  }
+  get(id2) {
+    return this.entries.get(id2);
+  }
+  /** Asks for the details of `items` (the cards near the viewport): only what is not current. */
+  want(items) {
+    if (this.disposed)
+      return;
+    let now2 = this.timers.now();
+    for (let item of items) {
+      let failed = this.failedAt.get(item.key);
+      this.entries.get(item.key)?.sig === item.sig || this.inflight.get(item.key) === item.sig || failed !== void 0 && now2 - failed < 15e3 || this.pending.set(item.key, item);
+    }
+    this.pending.size > 0 && !this.cancelTimer && (this.cancelTimer = this.timers.setTimeout(() => this.flush(), 60));
+  }
+  subscribe(id2, listener) {
+    let set3 = this.listeners.get(id2);
+    return set3 || (set3 = /* @__PURE__ */ new Set(), this.listeners.set(id2, set3)), set3.add(listener), () => {
+      set3.delete(listener), set3.size === 0 && this.listeners.delete(id2);
+    };
+  }
+  dispose() {
+    this.disposed = !0, this.cancelTimer?.(), this.cancelTimer = void 0, this.pending.clear();
+  }
+  /** Back in use after `dispose` (a remount of the same canvas). */
+  resume() {
+    this.disposed = !1;
+  }
+  notify(id2) {
+    for (let listener of [...this.listeners.get(id2) ?? []])
+      listener();
+  }
+  flush() {
+    if (this.cancelTimer = void 0, this.disposed)
+      return;
+    let byProfile = /* @__PURE__ */ new Map();
+    for (let item of this.pending.values())
+      byProfile.set(item.profile, [...byProfile.get(item.profile) ?? [], item]);
+    this.pending.clear();
+    let tz = this.tz();
+    for (let [profile, items] of byProfile)
+      for (let start2 = 0; start2 < items.length; start2 += 100) {
+        let batch = items.slice(start2, start2 + 100), ids = batch.map((item) => item.id);
+        for (let item of batch)
+          this.inflight.set(item.key, item.sig);
+        this.log.push({ profile, ids }), this.log.length > 200 && this.log.splice(0, this.log.length - 200), this.fetchDetails(profile, ids, tz).then(
+          (answer) => this.settle(batch, answer),
+          () => this.fail(batch)
+        );
+      }
+  }
+  settle(batch, answer) {
+    for (let item of batch) {
+      if (this.inflight.get(item.key) !== item.sig || (this.inflight.delete(item.key), this.failedAt.delete(item.key), this.disposed))
+        continue;
+      let found = answer.details?.[item.id];
+      this.entries.set(item.key, {
+        sig: item.sig,
+        details: found ? {
+          excerpt: typeof found.excerpt == "string" ? found.excerpt : null,
+          role: typeof found.excerpt_role == "string" ? found.excerpt_role : null,
+          activity: Array.isArray(found.activity) ? found.activity.map((value2) => Number.isFinite(value2) && value2 > 0 ? Math.floor(value2) : 0) : [],
+          days: Array.isArray(answer.days) ? answer.days : []
+        } : null
+      }), this.notify(item.key);
+    }
+  }
+  fail(batch) {
+    let now2 = this.timers.now();
+    for (let item of batch)
+      this.inflight.get(item.key) === item.sig && (this.inflight.delete(item.key), this.failedAt.set(item.key, now2));
+  }
+};
+function nearIds(rects, view, width, height, margin = 0.5) {
+  if (!(view.zoom > 0) || !(width > 0) || !(height > 0))
+    return [];
+  let w = width / view.zoom, h = height / view.zoom, left = -view.x / view.zoom - w * margin, top = -view.y / view.zoom - h * margin, right = left + w * (1 + 2 * margin), bottom = top + h * (1 + 2 * margin), out = [];
+  for (let [id2, rect] of rects)
+    rect.x < right && rect.x + rect.width > left && rect.y < bottom && rect.y + rect.height > top && out.push(id2);
+  return out;
+}
+
+// src/styles/rich/spec.ts
+init_define_import_meta_env();
+function richLayoutSpec({ showAll }) {
+  return {
+    nodeWidth: 280,
+    nodeHeight: 164,
+    columnGap: 60,
+    rowGap: 100,
+    treeGap: 48,
+    familyGap: 60,
+    groupGap: 120,
+    labelHeight: 26,
+    singlesColumns: 3,
+    includeSingles: showAll
+  };
+}
+function richPorts(kind, source, target) {
+  return kind === "reset" ? {
+    from: { x: source.x + source.width, y: source.y + source.height / 2, dir: "right" },
+    to: { x: target.x, y: target.y + target.height / 2, dir: "left" }
+  } : {
+    from: { x: source.x + source.width / 2, y: source.y + source.height, dir: "down" },
+    to: { x: target.x + target.width / 2, y: target.y, dir: "up" }
+  };
+}
+var cardTokens = (node) => Math.max(0, Number(node.row?.input_tokens) || 0) + Math.max(0, Number(node.row?.output_tokens) || 0);
+function maxTokensInScope(model) {
+  let max = 0;
+  for (let node of model.nodes)
+    node.kind === "session" && !node.outOfScope && (max = Math.max(max, cardTokens(node)));
+  return max;
+}
+function tokenBarWidth(tokens, max) {
+  return max > 0 ? 54 * Math.min(tokens, max) / max : 0;
+}
+function shortModel(model) {
+  return ((model ?? "").trim().split("/").pop() ?? "").replace(/^claude-/, "") || "—";
+}
+function sparkPoints(values, width = 50, height = 18) {
+  let max = Math.max(1, ...values), n = Math.max(1, values.length - 1);
+  return values.map((value2, index2) => ({ x: 2 + index2 * (width - 4) / n, y: height - 2 - value2 / max * (height - 5) }));
+}
+var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function activityTooltip(values, days) {
+  return `Last 7 days
+${values.map((value2, index2) => {
+    let day = days[index2], date2 = day ? /* @__PURE__ */ new Date(`${day}T12:00:00Z`) : void 0;
+    return `${date2 && !Number.isNaN(date2.getTime()) ? `${WEEKDAYS[date2.getUTCDay()]} ${day.slice(5)}` : `day ${index2 + 1}`}: ${value2} msg${value2 === 1 ? "" : "s"}`;
+  }).join(`
+`)}`;
+}
+
+// src/styles/rich/context.tsx
+import { jsx as jsx5 } from "react/jsx-runtime";
+var RichEnvCtx = createContext4(null);
+function useRichEnv() {
+  return useContext4(RichEnvCtx);
+}
+var localOffsetMinutes = (ms = Date.now()) => -new Date(ms).getTimezoneOffset(), NO_SUBSCRIBE = () => () => {
+}, NOTHING = () => {
+};
+function useDetails(id2) {
+  let store = useRichEnv()?.store;
+  return useSyncExternalStore(
+    store && id2 ? (listener) => store.subscribe(id2, listener) : NO_SUBSCRIBE,
+    store && id2 ? () => store.get(id2) : NOTHING,
+    NOTHING
+  );
+}
+function RichProvider({ model, children: children2 }) {
+  let ctx = usePluginCtx(), [store] = useState3(
+    () => new DetailsStore(
+      (profile, ids, tz) => fetchDetails(ctx, profile, ids, tz),
+      { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms), now: () => Date.now() },
+      () => localOffsetMinutes()
+    )
+  ), maxTokens = useMemo3(() => maxTokensInScope(model), [model]), value2 = useMemo3(() => ({ store, maxTokens }), [store, maxTokens]);
+  return useEffect2(() => (store.resume(), () => store.dispose()), [store]), /* @__PURE__ */ jsx5(RichEnvCtx.Provider, { value: value2, children: children2 });
+}
+
+// src/styles/rich/layer.tsx
+init_define_import_meta_env();
+import { Codicon as Codicon5 } from "@hermes/plugin-sdk";
+import { memo as memo5, useCallback as useCallback2, useEffect as useEffect3, useMemo as useMemo4, useRef as useRef2 } from "react";
+
+// src/styles/rich/rich-flow.tsx
+init_define_import_meta_env();
+import { Codicon as Codicon4 } from "@hermes/plugin-sdk";
+import { memo as memo4 } from "react";
+
+// src/styles/swimlanes/spec.ts
+init_define_import_meta_env();
+var NO_DRAG_TIP = "Swimlanes has no dragging";
+function swimPorts(kind, source, target) {
+  let to = { x: target.x, y: target.y + target.height / 2, dir: "left" };
+  if (kind === "reset") {
+    let dropX = source.x + 30;
+    if (to.y > source.y + source.height + 7 + 2 && to.x > dropX + 7 + 2)
+      return { from: { x: dropX, y: source.y + source.height, dir: "down" }, to };
+  }
+  return { from: { x: source.x + source.width, y: source.y + source.height / 2, dir: "right" }, to };
+}
+var POP_CHROME = 40, POP_ROW = 26, POP_GAP = 6, POP_MARGIN = 8;
+function popoverPlacement(chip, paneHeight, rows) {
+  let below = paneHeight - (chip.y + chip.height + POP_GAP) - POP_MARGIN, above = chip.y - POP_GAP - 26 - POP_MARGIN, wanted2 = Math.min(paneHeight * 0.6, POP_CHROME + rows * POP_ROW), flip = below < wanted2 && above > below, cap = (room) => Math.max(60, Math.min(paneHeight * 0.6, room));
+  return flip ? { above: !0, edge: chip.y - POP_GAP, maxHeight: cap(above) } : { above: !1, edge: chip.y + chip.height + POP_GAP, maxHeight: cap(below) };
+}
+function tokenLabel(value2) {
+  return !Number.isFinite(value2) || value2 <= 0 ? "0" : value2 >= 1e6 ? `${(value2 / 1e6).toFixed(1)}M` : value2 >= 1e3 ? `${Math.round(value2 / 1e3)}k` : String(Math.round(value2));
+}
+function swimLayoutSpec({ showAll }) {
+  return {
+    nodeWidth: 170,
+    nodeHeight: 54,
+    columnGap: 36,
+    rowGap: 18,
+    treeGap: 0,
+    familyGap: 0,
+    groupGap: 0,
+    labelHeight: 0,
+    singlesColumns: 1,
+    includeSingles: showAll
+  };
+}
+
+// src/styles/rich/rich-flow.tsx
+import { Fragment as Fragment4, jsx as jsx6, jsxs as jsxs5 } from "react/jsx-runtime";
+var FIRST_PROMPT_LABEL = "First prompt";
+function cardClass(data, selected2, extra = "") {
+  let { node, status } = data;
+  return [
+    "session-tree__block",
+    "st-rich",
+    extra,
+    selected2 ? "is-selected" : "",
+    data.inLineage ? "is-lineage" : "",
+    status?.open ? "is-open" : "",
+    status?.running ? "is-running" : "",
+    status?.needsInput ? "is-asking" : "",
+    status?.unread ? "is-unread" : "",
+    node.archived ? "is-archived" : "",
+    node.outOfScope ? "is-out-of-scope" : ""
+  ].filter(Boolean).join(" ");
+}
+function Sparkline({ values, days }) {
+  let points = sparkPoints(values), last = points[points.length - 1], line = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" "), tip = activityTooltip(values, days);
+  return /* @__PURE__ */ jsx6("span", { className: "st-rc-spark", "data-testid": "session-tree-sparkline", "data-activity": values.join(","), "data-days": days.join(","), title: tip, children: /* @__PURE__ */ jsxs5("svg", { viewBox: "0 0 50 18", width: 50, height: 18, "aria-label": tip, role: "img", children: [
+    points.length > 0 && /* @__PURE__ */ jsx6("path", { d: `M${points[0].x.toFixed(1)} 17 L${line.replace(/ /g, " L")} L${last.x.toFixed(1)} 17Z` }),
+    /* @__PURE__ */ jsx6("polyline", { points: line }),
+    last && /* @__PURE__ */ jsx6("circle", { cx: last.x, cy: last.y, r: 1.8 })
+  ] }) });
+}
+function SparkSlot({ entry }) {
+  return entry ? entry.details && entry.details.activity.length > 0 ? /* @__PURE__ */ jsx6(Sparkline, { values: entry.details.activity, days: entry.details.days }) : /* @__PURE__ */ jsx6("span", { className: "st-rc-spark is-empty", "data-testid": "session-tree-sparkline", "data-activity": "" }) : /* @__PURE__ */ jsx6("span", { className: "st-rc-spark is-loading", "data-testid": "session-tree-sparkline", "data-loading": "true" });
+}
+function Excerpt({ node, entry }) {
+  if (!entry)
+    return /* @__PURE__ */ jsxs5("div", { className: "st-rc-pv is-loading", "data-testid": "session-tree-excerpt", "data-loading": "true", children: [
+      /* @__PURE__ */ jsx6("i", { className: "st-rc-sk", style: { width: "92%" } }),
+      /* @__PURE__ */ jsx6("i", { className: "st-rc-sk", style: { width: "64%" } })
+    ] });
+  let excerpt = entry.details?.excerpt;
+  if (excerpt)
+    return /* @__PURE__ */ jsx6("div", { className: "st-rc-pv", "data-testid": "session-tree-excerpt", "data-kind": "last", "data-role": entry.details?.role ?? void 0, title: excerpt, children: /* @__PURE__ */ jsx6("span", { "data-field": "excerpt", children: excerpt }) });
+  let preview = node.row?.preview?.trim();
+  return /* @__PURE__ */ jsx6("div", { className: "st-rc-pv", "data-testid": "session-tree-excerpt", "data-kind": preview ? "first-prompt" : "none", title: preview || void 0, children: preview ? /* @__PURE__ */ jsxs5(Fragment4, { children: [
+    /* @__PURE__ */ jsxs5("b", { "data-field": "excerpt-label", children: [
+      FIRST_PROMPT_LABEL,
+      ":"
+    ] }),
+    " ",
+    /* @__PURE__ */ jsx6("span", { "data-field": "excerpt", children: preview })
+  ] }) : /* @__PURE__ */ jsx6("span", { className: "st-rc-none", children: "No messages to show" }) });
+}
+var RichCard = memo4(function({ data, selected: selected2 }) {
+  let { node, status, project } = data, actions = useSessionActions(), env = useRichEnv(), row = node.row, entry = useDetails(node.id), tokens = cardTokens(node), max = env?.maxTokens ?? 0, bar = tokenBarWidth(tokens, max), ghosts = Math.min(node.compacted, 2);
+  return /* @__PURE__ */ jsxs5(
+    "div",
+    {
+      className: cardClass(data, !!selected2),
+      "data-testid": "session-tree-block",
+      "data-session-id": row.id,
+      "data-node-id": node.id,
+      "data-project-id": node.projectId ?? "",
+      "data-status": status?.tone ?? "idle",
+      "data-running": status?.running ? "true" : void 0,
+      "data-needs-input": status?.needsInput ? "true" : void 0,
+      "data-unread": status?.unread ? "true" : void 0,
+      "data-pinned": status?.pinned ? "true" : void 0,
+      "data-open": status?.open ? "true" : void 0,
+      "data-archived": node.archived ? "true" : void 0,
+      "data-out-of-scope": node.outOfScope ? "true" : void 0,
+      "data-lineage": data.inLineage ? "true" : void 0,
+      "data-ghosts": ghosts,
+      "data-tokens": tokens,
+      "data-token-max": max,
+      "data-details": entry ? entry.details ? "loaded" : "missing" : "loading",
+      style: { width: 280, height: 164, "--st-pc": projectColor(project) },
+      children: [
+        /* @__PURE__ */ jsx6(BlockHandles, { resetX: 40 }),
+        Array.from({ length: ghosts }, (_, index2) => /* @__PURE__ */ jsx6("i", { className: "st-rc-ghost", "data-testid": "session-tree-ghost", style: { "--st-g": index2 + 1 }, "aria-hidden": "true" }, index2)),
+        status?.needsInput && /* @__PURE__ */ jsxs5("div", { className: "st-rc-banner", "data-testid": "session-tree-needs-input", children: [
+          "● Needs input ",
+          /* @__PURE__ */ jsx6("span", { children: "· waiting on your reply" })
+        ] }),
+        /* @__PURE__ */ jsxs5("div", { className: "st-rc-body", children: [
+          /* @__PURE__ */ jsxs5("div", { className: "st-rc-hd", children: [
+            /* @__PURE__ */ jsxs5("span", { className: "st-rc-proj", "data-field": "project", children: [
+              /* @__PURE__ */ jsx6(ProjectGlyph, { project, size: 10 }),
+              project?.label ?? "Home"
+            ] }),
+            status?.pinned && /* @__PURE__ */ jsx6(Codicon4, { name: "pinned", size: 12, className: "st-pin", "aria-label": "pinned" }),
+            status?.unread && /* @__PURE__ */ jsx6("span", { className: "st-rc-udot", "data-testid": "session-tree-unread-dot", title: "Unread" }),
+            status?.running && /* @__PURE__ */ jsx6("span", { className: "st-rc-run", children: "running" }),
+            node.archived && /* @__PURE__ */ jsx6("span", { className: "st-rc-proj st-rc-arch", children: "archived" }),
+            /* @__PURE__ */ jsx6("span", { className: "st-rc-grow" }),
+            /* @__PURE__ */ jsx6(SparkSlot, { entry }),
+            actions?.canAct(node) && // R14: the session menu from the card itself.
+            /* @__PURE__ */ jsx6(
+              "button",
+              {
+                type: "button",
+                className: "st-more st-rc-more nodrag nopan",
+                "data-testid": "session-tree-block-more",
+                "aria-label": "Session actions",
+                title: "Session actions",
+                onMouseDown: (event) => event.stopPropagation(),
+                onDoubleClick: (event) => event.stopPropagation(),
+                onClick: (event) => {
+                  event.stopPropagation(), actions.openMenuFor(node.id, event.currentTarget);
+                },
+                children: /* @__PURE__ */ jsx6(Codicon4, { name: "ellipsis", size: 14 })
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsx6("div", { className: "st-rc-ttl", "data-field": "title", title: node.title, children: node.title }),
+          /* @__PURE__ */ jsx6(Excerpt, { node, entry }),
+          /* @__PURE__ */ jsxs5("div", { className: "st-rc-ft", children: [
+            /* @__PURE__ */ jsx6("span", { className: "st-rc-model", "data-field": "model", title: row.model ?? void 0, children: shortModel(row.model) }),
+            /* @__PURE__ */ jsx6("span", { "data-field": "last-used", children: agoLabel(row.last_active || row.started_at, data.nowMs) }),
+            /* @__PURE__ */ jsxs5("span", { "data-field": "messages", children: [
+              row.message_count ?? 0,
+              " msgs"
+            ] }),
+            /* @__PURE__ */ jsxs5("span", { className: "st-rc-tok", title: `${tokens.toLocaleString()} tokens`, children: [
+              /* @__PURE__ */ jsx6("span", { className: "st-rc-bar", style: { width: 54 }, children: /* @__PURE__ */ jsx6("b", { "data-testid": "session-tree-token-bar", style: { width: bar } }) }),
+              /* @__PURE__ */ jsx6("span", { "data-field": "tokens", children: tokenLabel(tokens) })
+            ] })
+          ] })
+        ] }),
+        node.compacted > 0 && /* @__PURE__ */ jsxs5(
+          "span",
+          {
+            className: "st-rc-ctag",
+            "data-testid": "session-tree-compacted",
+            title: `${node.compacted} earlier segment${node.compacted > 1 ? "s" : ""} compacted into this card`,
+            children: [
+              /* @__PURE__ */ jsx6(Codicon4, { name: "layers", size: 10 }),
+              "compacted ×",
+              node.compacted
+            ]
+          }
+        )
+      ]
+    }
+  );
+}), RichStandin = memo4(function({ data }) {
+  let { node } = data;
+  return /* @__PURE__ */ jsxs5(
+    "div",
+    {
+      className: cardClass(data, !1, "is-standin"),
+      "data-testid": "session-tree-standin",
+      "data-node-id": node.id,
+      "data-missing-id": node.missingId,
+      "data-out-of-scope": node.outOfScope ? "true" : void 0,
+      style: { width: 280, height: 164 },
+      children: [
+        /* @__PURE__ */ jsx6(BlockHandles, { resetX: 40 }),
+        /* @__PURE__ */ jsxs5("div", { className: "st-rc-body", children: [
+          /* @__PURE__ */ jsx6("div", { className: "st-rc-hd", children: /* @__PURE__ */ jsx6("span", { className: "st-rc-proj st-rc-arch", children: "unknown" }) }),
+          /* @__PURE__ */ jsx6("div", { className: "st-rc-ttl", children: "Parent not loaded" }),
+          /* @__PURE__ */ jsx6("div", { className: "st-rc-pv", children: "Deleted, hidden or outside the loaded sessions" }),
+          /* @__PURE__ */ jsx6("i", { className: "st-rc-sk", style: { width: "82%" } }),
+          /* @__PURE__ */ jsx6("i", { className: "st-rc-sk", style: { width: "56%" } })
+        ] })
+      ]
+    }
+  );
+});
+function rectOfInternal2(node) {
+  return {
+    x: node.internals.positionAbsolute.x,
+    y: node.internals.positionAbsolute.y,
+    width: node.measured?.width ?? node.width ?? 280,
+    height: node.measured?.height ?? node.height ?? 164
+  };
+}
+var samePort2 = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && a.dir === b.dir;
+function RichLink({ id: id2, source, target, data }) {
+  let sourceNode = useInternalNode(source), targetNode = useInternalNode(target);
+  if (!sourceNode || !targetNode || !data)
+    return null;
+  let { from, to } = richPorts(data.kind, rectOfInternal2(sourceNode), rectOfInternal2(targetNode)), route = data.route && samePort2(data.route.from, from) && samePort2(data.route.to, to) ? data.route.route : curveRouter.live(from, to), classes = [
+    "session-tree__link",
+    "st-rich-link",
+    `session-tree__link--${data.kind}`,
+    data.fromStandin ? "session-tree__link--standin" : "",
+    data.highlighted ? "is-highlighted" : ""
+  ].filter(Boolean).join(" ");
+  return /* @__PURE__ */ jsxs5(
+    "g",
+    {
+      "data-testid": "session-tree-link",
+      "data-source": source,
+      "data-target": target,
+      "data-kind": data.kind,
+      "data-standin": data.fromStandin ? "true" : void 0,
+      "data-detoured": route.detoured ? "true" : "false",
+      "data-highlighted": data.highlighted ? "true" : void 0,
+      className: data.dimmed ? "is-dimmed" : void 0,
+      children: [
+        /* @__PURE__ */ jsx6(BaseEdge, { id: id2, path: route.svg, className: classes }),
+        /* @__PURE__ */ jsx6("circle", { className: `st-rich-link-end${data.kind === "reset" ? " is-reset" : ""}${data.highlighted ? " is-highlighted" : ""}`, cx: to.x, cy: to.y, r: 4 }),
+        data.kind === "reset" && /* @__PURE__ */ jsx6(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx6(
+          "div",
+          {
+            className: "session-tree__link-label st-rich-pill nodrag nopan",
+            "data-testid": "session-tree-link-label",
+            "data-link-id": id2,
+            style: { transform: `translate(-50%, -50%) translate(${route.mid.x}px, ${route.mid.y}px)` },
+            children: "continued as"
+          }
+        ) })
+      ]
+    }
+  );
+}
+
+// src/styles/rich/layer.tsx
+import { Fragment as Fragment5, jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
+var VIEWPORT_THROTTLE_MS = 150, DRAWER_ROW = 62, DRAWER_SLACK_ROWS = 6, wanted = (node, nowMs) => node.row ? { key: node.id, id: node.row.id, profile: node.profile, sig: detailsSignature(node.row, nowMs, localOffsetMinutes(nowMs)) } : void 0;
+function useViewportDetails({ model, positions, shown, nodeSize, nowMs }) {
+  let env = useRichEnv(), ctx = usePluginCtx(), flow = useStoreApi(), latest = useRef2({ model, positions, shown, nodeSize, nowMs }), timer2 = useRef2(void 0), run = useCallback2(() => {
+    if (timer2.current = void 0, !env)
+      return;
+    let { model: model2, positions: positions2, shown: shown2, nodeSize: nodeSize2, nowMs: nowMs2 } = latest.current, { transform: transform2, width, height } = flow.getState(), rects = [];
+    for (let id2 of shown2) {
+      let point = positions2.get(id2), node = model2.nodeById.get(id2);
+      point && node?.kind === "session" && node.row && rects.push([id2, { x: point.x, y: point.y, width: nodeSize2.width, height: nodeSize2.height }]);
+    }
+    let items = nearIds(rects, { x: transform2[0], y: transform2[1], zoom: transform2[2] }, width, height).map((id2) => wanted(model2.nodeById.get(id2), nowMs2)).filter((item) => !!item);
+    env.store.want(items);
+  }, [env, flow]), schedule2 = useCallback2(
+    (ms) => {
+      timer2.current || (timer2.current = ctx.setTimeout(run, ms));
+    },
+    [ctx, run]
+  );
+  useEffect3(() => {
+    latest.current = { model, positions, shown, nodeSize, nowMs }, schedule2(0);
+  }, [model, positions, shown, nodeSize, nowMs, schedule2]), useEffect3(() => {
+    let off = flow.subscribe((state, previous) => {
+      (state.transform !== previous.transform || state.width !== previous.width || state.height !== previous.height) && schedule2(VIEWPORT_THROTTLE_MS);
+    });
+    return () => {
+      off(), timer2.current?.(), timer2.current = void 0;
+    };
+  }, [flow, schedule2]);
+}
+var DrawerRow = memo5(function({
+  node,
+  model,
+  selected: selected2,
+  onSelect,
+  onOpen,
+  nowMs
+}) {
+  let entry = useDetails(node.id), row = node.row, project = node.projectId ? model.projects.find((each) => each.id === node.projectId) : void 0, excerpt = entry?.details?.excerpt, preview = row.preview?.trim();
+  return /* @__PURE__ */ jsxs6(
+    "div",
+    {
+      className: `st-rc-single${selected2 ? " is-selected" : ""}${node.archived ? " is-archived" : ""}`,
+      "data-testid": "session-tree-drawer-row",
+      "data-st-node": node.id,
+      "data-session-id": row.id,
+      title: node.title,
+      style: { height: DRAWER_ROW, "--st-pc": projectColor(project) },
+      onClick: () => onSelect(node.id),
+      onDoubleClick: () => onOpen(node),
+      children: [
+        /* @__PURE__ */ jsx7("i", { className: "st-rc-single-dot" }),
+        /* @__PURE__ */ jsx7("span", { className: "st-rc-single-t", "data-field": "title", children: node.title }),
+        /* @__PURE__ */ jsx7("span", { className: "st-rc-single-a", children: shortAge(row.last_active || row.started_at, nowMs) }),
+        entry ? excerpt ? /* @__PURE__ */ jsx7("span", { className: "st-rc-single-p", "data-testid": "session-tree-excerpt", "data-kind": "last", children: /* @__PURE__ */ jsx7("span", { "data-field": "excerpt", children: excerpt }) }) : /* @__PURE__ */ jsx7("span", { className: "st-rc-single-p", "data-testid": "session-tree-excerpt", "data-kind": preview ? "first-prompt" : "none", children: preview ? /* @__PURE__ */ jsxs6(Fragment5, { children: [
+          /* @__PURE__ */ jsxs6("b", { "data-field": "excerpt-label", children: [
+            FIRST_PROMPT_LABEL,
+            ":"
+          ] }),
+          " ",
+          /* @__PURE__ */ jsx7("span", { "data-field": "excerpt", children: preview })
+        ] }) : "No messages to show" }) : /* @__PURE__ */ jsx7("span", { className: "st-rc-single-p is-loading", "data-testid": "session-tree-excerpt", "data-loading": "true", children: /* @__PURE__ */ jsx7("i", { className: "st-rc-sk", style: { width: "80%" } }) })
+      ]
+    }
+  );
+});
+function Drawer({ model, open, onPanel, selectedId, onSelect, onOpen, nowMs }) {
+  let env = useRichEnv(), list = useRef2(null), singles = useMemo4(() => singlesInScope(model), [model]), latest = useRef2({ singles, nowMs }), askVisible = useCallback2(() => {
+    let element = list.current, { singles: singles2, nowMs: nowMs2 } = latest.current;
+    if (!env || !element || !open)
+      return;
+    let first = Math.max(0, Math.floor(element.scrollTop / DRAWER_ROW) - DRAWER_SLACK_ROWS), last = Math.min(singles2.length, Math.ceil((element.scrollTop + element.clientHeight) / DRAWER_ROW) + DRAWER_SLACK_ROWS);
+    env.store.want(
+      singles2.slice(first, last).map((node) => wanted(node, nowMs2)).filter((item) => !!item)
+    );
+  }, [env, open]);
+  return useEffect3(() => {
+    latest.current = { singles, nowMs }, askVisible();
+  }, [singles, nowMs, askVisible]), /* @__PURE__ */ jsxs6(
+    "aside",
+    {
+      className: `st-rc-drawer nowheel nopan nodrag${open ? " is-open" : ""}`,
+      "data-testid": "session-tree-drawer",
+      "data-open": open ? "true" : "false",
+      "aria-label": "Sessions with no branches",
+      children: [
+        /* @__PURE__ */ jsxs6(
+          "button",
+          {
+            type: "button",
+            className: "st-rc-grip",
+            "data-testid": "session-tree-drawer-grip",
+            "aria-expanded": open,
+            title: "Sessions with no branches",
+            onMouseDown: (event) => {
+              event.preventDefault(), event.stopPropagation();
+            },
+            onDoubleClick: (event) => event.stopPropagation(),
+            onClick: (event) => {
+              event.stopPropagation(), onPanel(!open);
+            },
+            children: [
+              /* @__PURE__ */ jsx7("b", { "data-testid": "session-tree-drawer-count", children: singles.length }),
+              " unbranched",
+              /* @__PURE__ */ jsx7(Codicon5, { name: open ? "chevron-right" : "chevron-left", size: 11 })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs6("div", { className: "st-rc-dr-h", children: [
+          "Unbranched ",
+          /* @__PURE__ */ jsxs6("small", { children: [
+            singles.length,
+            " without branches"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs6("div", { className: "st-rc-dr-list", ref: list, onScroll: askVisible, children: [
+          singles.map((node) => /* @__PURE__ */ jsx7(DrawerRow, { node, model, selected: node.id === selectedId, onSelect, onOpen, nowMs }, node.id)),
+          singles.length === 0 && /* @__PURE__ */ jsx7("div", { className: "st-rc-none", children: "No sessions without branches in this scope" })
+        ] })
+      ]
+    }
+  );
+}
+function RichLayer(props) {
+  return useViewportDetails(props), props.showAll ? null : /* @__PURE__ */ jsx7(Drawer, { ...props, open: props.panelOpen });
+}
+
+// src/styles/rich/layout.ts
+init_define_import_meta_env();
+var TARGET_ASPECT = 1.6, MERGE_COLUMNS = 12;
+function transposedSpec(spec) {
+  return { ...spec, nodeWidth: spec.nodeHeight, nodeHeight: spec.nodeWidth, columnGap: spec.rowGap, rowGap: spec.columnGap, labelHeight: 0 };
+}
+function familyLocal(model, family, spec) {
+  if (family.nodeIds.length === 1)
+    return { family, positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), width: spec.nodeWidth, height: spec.nodeHeight };
+  let local2 = layoutFamily(model, family, transposedSpec(spec)), positions = /* @__PURE__ */ new Map(), width = 0, height = 0;
+  for (let [id2, point] of local2.positions) {
+    let canvas = { x: point.y, y: point.x };
+    positions.set(id2, canvas), width = Math.max(width, canvas.x + spec.nodeWidth), height = Math.max(height, canvas.y + spec.nodeHeight);
+  }
+  return { family, positions, width, height };
+}
+var groupOf = (family) => family.projectId ?? NO_PROJECT_ID, labelOf = (projectId) => ({ id: groupKey(projectId === NO_PROJECT_ID ? void 0 : projectId), projectId: projectId === NO_PROJECT_ID ? void 0 : projectId }), CONTINUATION2 = "";
+function freshRichLayout(model, spec) {
+  let families = laidOutFamilies(model, spec), locals = families.map((family) => familyLocal(model, family, spec)), gapX = spec.columnGap, gapY = spec.familyGap, area = locals.reduce((sum, local2) => sum + (local2.width + gapX) * (local2.height + gapY + 44), 0), target = Math.max(LABEL_WIDTH, ...locals.map((local2) => local2.width), Math.sqrt(area * TARGET_ASPECT)), positions = /* @__PURE__ */ new Map(), labels = [], continued = /* @__PURE__ */ new Map(), x = 0, y = 0, rowHeight = 0, rowGroup;
+  for (let projectId of groupOrder(model, families).map((id2) => id2 ?? NO_PROJECT_ID)) {
+    let members = locals.filter((local2) => groupOf(local2.family) === projectId), ordered = [...members.filter((local2) => local2.family.nodeIds.length > 1), ...members.filter((local2) => local2.family.nodeIds.length === 1)];
+    for (let local2 of ordered) {
+      let lead = x > 0 && rowGroup !== projectId ? spec.groupGap - gapX : 0;
+      if (x > 0 && x + lead + local2.width > target ? (y += rowHeight + gapY, x = 0, rowHeight = 0, rowGroup = void 0) : x += lead, rowGroup !== projectId) {
+        let label = labelOf(projectId), count = continued.get(label.id), id2 = count === void 0 ? label.id : `${label.id}${CONTINUATION2}${count}`;
+        continued.set(label.id, (count ?? 0) + 1), labels.push({ id: id2, projectId: label.projectId }), positions.set(id2, { x, y }), rowGroup = projectId;
+      }
+      for (let [id2, point] of local2.positions)
+        positions.set(id2, { x: x + point.x, y: y + 44 + point.y });
+      x += local2.width + gapX, rowHeight = Math.max(rowHeight, 44 + local2.height);
+    }
+  }
+  return { positions, labels };
+}
+var RectIndex = class _RectIndex {
+  buckets = /* @__PURE__ */ new Map();
+  static SIZE = 400;
+  add(rect) {
+    for (let key of this.keys(rect)) {
+      let list = this.buckets.get(key);
+      list ? list.push(rect) : this.buckets.set(key, [rect]);
+    }
+  }
+  hits(rect) {
+    for (let key of this.keys(rect))
+      for (let other of this.buckets.get(key) ?? [])
+        if (rect.x < other.x + other.width && other.x < rect.x + rect.width && rect.y < other.y + other.height && other.y < rect.y + rect.height)
+          return !0;
+    return !1;
+  }
+  *keys(rect) {
+    let size = _RectIndex.SIZE;
+    for (let bx = Math.floor(rect.x / size); bx <= Math.floor((rect.x + rect.width) / size); bx += 1)
+      for (let by = Math.floor(rect.y / size); by <= Math.floor((rect.y + rect.height) / size); by += 1)
+        yield `${bx},${by}`;
+  }
+};
+function mergeRichLayout(previous, model, spec) {
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), stepX = spec.nodeWidth + spec.columnGap, stepY = spec.nodeHeight + spec.rowGap, clearX = spec.columnGap / 2, clearY = spec.familyGap / 2, index2 = new RectIndex(), cardRect = (point) => ({ x: point.x - clearX, y: point.y - clearY, width: spec.nodeWidth + 2 * clearX, height: spec.nodeHeight + 2 * clearY }), labelRect = (point) => ({ x: point.x, y: point.y, width: LABEL_WIDTH, height: spec.labelHeight }), fits = (point) => !index2.hits({ x: point.x, y: point.y, width: spec.nodeWidth, height: spec.nodeHeight }), place = (id2, point) => {
+    positions.set(id2, point), index2.add(cardRect(point));
+  }, bottom = 0;
+  for (let [id2, point] of positions)
+    index2.add(id2.startsWith(GROUP_PREFIX) ? labelRect(point) : cardRect(point)), bottom = Math.max(bottom, point.y + (id2.startsWith(GROUP_PREFIX) ? spec.labelHeight : spec.nodeHeight));
+  let nearest = (base) => {
+    for (let dy = 0; dy < 40; dy += 1)
+      for (let k = 0; k <= 16; k += 1)
+        for (let sign of [1, -1]) {
+          if (k === 0 && sign === -1)
+            continue;
+          let point = { x: base.x + sign * k * stepX, y: base.y + dy * stepY };
+          if (fits(point))
+            return point;
+        }
+    return { x: base.x, y: bottom + stepY };
+  }, newFamilies = [];
+  for (let family of families) {
+    if (!family.nodeIds.some((id2) => positions.has(id2))) {
+      newFamilies.push(family);
+      continue;
+    }
+    for (let id2 of family.nodeIds) {
+      if (positions.has(id2))
+        continue;
+      let parent = model.parentOf.get(id2), predecessor = model.continuedFrom.get(id2), child = (model.childrenOf.get(id2) ?? []).find((kid) => positions.has(kid)), base;
+      if (parent && positions.has(parent)) {
+        let p = positions.get(parent), row = (model.childrenOf.get(parent) ?? []).filter((kid) => kid !== id2 && positions.has(kid)).map((kid) => positions.get(kid)).filter((sibling) => Math.abs(sibling.y - (p.y + stepY)) < stepY / 2);
+        base = row.length > 0 ? { x: Math.max(...row.map((sibling) => sibling.x)) + stepX, y: p.y + stepY } : { x: p.x, y: p.y + stepY };
+      } else if (predecessor && positions.has(predecessor)) {
+        let p = positions.get(predecessor);
+        base = { x: p.x + stepX + spec.treeGap, y: p.y };
+      } else if (child) {
+        let c = positions.get(child);
+        base = { x: c.x, y: c.y - stepY };
+      } else
+        base = family.nodeIds.map((other) => positions.get(other)).find((point) => !!point) ?? { x: 0, y: 44 };
+      let spot = nearest(base);
+      place(id2, spot), bottom = Math.max(bottom, spot.y + spec.nodeHeight);
+    }
+  }
+  let labelsAt = new Map([...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => [id2, point])), cursors = /* @__PURE__ */ new Map();
+  for (let family of newFamilies) {
+    let local2 = familyLocal(model, family, spec), key = groupKey(family.projectId), label = labelsAt.get(key);
+    label || (label = { x: 0, y: bottom + spec.groupGap }, positions.set(key, label), labelsAt.set(key, label), index2.add(labelRect(label)), bottom = label.y + spec.labelHeight);
+    let origin = { x: label.x, y: label.y + 44 }, free = (at) => [...local2.positions.values()].every((point) => fits({ x: at.x + point.x, y: at.y + point.y })), spot;
+    for (let row = cursors.get(key) ?? 0; row < 400 && !spot; row += 1)
+      for (let col = 0; col < MERGE_COLUMNS; col += 1) {
+        let at = { x: origin.x + col * stepX, y: origin.y + row * stepY };
+        if (free(at)) {
+          spot = at, cursors.set(key, row);
+          break;
+        }
+      }
+    spot ??= { x: 0, y: bottom + spec.groupGap };
+    for (let [id2, point] of local2.positions) {
+      let at = { x: spot.x + point.x, y: spot.y + point.y };
+      place(id2, at), bottom = Math.max(bottom, at.y + spec.nodeHeight);
+    }
+  }
+  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => ({ id: id2, projectId: labelOf(labelGroup(id2).slice(GROUP_PREFIX.length)).projectId }));
+  return { positions, labels };
+}
+function layoutRich(model, previous, spec) {
+  return previous && previous.size > 0 ? mergeRichLayout(previous, model, spec) : freshRichLayout(model, spec);
+}
+
+// src/styles/rich/index.ts
+var richStyle = {
+  id: "rich",
+  label: "Rich cards",
+  nodeTypes: { "rich-session": RichCard, "rich-standin": RichStandin, group: GroupLabel },
+  nodeType: { session: "rich-session", standin: "rich-standin", group: "group" },
+  edgeTypes: { "rich-link": RichLink },
+  edgeType: "rich-link",
+  nodeSize: { width: 280, height: 164 },
+  layoutSpec: richLayoutSpec,
+  layout: layoutRich,
+  draggable: !0,
+  savesLayout: !0,
+  singles: "drawer",
+  router: curveRouter,
+  ports: richPorts,
+  grid: 20,
+  resetPortX: 40,
+  Provider: RichProvider,
+  Layer: RichLayer,
+  // The mockup opens with the drawer closed behind its grip.
+  panelDefaultOpen: !1
+};
+
 // src/styles/swimlanes/index.ts
 init_define_import_meta_env();
 
@@ -9061,60 +9809,12 @@ function createFrameCache() {
 
 // src/styles/swimlanes/layers.tsx
 init_define_import_meta_env();
-import { Codicon as Codicon5 } from "@hermes/plugin-sdk";
-import { memo as memo5, useEffect as useEffect2, useLayoutEffect as useLayoutEffect2, useRef as useRef2 } from "react";
-
-// src/page/plugin-context.ts
-init_define_import_meta_env();
-import { createContext as createContext3, useContext as useContext3 } from "react";
-var PluginCtx = createContext3(null);
-function usePluginCtx() {
-  let ctx = useContext3(PluginCtx);
-  if (!ctx)
-    throw new Error("Session Tree component rendered outside its plugin context");
-  return ctx;
-}
+import { Codicon as Codicon7 } from "@hermes/plugin-sdk";
+import { memo as memo7, useEffect as useEffect4, useLayoutEffect as useLayoutEffect2, useRef as useRef3 } from "react";
 
 // src/styles/swimlanes/layout.ts
 init_define_import_meta_env();
-
-// src/styles/swimlanes/spec.ts
-init_define_import_meta_env();
-var NO_DRAG_TIP = "Swimlanes has no dragging";
-function swimPorts(kind, source, target) {
-  let to = { x: target.x, y: target.y + target.height / 2, dir: "left" };
-  if (kind === "reset") {
-    let dropX = source.x + 30;
-    if (to.y > source.y + source.height + 7 + 2 && to.x > dropX + 7 + 2)
-      return { from: { x: dropX, y: source.y + source.height, dir: "down" }, to };
-  }
-  return { from: { x: source.x + source.width, y: source.y + source.height / 2, dir: "right" }, to };
-}
-var POP_CHROME = 40, POP_ROW = 26, POP_GAP = 6, POP_MARGIN = 8;
-function popoverPlacement(chip, paneHeight, rows) {
-  let below = paneHeight - (chip.y + chip.height + POP_GAP) - POP_MARGIN, above = chip.y - POP_GAP - 26 - POP_MARGIN, wanted = Math.min(paneHeight * 0.6, POP_CHROME + rows * POP_ROW), flip = below < wanted && above > below, cap = (room) => Math.max(60, Math.min(paneHeight * 0.6, room));
-  return flip ? { above: !0, edge: chip.y - POP_GAP, maxHeight: cap(above) } : { above: !1, edge: chip.y + chip.height + POP_GAP, maxHeight: cap(below) };
-}
-function tokenLabel(value2) {
-  return !Number.isFinite(value2) || value2 <= 0 ? "0" : value2 >= 1e6 ? `${(value2 / 1e6).toFixed(1)}M` : value2 >= 1e3 ? `${Math.round(value2 / 1e3)}k` : String(Math.round(value2));
-}
-function swimLayoutSpec({ showAll }) {
-  return {
-    nodeWidth: 170,
-    nodeHeight: 54,
-    columnGap: 36,
-    rowGap: 18,
-    treeGap: 0,
-    familyGap: 0,
-    groupGap: 0,
-    labelHeight: 0,
-    singlesColumns: 1,
-    includeSingles: showAll
-  };
-}
-
-// src/styles/swimlanes/layout.ts
-var DAY_S = 86400, MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], validTime = (value2) => typeof value2 == "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null, localDay = (seconds, offsetSeconds) => Math.floor((seconds + offsetSeconds) / DAY_S);
+var DAY_S = 86400, MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], WEEKDAYS2 = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], validTime = (value2) => typeof value2 == "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null, localDay = (seconds, offsetSeconds) => Math.floor((seconds + offsetSeconds) / DAY_S);
 function effectiveStart(node, nowSeconds) {
   let raw = validTime(node.row?.started_at) ?? validTime(node.row?.last_active);
   return raw === null ? { time: null, future: !1 } : raw > nowSeconds ? { time: nowSeconds, future: !0 } : { time: raw, future: !1 };
@@ -9128,7 +9828,7 @@ function orderLanes(lanes) {
 var tokensOf = (node) => Math.max(0, Number(node.row?.input_tokens) || 0) + Math.max(0, Number(node.row?.output_tokens) || 0), blockTokens = tokensOf;
 function dayLabel(day, bold) {
   let date2 = new Date(day * DAY_S * 1e3);
-  return bold ? `${MONTHS2[date2.getUTCMonth()]} ${date2.getUTCDate()}` : `${WEEKDAYS[date2.getUTCDay()]} ${date2.getUTCDate()}`;
+  return bold ? `${MONTHS2[date2.getUTCMonth()]} ${date2.getUTCDate()}` : `${WEEKDAYS2[date2.getUTCDay()]} ${date2.getUTCDate()}`;
 }
 function localCalendar(offsetAt) {
   let offsetS = (seconds) => offsetAt(seconds * 1e3) * 60, starts = /* @__PURE__ */ new Map(), dayOf = (seconds) => localDay(seconds, offsetS(seconds)), midnight = (day) => {
@@ -9325,19 +10025,19 @@ function fitSwimlanes(layout, width, height, minZoom) {
 
 // src/styles/swimlanes/swim-flow.tsx
 init_define_import_meta_env();
-import { Codicon as Codicon4 } from "@hermes/plugin-sdk";
-import { memo as memo4 } from "react";
+import { Codicon as Codicon6 } from "@hermes/plugin-sdk";
+import { memo as memo6 } from "react";
 
 // src/page/frame-context.ts
 init_define_import_meta_env();
-import { createContext as createContext4, useContext as useContext4 } from "react";
-var FrameUiCtx = createContext4(null);
+import { createContext as createContext5, useContext as useContext5 } from "react";
+var FrameUiCtx = createContext5(null);
 function useFrameUi() {
-  return useContext4(FrameUiCtx);
+  return useContext5(FrameUiCtx);
 }
 
 // src/styles/swimlanes/swim-flow.tsx
-import { Fragment as Fragment4, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
 var CHIP_PREFIX = "chip:";
 function blockClass2(data, selected2, extra = "") {
   let { node } = data;
@@ -9353,9 +10053,9 @@ function blockClass2(data, selected2, extra = "") {
     node.outOfScope ? "is-ghost" : ""
   ].filter(Boolean).join(" ");
 }
-var SwimBlock = memo4(function({ data, selected: selected2 }) {
+var SwimBlock = memo6(function({ data, selected: selected2 }) {
   let { node, status, project } = data, actions = useSessionActions(), row = node.row, tone = status?.tone ?? "idle", ghost = node.outOfScope;
-  return /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsxs7(
     "div",
     {
       className: blockClass2(data, !!selected2),
@@ -9371,26 +10071,26 @@ var SwimBlock = memo4(function({ data, selected: selected2 }) {
       "data-lineage": data.inLineage ? "true" : void 0,
       style: { width: 170, height: 54, "--st-pc": projectColor(project) },
       children: [
-        /* @__PURE__ */ jsx5(BlockHandles, { resetX: 30 }),
-        node.compacted > 0 && /* @__PURE__ */ jsxs5(
+        /* @__PURE__ */ jsx8(BlockHandles, { resetX: 30 }),
+        node.compacted > 0 && /* @__PURE__ */ jsxs7(
           "span",
           {
             className: "st-swim-cpill",
             "data-testid": "session-tree-compacted",
             title: `${node.compacted} earlier segment${node.compacted > 1 ? "s" : ""} folded into this block`,
             children: [
-              /* @__PURE__ */ jsx5(Codicon4, { name: "layers", size: 10 }),
+              /* @__PURE__ */ jsx8(Codicon6, { name: "layers", size: 10 }),
               "compacted ×",
               node.compacted
             ]
           }
         ),
-        /* @__PURE__ */ jsxs5("div", { className: "st-swim-r1", children: [
-          status?.pinned && /* @__PURE__ */ jsx5(Codicon4, { name: "pinned", size: 11, className: "st-pin" }),
-          /* @__PURE__ */ jsx5("span", { className: "st-title", children: node.title }),
-          tone !== "idle" && /* @__PURE__ */ jsx5("span", { className: `st-dot st-dot--${tone}`, "aria-label": tone }),
+        /* @__PURE__ */ jsxs7("div", { className: "st-swim-r1", children: [
+          status?.pinned && /* @__PURE__ */ jsx8(Codicon6, { name: "pinned", size: 11, className: "st-pin" }),
+          /* @__PURE__ */ jsx8("span", { className: "st-title", children: node.title }),
+          tone !== "idle" && /* @__PURE__ */ jsx8("span", { className: `st-dot st-dot--${tone}`, "aria-label": tone }),
           actions?.canAct(node) && // R14: the session menu from the block itself (on hover or while selected).
-          /* @__PURE__ */ jsx5(
+          /* @__PURE__ */ jsx8(
             "button",
             {
               type: "button",
@@ -9403,39 +10103,39 @@ var SwimBlock = memo4(function({ data, selected: selected2 }) {
               onClick: (event) => {
                 event.stopPropagation(), actions.openMenuFor(node.id, event.currentTarget);
               },
-              children: /* @__PURE__ */ jsx5(Codicon4, { name: "ellipsis", size: 12 })
+              children: /* @__PURE__ */ jsx8(Codicon6, { name: "ellipsis", size: 12 })
             }
           )
         ] }),
-        /* @__PURE__ */ jsx5("div", { className: "st-swim-meta", children: ghost ? /* @__PURE__ */ jsxs5(Fragment4, { children: [
-          /* @__PURE__ */ jsx5(ProjectGlyph, { project, size: 10 }),
-          /* @__PURE__ */ jsx5("span", { className: "st-swim-ghost-project", "data-testid": "session-tree-ghost-project", children: project?.label ?? "Home" }),
-          /* @__PURE__ */ jsx5("i", { children: "·" }),
+        /* @__PURE__ */ jsx8("div", { className: "st-swim-meta", children: ghost ? /* @__PURE__ */ jsxs7(Fragment6, { children: [
+          /* @__PURE__ */ jsx8(ProjectGlyph, { project, size: 10 }),
+          /* @__PURE__ */ jsx8("span", { className: "st-swim-ghost-project", "data-testid": "session-tree-ghost-project", children: project?.label ?? "Home" }),
+          /* @__PURE__ */ jsx8("i", { children: "·" }),
           agoLabel(row.last_active || row.started_at, data.nowMs)
-        ] }) : /* @__PURE__ */ jsxs5(Fragment4, { children: [
-          status?.open && /* @__PURE__ */ jsxs5(Fragment4, { children: [
-            /* @__PURE__ */ jsx5("span", { className: "st-opn", children: "● open" }),
-            /* @__PURE__ */ jsx5("i", { children: "·" })
+        ] }) : /* @__PURE__ */ jsxs7(Fragment6, { children: [
+          status?.open && /* @__PURE__ */ jsxs7(Fragment6, { children: [
+            /* @__PURE__ */ jsx8("span", { className: "st-opn", children: "● open" }),
+            /* @__PURE__ */ jsx8("i", { children: "·" })
           ] }),
-          status?.needsInput && !status.running && /* @__PURE__ */ jsxs5(Fragment4, { children: [
-            /* @__PURE__ */ jsx5("span", { className: "st-ask", children: "needs input" }),
-            /* @__PURE__ */ jsx5("i", { children: "·" })
+          status?.needsInput && !status.running && /* @__PURE__ */ jsxs7(Fragment6, { children: [
+            /* @__PURE__ */ jsx8("span", { className: "st-ask", children: "needs input" }),
+            /* @__PURE__ */ jsx8("i", { children: "·" })
           ] }),
-          status?.running ? /* @__PURE__ */ jsx5("span", { className: "st-run", children: "running" }) : agoLabel(row.last_active || row.started_at, data.nowMs),
-          /* @__PURE__ */ jsx5("i", { children: "·" }),
-          /* @__PURE__ */ jsxs5("span", { "data-field": "messages", children: [
+          status?.running ? /* @__PURE__ */ jsx8("span", { className: "st-run", children: "running" }) : agoLabel(row.last_active || row.started_at, data.nowMs),
+          /* @__PURE__ */ jsx8("i", { children: "·" }),
+          /* @__PURE__ */ jsxs7("span", { "data-field": "messages", children: [
             row.message_count ?? 0,
             " msgs"
           ] }),
-          /* @__PURE__ */ jsx5("i", { children: "·" }),
-          /* @__PURE__ */ jsx5("span", { "data-field": "tokens", children: tokenLabel(blockTokens(node)) })
+          /* @__PURE__ */ jsx8("i", { children: "·" }),
+          /* @__PURE__ */ jsx8("span", { "data-field": "tokens", children: tokenLabel(blockTokens(node)) })
         ] }) })
       ]
     }
   );
-}), SwimStandin = memo4(function({ data }) {
+}), SwimStandin = memo6(function({ data }) {
   let { node } = data;
-  return /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsxs7(
     "div",
     {
       className: blockClass2(data, !1, "is-standin"),
@@ -9445,14 +10145,14 @@ var SwimBlock = memo4(function({ data, selected: selected2 }) {
       "data-out-of-scope": node.outOfScope ? "true" : void 0,
       style: { width: 170, height: 54 },
       children: [
-        /* @__PURE__ */ jsx5(BlockHandles, { resetX: 30 }),
-        /* @__PURE__ */ jsx5("div", { className: "st-swim-r1", children: /* @__PURE__ */ jsx5("span", { className: "st-title", children: "Parent not loaded" }) }),
-        /* @__PURE__ */ jsx5("div", { className: "st-swim-meta", children: "deleted, hidden or not loaded" })
+        /* @__PURE__ */ jsx8(BlockHandles, { resetX: 30 }),
+        /* @__PURE__ */ jsx8("div", { className: "st-swim-r1", children: /* @__PURE__ */ jsx8("span", { className: "st-title", children: "Parent not loaded" }) }),
+        /* @__PURE__ */ jsx8("div", { className: "st-swim-meta", children: "deleted, hidden or not loaded" })
       ]
     }
   );
 });
-function rectOfInternal2(node) {
+function rectOfInternal3(node) {
   return {
     x: node.internals.positionAbsolute.x,
     y: node.internals.positionAbsolute.y,
@@ -9460,19 +10160,19 @@ function rectOfInternal2(node) {
     height: node.measured?.height ?? node.height ?? 54
   };
 }
-var samePort2 = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && a.dir === b.dir;
+var samePort3 = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && a.dir === b.dir;
 function SwimLink({ id: id2, source, target, data }) {
   let sourceNode = useInternalNode(source), targetNode = useInternalNode(target);
   if (!sourceNode || !targetNode || !data)
     return null;
-  let { from, to } = swimPorts(data.kind, rectOfInternal2(sourceNode), rectOfInternal2(targetNode)), route = data.route && samePort2(data.route.from, from) && samePort2(data.route.to, to) ? data.route.route : orthogonalRouter.live(from, to), classes = [
+  let { from, to } = swimPorts(data.kind, rectOfInternal3(sourceNode), rectOfInternal3(targetNode)), route = data.route && samePort3(data.route.from, from) && samePort3(data.route.to, to) ? data.route.route : orthogonalRouter.live(from, to), classes = [
     "session-tree__link",
     "st-swim-link",
     `session-tree__link--${data.kind}`,
     data.fromStandin ? "session-tree__link--standin" : "",
     data.highlighted ? "is-highlighted" : ""
   ].filter(Boolean).join(" ");
-  return /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsxs7(
     "g",
     {
       "data-testid": "session-tree-link",
@@ -9483,15 +10183,15 @@ function SwimLink({ id: id2, source, target, data }) {
       "data-detoured": route.detoured ? "true" : "false",
       "data-highlighted": data.highlighted ? "true" : void 0,
       children: [
-        /* @__PURE__ */ jsx5(BaseEdge, { id: id2, path: route.svg, className: classes }),
-        /* @__PURE__ */ jsx5(
+        /* @__PURE__ */ jsx8(BaseEdge, { id: id2, path: route.svg, className: classes }),
+        /* @__PURE__ */ jsx8(
           "path",
           {
             className: `st-swim-arrow${data.kind === "reset" ? " is-reset" : ""}${data.highlighted ? " is-highlighted" : ""}`,
             d: `M${to.x - 6} ${to.y - 4} L${to.x} ${to.y} L${to.x - 6} ${to.y + 4}Z`
           }
         ),
-        data.kind === "reset" && /* @__PURE__ */ jsx5(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx5(
+        data.kind === "reset" && /* @__PURE__ */ jsx8(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx8(
           "div",
           {
             className: "session-tree__link-label st-swim-link-label nodrag nopan",
@@ -9505,9 +10205,9 @@ function SwimLink({ id: id2, source, target, data }) {
     }
   );
 }
-var SwimChip = memo4(function({ id: id2, data }) {
+var SwimChip = memo6(function({ id: id2, data }) {
   let ui = useFrameUi(), open = ui?.activeId === id2;
-  return /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsxs7(
     "button",
     {
       type: "button",
@@ -9527,20 +10227,20 @@ var SwimChip = memo4(function({ id: id2, data }) {
       },
       children: [
         "no branches ",
-        /* @__PURE__ */ jsx5("b", { children: data.count }),
-        /* @__PURE__ */ jsx5(Codicon4, { name: open ? "chevron-up" : "chevron-down", size: 11 })
+        /* @__PURE__ */ jsx8("b", { children: data.count }),
+        /* @__PURE__ */ jsx8(Codicon6, { name: open ? "chevron-up" : "chevron-down", size: 11 })
       ]
     }
   );
 });
 
 // src/styles/swimlanes/layers.tsx
-import { Fragment as Fragment5, jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
-var swim = (layout) => layout, BAND_OVERHANG = 4e3, SwimUnderSvg = memo5(function({ layout }) {
+import { Fragment as Fragment7, jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
+var swim = (layout) => layout, BAND_OVERHANG = 4e3, SwimUnderSvg = memo7(function({ layout }) {
   let left = Math.min(layout.bounds.minX, layout.earlier.x) - BAND_OVERHANG, right = Math.max(layout.bounds.maxX, layout.window.right) + BAND_OVERHANG, height = layout.bounds.height;
-  return /* @__PURE__ */ jsxs6("svg", { className: "st-swim-under-svg", width: 1, height: 1, "aria-hidden": "true", children: [
-    /* @__PURE__ */ jsx6("defs", { children: /* @__PURE__ */ jsx6("pattern", { id: "st-swim-hatch", width: 8, height: 8, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)", children: /* @__PURE__ */ jsx6("line", { x1: 0, y1: 0, x2: 0, y2: 8, className: "st-swim-hatch-line" }) }) }),
-    layout.lanes.map((lane, index2) => /* @__PURE__ */ jsx6(
+  return /* @__PURE__ */ jsxs8("svg", { className: "st-swim-under-svg", width: 1, height: 1, "aria-hidden": "true", children: [
+    /* @__PURE__ */ jsx9("defs", { children: /* @__PURE__ */ jsx9("pattern", { id: "st-swim-hatch", width: 8, height: 8, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)", children: /* @__PURE__ */ jsx9("line", { x1: 0, y1: 0, x2: 0, y2: 8, className: "st-swim-hatch-line" }) }) }),
+    layout.lanes.map((lane, index2) => /* @__PURE__ */ jsx9(
       "rect",
       {
         "data-testid": "session-tree-lane-band",
@@ -9553,10 +10253,10 @@ var swim = (layout) => layout, BAND_OVERHANG = 4e3, SwimUnderSvg = memo5(functio
       },
       lane.key
     )),
-    /* @__PURE__ */ jsx6("rect", { className: "st-swim-earlier", x: left, y: 0, width: layout.earlier.x + layout.earlier.width - left - 6, height, fill: "url(#st-swim-hatch)" }),
-    layout.ticks.map((tick) => /* @__PURE__ */ jsx6("line", { className: "st-swim-dayline", x1: tick.x, y1: 0, x2: tick.x, y2: height }, tick.day)),
+    /* @__PURE__ */ jsx9("rect", { className: "st-swim-earlier", x: left, y: 0, width: layout.earlier.x + layout.earlier.width - left - 6, height, fill: "url(#st-swim-hatch)" }),
+    layout.ticks.map((tick) => /* @__PURE__ */ jsx9("line", { className: "st-swim-dayline", x1: tick.x, y1: 0, x2: tick.x, y2: height }, tick.day)),
     layout.lanes.map(
-      (lane) => lane.activity.map((mark) => /* @__PURE__ */ jsx6(
+      (lane) => lane.activity.map((mark) => /* @__PURE__ */ jsx9(
         "rect",
         {
           className: `st-swim-activity${mark.standin ? " is-standin" : ""}`,
@@ -9576,13 +10276,13 @@ var swim = (layout) => layout, BAND_OVERHANG = 4e3, SwimUnderSvg = memo5(functio
 });
 function SwimNowLine({ layout, nowMs }) {
   let x = swimNowX(layout, nowMs);
-  return /* @__PURE__ */ jsx6("svg", { className: "st-swim-under-svg", width: 1, height: 1, "aria-hidden": "true", children: /* @__PURE__ */ jsx6("line", { className: "st-swim-nowline", "data-testid": "session-tree-now-line", x1: x, y1: 0, x2: x, y2: layout.bounds.height }) });
+  return /* @__PURE__ */ jsx9("svg", { className: "st-swim-under-svg", width: 1, height: 1, "aria-hidden": "true", children: /* @__PURE__ */ jsx9("line", { className: "st-swim-nowline", "data-testid": "session-tree-now-line", x1: x, y1: 0, x2: x, y2: layout.bounds.height }) });
 }
 function SwimUnder({ layout, nowMs }) {
   let { x, y, zoom: zoom3 } = useViewport();
-  return /* @__PURE__ */ jsxs6("div", { className: "st-swim-under", "data-testid": "session-tree-swim-under", style: { transform: `translate(${x}px, ${y}px) scale(${zoom3})` }, children: [
-    /* @__PURE__ */ jsx6(SwimUnderSvg, { layout: swim(layout) }),
-    /* @__PURE__ */ jsx6(SwimNowLine, { layout: swim(layout), nowMs })
+  return /* @__PURE__ */ jsxs8("div", { className: "st-swim-under", "data-testid": "session-tree-swim-under", style: { transform: `translate(${x}px, ${y}px) scale(${zoom3})` }, children: [
+    /* @__PURE__ */ jsx9(SwimUnderSvg, { layout: swim(layout) }),
+    /* @__PURE__ */ jsx9(SwimNowLine, { layout: swim(layout), nowMs })
   ] });
 }
 function SinglesPopover({
@@ -9593,8 +10293,8 @@ function SinglesPopover({
   onOpen,
   onClose
 }) {
-  let ctx = usePluginCtx(), ref = useRef2(null), lane = layout.lanes.find((each) => `${CHIP_PREFIX}${each.key}` === active.id), paneHeight = useStore((state) => state.height);
-  if (useEffect2(() => {
+  let ctx = usePluginCtx(), ref = useRef3(null), lane = layout.lanes.find((each) => `${CHIP_PREFIX}${each.key}` === active.id), paneHeight = useStore((state) => state.height);
+  if (useEffect4(() => {
     let offs = [
       ctx.addEventListener(window, "keydown", (event) => {
         event.key === "Escape" && onClose();
@@ -9618,7 +10318,7 @@ function SinglesPopover({
     maxHeight: placement.maxHeight,
     width
   };
-  return /* @__PURE__ */ jsxs6(
+  return /* @__PURE__ */ jsxs8(
     "div",
     {
       ref,
@@ -9630,14 +10330,14 @@ function SinglesPopover({
       "data-placement": placement.above ? "above" : "below",
       style: style2,
       children: [
-        /* @__PURE__ */ jsxs6("h4", { children: [
+        /* @__PURE__ */ jsxs8("h4", { children: [
           lane.label,
           " · no branches ",
-          /* @__PURE__ */ jsx6("span", { children: lane.singleIds.length })
+          /* @__PURE__ */ jsx9("span", { children: lane.singleIds.length })
         ] }),
-        /* @__PURE__ */ jsx6("div", { className: "st-swim-pop-list", children: lane.singleIds.map((id2) => {
+        /* @__PURE__ */ jsx9("div", { className: "st-swim-pop-list", children: lane.singleIds.map((id2) => {
           let node = model.nodeById.get(id2);
-          return node?.row ? /* @__PURE__ */ jsxs6(
+          return node?.row ? /* @__PURE__ */ jsxs8(
             "div",
             {
               className: `st-swim-pop-item${node.archived ? " is-archived" : ""}`,
@@ -9648,9 +10348,9 @@ function SinglesPopover({
               style: { "--st-pc": projectColor(lane.project) },
               onDoubleClick: () => onOpen(node),
               children: [
-                /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-dot" }),
-                /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-title", children: node.title }),
-                /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-age", children: shortAge(node.row.last_active || node.row.started_at, nowMs) })
+                /* @__PURE__ */ jsx9("span", { className: "st-swim-pop-dot" }),
+                /* @__PURE__ */ jsx9("span", { className: "st-swim-pop-title", children: node.title }),
+                /* @__PURE__ */ jsx9("span", { className: "st-swim-pop-age", children: shortAge(node.row.last_active || node.row.started_at, nowMs) })
               ]
             },
             id2
@@ -9661,22 +10361,22 @@ function SinglesPopover({
   );
 }
 function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, active, onCloseActive }) {
-  let layout = swim(frameLayout), { x, y, zoom: zoom3 } = useViewport(), scoped = model.options.scope !== "all", sx = (worldX) => x + worldX * zoom3, nowLeft = sx(swimNowX(layout, nowMs)), axisRef = useRef2(null), pillRef = useRef2(null);
+  let layout = swim(frameLayout), { x, y, zoom: zoom3 } = useViewport(), scoped = model.options.scope !== "all", sx = (worldX) => x + worldX * zoom3, nowLeft = sx(swimNowX(layout, nowMs)), axisRef = useRef3(null), pillRef = useRef3(null);
   return useLayoutEffect2(() => {
     let axis = axisRef.current, pill = pillRef.current;
     if (!axis || !pill)
       return;
     let label = axis.querySelector(`[data-testid="session-tree-axis-tick"][data-day="${layout.window.today}"] .st-swim-tick-label`), half = pill.offsetWidth / 2, labelRight = label ? label.getBoundingClientRect().right - axis.getBoundingClientRect().left : -1 / 0, left = Math.max(nowLeft, labelRight + 4 + half);
     pill.style.left = `${left}px`, pill.dataset.shifted = left > nowLeft ? "true" : "false";
-  }), /* @__PURE__ */ jsxs6("div", { className: "st-swim-over", "data-testid": "session-tree-swim-over", children: [
-    /* @__PURE__ */ jsxs6("div", { ref: axisRef, className: "st-swim-axis", "data-testid": "session-tree-axis", style: { height: 26 }, children: [
-      /* @__PURE__ */ jsx6("div", { className: "st-swim-tick is-earlier", "data-testid": "session-tree-axis-earlier", style: { left: sx(layout.earlier.x + 10) }, children: "‹ earlier" }),
-      layout.ticks.map((tick) => /* @__PURE__ */ jsx6("div", { className: `st-swim-tick${tick.bold ? " is-bold" : ""}`, "data-testid": "session-tree-axis-tick", "data-day": tick.day, "data-x": tick.x, style: { left: sx(tick.x) }, children: /* @__PURE__ */ jsx6("span", { className: "st-swim-tick-label", children: tick.label }) }, tick.day)),
-      /* @__PURE__ */ jsx6("div", { ref: pillRef, className: "st-swim-now", "data-testid": "session-tree-now", "data-now-x": nowLeft, children: "now" })
+  }), /* @__PURE__ */ jsxs8("div", { className: "st-swim-over", "data-testid": "session-tree-swim-over", children: [
+    /* @__PURE__ */ jsxs8("div", { ref: axisRef, className: "st-swim-axis", "data-testid": "session-tree-axis", style: { height: 26 }, children: [
+      /* @__PURE__ */ jsx9("div", { className: "st-swim-tick is-earlier", "data-testid": "session-tree-axis-earlier", style: { left: sx(layout.earlier.x + 10) }, children: "‹ earlier" }),
+      layout.ticks.map((tick) => /* @__PURE__ */ jsx9("div", { className: `st-swim-tick${tick.bold ? " is-bold" : ""}`, "data-testid": "session-tree-axis-tick", "data-day": tick.day, "data-x": tick.x, style: { left: sx(tick.x) }, children: /* @__PURE__ */ jsx9("span", { className: "st-swim-tick-label", children: tick.label }) }, tick.day)),
+      /* @__PURE__ */ jsx9("div", { ref: pillRef, className: "st-swim-now", "data-testid": "session-tree-now", "data-now-x": nowLeft, children: "now" })
     ] }),
-    /* @__PURE__ */ jsx6("div", { className: "st-swim-gutter", "data-testid": "session-tree-lane-headers", style: { width: 168 }, children: layout.lanes.map((lane, index2) => {
+    /* @__PURE__ */ jsx9("div", { className: "st-swim-gutter", "data-testid": "session-tree-lane-headers", style: { width: 168 }, children: layout.lanes.map((lane, index2) => {
       let height = lane.height * zoom3, disabled = scoped;
-      return /* @__PURE__ */ jsxs6(
+      return /* @__PURE__ */ jsxs8(
         "div",
         {
           role: "button",
@@ -9700,13 +10400,13 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
             disabled || onToggleLane(lane.key);
           },
           children: [
-            /* @__PURE__ */ jsxs6("div", { className: "st-swim-lh-name", children: [
-              /* @__PURE__ */ jsx6(ProjectGlyph, { project: lane.project, size: 11 }),
-              /* @__PURE__ */ jsx6("span", { className: "st-swim-lh-label", children: lane.label }),
-              !disabled && /* @__PURE__ */ jsx6(Codicon5, { name: lane.collapsed ? "chevron-right" : "chevron-down", size: 11, className: "st-swim-lh-chevron" })
+            /* @__PURE__ */ jsxs8("div", { className: "st-swim-lh-name", children: [
+              /* @__PURE__ */ jsx9(ProjectGlyph, { project: lane.project, size: 11 }),
+              /* @__PURE__ */ jsx9("span", { className: "st-swim-lh-label", children: lane.label }),
+              !disabled && /* @__PURE__ */ jsx9(Codicon7, { name: lane.collapsed ? "chevron-right" : "chevron-down", size: 11, className: "st-swim-lh-chevron" })
             ] }),
-            !lane.collapsed && height >= 54 && /* @__PURE__ */ jsxs6(Fragment5, { children: [
-              /* @__PURE__ */ jsxs6("div", { className: "st-swim-lh-meta", "data-field": "totals", children: [
+            !lane.collapsed && height >= 54 && /* @__PURE__ */ jsxs8(Fragment7, { children: [
+              /* @__PURE__ */ jsxs8("div", { className: "st-swim-lh-meta", "data-field": "totals", children: [
                 lane.sessions,
                 " session",
                 lane.sessions === 1 ? "" : "s",
@@ -9714,7 +10414,7 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
                 tokenLabel(lane.tokens),
                 " tok"
               ] }),
-              /* @__PURE__ */ jsxs6("div", { className: "st-swim-lh-meta is-sub", "data-field": "split", children: [
+              /* @__PURE__ */ jsxs8("div", { className: "st-swim-lh-meta is-sub", "data-field": "split", children: [
                 lane.inTrees,
                 " in trees · ",
                 lane.singles,
@@ -9722,7 +10422,7 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
                 lane.singles === 1 ? "" : "s"
               ] })
             ] }),
-            !lane.collapsed && height < 54 && /* @__PURE__ */ jsxs6("div", { className: "st-swim-lh-meta is-compact", "data-field": "totals", "data-compact": "true", children: [
+            !lane.collapsed && height < 54 && /* @__PURE__ */ jsxs8("div", { className: "st-swim-lh-meta is-compact", "data-field": "totals", "data-compact": "true", children: [
               lane.sessions,
               " session",
               lane.sessions === 1 ? "" : "s",
@@ -9735,11 +10435,11 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
         lane.key
       );
     }) }),
-    /* @__PURE__ */ jsxs6("div", { className: "st-swim-corner", style: { width: 168, height: 26 }, children: [
+    /* @__PURE__ */ jsxs8("div", { className: "st-swim-corner", style: { width: 168, height: 26 }, children: [
       "Projects · ",
       layout.monthLabel
     ] }),
-    active && /* @__PURE__ */ jsx6(SinglesPopover, { layout, model, active, nowMs, onOpen, onClose: onCloseActive })
+    active && /* @__PURE__ */ jsx9(SinglesPopover, { layout, model, active, nowMs, onOpen, onClose: onCloseActive })
   ] });
 }
 
@@ -9794,7 +10494,8 @@ var swimFrame = {
 // src/styles/registry.ts
 var DEFAULT_STYLE_ID = "dense", STYLES = /* @__PURE__ */ new Map([
   [denseStyle.id, denseStyle],
-  [swimlanesStyle.id, swimlanesStyle]
+  [swimlanesStyle.id, swimlanesStyle],
+  [richStyle.id, richStyle]
 ]);
 function registeredStyles() {
   return [...STYLES.values()];
@@ -9811,7 +10512,7 @@ function resolveStyleId(override, synced) {
 
 // src/page/graph-canvas.tsx
 init_define_import_meta_env();
-import { useCallback as useCallback3, useEffect as useEffect3, useMemo as useMemo3, useRef as useRef3, useState as useState4 } from "react";
+import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo5, useRef as useRef4, useState as useState5 } from "react";
 
 // src/page/canvas-routing.ts
 init_define_import_meta_env();
@@ -9868,7 +10569,7 @@ function createCanvasRouting() {
 // src/page/session-menu.tsx
 init_define_import_meta_env();
 import {
-  Codicon as Codicon6,
+  Codicon as Codicon8,
   ColorSwatches,
   ContextMenu,
   ContextMenuContent,
@@ -9882,8 +10583,8 @@ import {
   icons,
   PROFILE_SWATCHES
 } from "@hermes/plugin-sdk";
-import { useCallback as useCallback2, useState as useState3 } from "react";
-import { Fragment as Fragment6, jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
+import { useCallback as useCallback3, useState as useState4 } from "react";
+import { Fragment as Fragment8, jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
 function nodeIdAt(target) {
   let element = target?.closest?.(".react-flow__node, [data-st-node]");
   return element?.getAttribute("data-st-node") ?? element?.getAttribute("data-id") ?? null;
@@ -9891,8 +10592,8 @@ function nodeIdAt(target) {
 var ICON = 14;
 function MenuItems({ node, actions, labels }) {
   let row = node.row, status = actions.statusOf(node), unread = !!row.unread, blocked = deleteBlockedReason(status), targets = actions.moveTargets(node), ArchiveOff = icons.ArchiveOff;
-  return /* @__PURE__ */ jsxs7(Fragment6, { children: [
-    /* @__PURE__ */ jsxs7(
+  return /* @__PURE__ */ jsxs9(Fragment8, { children: [
+    /* @__PURE__ */ jsxs9(
       ContextMenuItem,
       {
         "data-action": "rename",
@@ -9900,27 +10601,27 @@ function MenuItems({ node, actions, labels }) {
           actions.noteDialogFromMenu(), actions.rename(node);
         },
         children: [
-          /* @__PURE__ */ jsx7(Codicon6, { name: "edit", size: ICON }),
-          /* @__PURE__ */ jsx7("span", { children: labels.rename })
+          /* @__PURE__ */ jsx10(Codicon8, { name: "edit", size: ICON }),
+          /* @__PURE__ */ jsx10("span", { children: labels.rename })
         ]
       }
     ),
-    /* @__PURE__ */ jsxs7(ContextMenuItem, { "data-action": "pin", "data-pinned": row.pinned ? "true" : "false", onSelect: () => actions.togglePin(node), children: [
-      /* @__PURE__ */ jsx7(Codicon6, { name: "pin", size: ICON }),
-      /* @__PURE__ */ jsx7("span", { children: row.pinned ? labels.unpin : labels.pin })
+    /* @__PURE__ */ jsxs9(ContextMenuItem, { "data-action": "pin", "data-pinned": row.pinned ? "true" : "false", onSelect: () => actions.togglePin(node), children: [
+      /* @__PURE__ */ jsx10(Codicon8, { name: "pin", size: ICON }),
+      /* @__PURE__ */ jsx10("span", { children: row.pinned ? labels.unpin : labels.pin })
     ] }),
-    /* @__PURE__ */ jsxs7(ContextMenuItem, { "data-action": "read", "data-unread": unread ? "true" : "false", onSelect: () => {
+    /* @__PURE__ */ jsxs9(ContextMenuItem, { "data-action": "read", "data-unread": unread ? "true" : "false", onSelect: () => {
       actions.toggleUnread(node);
     }, children: [
-      /* @__PURE__ */ jsx7(Codicon6, { name: unread ? "mail-read" : "mail", size: ICON }),
-      /* @__PURE__ */ jsx7("span", { children: unread ? labels.markRead : labels.markUnread })
+      /* @__PURE__ */ jsx10(Codicon8, { name: unread ? "mail-read" : "mail", size: ICON }),
+      /* @__PURE__ */ jsx10("span", { children: unread ? labels.markRead : labels.markUnread })
     ] }),
-    /* @__PURE__ */ jsxs7(ContextMenuSub, { children: [
-      /* @__PURE__ */ jsxs7(ContextMenuSubTrigger, { "data-action": "appearance", children: [
-        /* @__PURE__ */ jsx7(Codicon6, { name: "symbol-color", size: ICON }),
-        /* @__PURE__ */ jsx7("span", { children: labels.appearance })
+    /* @__PURE__ */ jsxs9(ContextMenuSub, { children: [
+      /* @__PURE__ */ jsxs9(ContextMenuSubTrigger, { "data-action": "appearance", children: [
+        /* @__PURE__ */ jsx10(Codicon8, { name: "symbol-color", size: ICON }),
+        /* @__PURE__ */ jsx10("span", { children: labels.appearance })
       ] }),
-      /* @__PURE__ */ jsx7(ContextMenuSubContent, { className: "p-2", "data-testid": "session-tree-menu-appearance", children: /* @__PURE__ */ jsx7(
+      /* @__PURE__ */ jsx10(ContextMenuSubContent, { className: "p-2", "data-testid": "session-tree-menu-appearance", children: /* @__PURE__ */ jsx10(
         ColorSwatches,
         {
           clearIcon: "circle-slash",
@@ -9931,7 +10632,7 @@ function MenuItems({ node, actions, labels }) {
         }
       ) })
     ] }),
-    /* @__PURE__ */ jsx7(
+    /* @__PURE__ */ jsx10(
       CopyButton,
       {
         appearance: "context-menu-item",
@@ -9943,36 +10644,36 @@ function MenuItems({ node, actions, labels }) {
         onCopyError: (error) => actions.copyFailed(error)
       }
     ),
-    /* @__PURE__ */ jsx7(ContextMenuSeparator, {}),
-    /* @__PURE__ */ jsxs7(ContextMenuItem, { "data-action": "branch", onSelect: () => {
+    /* @__PURE__ */ jsx10(ContextMenuSeparator, {}),
+    /* @__PURE__ */ jsxs9(ContextMenuItem, { "data-action": "branch", onSelect: () => {
       actions.branch(node);
     }, children: [
-      /* @__PURE__ */ jsx7(Codicon6, { name: "repo-forked", size: ICON }),
-      /* @__PURE__ */ jsx7("span", { children: labels.branch })
+      /* @__PURE__ */ jsx10(Codicon8, { name: "repo-forked", size: ICON }),
+      /* @__PURE__ */ jsx10("span", { children: labels.branch })
     ] }),
-    /* @__PURE__ */ jsxs7(ContextMenuItem, { "data-action": "export", onSelect: () => {
+    /* @__PURE__ */ jsxs9(ContextMenuItem, { "data-action": "export", onSelect: () => {
       actions.exportSession(node);
     }, children: [
-      /* @__PURE__ */ jsx7(Codicon6, { name: "cloud-download", size: ICON }),
-      /* @__PURE__ */ jsx7("span", { children: labels.export })
+      /* @__PURE__ */ jsx10(Codicon8, { name: "cloud-download", size: ICON }),
+      /* @__PURE__ */ jsx10("span", { children: labels.export })
     ] }),
-    /* @__PURE__ */ jsxs7(ContextMenuSub, { children: [
-      /* @__PURE__ */ jsxs7(ContextMenuSubTrigger, { "data-action": "move", children: [
-        /* @__PURE__ */ jsx7(Codicon6, { name: "folder", size: ICON }),
-        /* @__PURE__ */ jsx7("span", { children: labels.moveToProject })
+    /* @__PURE__ */ jsxs9(ContextMenuSub, { children: [
+      /* @__PURE__ */ jsxs9(ContextMenuSubTrigger, { "data-action": "move", children: [
+        /* @__PURE__ */ jsx10(Codicon8, { name: "folder", size: ICON }),
+        /* @__PURE__ */ jsx10("span", { children: labels.moveToProject })
       ] }),
-      /* @__PURE__ */ jsx7(ContextMenuSubContent, { "data-testid": "session-tree-menu-move", children: targets.length === 0 ? /* @__PURE__ */ jsx7(ContextMenuItem, { disabled: !0, children: labels.moveNoProjects }) : targets.map((project) => /* @__PURE__ */ jsx7(ContextMenuItem, { "data-action": "move-to", "data-project-id": project.id, onSelect: () => {
+      /* @__PURE__ */ jsx10(ContextMenuSubContent, { "data-testid": "session-tree-menu-move", children: targets.length === 0 ? /* @__PURE__ */ jsx10(ContextMenuItem, { disabled: !0, children: labels.moveNoProjects }) : targets.map((project) => /* @__PURE__ */ jsx10(ContextMenuItem, { "data-action": "move-to", "data-project-id": project.id, onSelect: () => {
         actions.moveTo(node, project);
       }, children: project.label }, project.id)) })
     ] }),
-    /* @__PURE__ */ jsx7(ContextMenuSeparator, {}),
-    /* @__PURE__ */ jsxs7(ContextMenuItem, { "data-action": "archive", "data-archived": row.archived ? "true" : "false", onSelect: () => {
+    /* @__PURE__ */ jsx10(ContextMenuSeparator, {}),
+    /* @__PURE__ */ jsxs9(ContextMenuItem, { "data-action": "archive", "data-archived": row.archived ? "true" : "false", onSelect: () => {
       actions.toggleArchive(node);
     }, children: [
-      row.archived && ArchiveOff ? /* @__PURE__ */ jsx7(ArchiveOff, { className: "size-3.5" }) : /* @__PURE__ */ jsx7(Codicon6, { name: "archive", size: ICON }),
-      /* @__PURE__ */ jsx7("span", { children: row.archived ? labels.unarchive : labels.archive })
+      row.archived && ArchiveOff ? /* @__PURE__ */ jsx10(ArchiveOff, { className: "size-3.5" }) : /* @__PURE__ */ jsx10(Codicon8, { name: "archive", size: ICON }),
+      /* @__PURE__ */ jsx10("span", { children: row.archived ? labels.unarchive : labels.archive })
     ] }),
-    /* @__PURE__ */ jsxs7(
+    /* @__PURE__ */ jsxs9(
       ContextMenuItem,
       {
         variant: "destructive",
@@ -9985,16 +10686,16 @@ function MenuItems({ node, actions, labels }) {
           actions.noteDialogFromMenu(), actions.remove(node);
         },
         children: [
-          /* @__PURE__ */ jsx7(Codicon6, { name: "trash", size: ICON }),
-          /* @__PURE__ */ jsx7("span", { children: labels.delete }),
-          blocked && /* @__PURE__ */ jsx7("span", { className: "st-menu-note", children: blocked })
+          /* @__PURE__ */ jsx10(Codicon8, { name: "trash", size: ICON }),
+          /* @__PURE__ */ jsx10("span", { children: labels.delete }),
+          blocked && /* @__PURE__ */ jsx10("span", { className: "st-menu-note", children: blocked })
         ]
       }
     )
   ] });
 }
 function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) {
-  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState3(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback2(
+  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState4(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback3(
     (event) => {
       let id2 = actions?.takeRequestedMenuNode() ?? null ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
       if (!actions || !actions.canAct(target)) {
@@ -10005,9 +10706,9 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) 
     },
     [actions, model, onOpenFor]
   );
-  return /* @__PURE__ */ jsxs7(ContextMenu, { children: [
-    /* @__PURE__ */ jsx7(ContextMenuTrigger, { asChild: !0, onContextMenu, children: children2 }),
-    actions && node && actions.canAct(node) && /* @__PURE__ */ jsx7(
+  return /* @__PURE__ */ jsxs9(ContextMenu, { children: [
+    /* @__PURE__ */ jsx10(ContextMenuTrigger, { asChild: !0, onContextMenu, children: children2 }),
+    actions && node && actions.canAct(node) && /* @__PURE__ */ jsx10(
       ContextMenuContent,
       {
         className: "w-40",
@@ -10017,20 +10718,26 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) 
         onCloseAutoFocus: (event) => {
           event.preventDefault(), actions.dialogOpening() || onRestoreFocus();
         },
-        children: /* @__PURE__ */ jsx7(MenuItems, { node, actions, labels })
+        children: /* @__PURE__ */ jsx10(MenuItems, { node, actions, labels })
       }
     )
   ] });
 }
 
 // src/page/graph-canvas.tsx
-import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
 var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350;
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
+function StyleProviders({ model, children: children2 }) {
+  return registeredStyles().reduceRight((inner, each) => {
+    let Provider2 = each.Provider;
+    return Provider2 ? /* @__PURE__ */ jsx11(Provider2, { model, children: inner }, each.id) : inner;
+  }, children2);
+}
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props, [mountViewport] = useState4(initialViewport), ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef3(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef3(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState4(null), active = frame2 ? activeExtra : null, [routing] = useState4(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router }), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo3(() => {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState5(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState5(), actions = useSessionActions(), [tooltip, setTooltip] = useState5(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState5(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState5(null), active = frame2 ? activeExtra : null, [routing] = useState5(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router }), lineage = useMemo5(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo5(() => {
     let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -10078,10 +10785,10 @@ function GraphCanvas(props) {
       });
     }
     return frame2 && frameLayout && nodes2.push(...frame2.extraNodes(frameLayout)), nodes2;
-  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs, frame2, frameLayout]), nodes = useMemo3(() => {
+  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs, frame2, frameLayout]), nodes = useMemo5(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
     return spaceHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
-  }, [baseNodes, drag2, spaceHeld]), edges = useMemo3(
+  }, [baseNodes, drag2, spaceHeld]), edges = useMemo5(
     () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
       let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
       return {
@@ -10102,9 +10809,9 @@ function GraphCanvas(props) {
       };
     }),
     [model, shown, style2, lineage, routes]
-  ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback3(() => {
+  ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback4(() => {
     tooltipTimer.current?.(), tooltipTimer.current = void 0, setTooltip(void 0);
-  }, []), onNodesChange = useCallback3((changes) => {
+  }, []), onNodesChange = useCallback4((changes) => {
     let moves = changes.filter(
       (change) => change.type === "position" && !!change.position && change.dragging === !0
     );
@@ -10114,12 +10821,12 @@ function GraphCanvas(props) {
         next.set(move.id, move.position);
       return next;
     });
-  }, []), onNodeDragStart = useCallback3(
+  }, []), onNodeDragStart = useCallback4(
     (_event, _node, dragged) => {
       hideTooltip(), onDragging(dragged.map((item) => item.id).filter((id2) => !id2.startsWith(GROUP_PREFIX)));
     },
     [hideTooltip, onDragging]
-  ), onNodeDragStop = useCallback3(
+  ), onNodeDragStop = useCallback4(
     (_event, _node, dragged) => {
       let moves = /* @__PURE__ */ new Map();
       for (let item of dragged)
@@ -10127,21 +10834,21 @@ function GraphCanvas(props) {
       setDrag(void 0), moves.size > 0 && onMove(moves), onDragging(null);
     },
     [onMove, onDragging]
-  ), graphNode = useCallback3((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback3(
+  ), graphNode = useCallback4((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback4(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
       node && !node.readOnly && onSelect(node.id);
     },
     [graphNode, onSelect]
-  ), onNodeDoubleClick = useCallback3(
+  ), onNodeDoubleClick = useCallback4(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
       node && !node.readOnly && node.kind === "session" && onOpen(node);
     },
     [graphNode, onOpen]
-  ), onNodeContextMenu = useCallback3(() => hideTooltip(), [hideTooltip]), onMoveEnd = useCallback3((_event, viewport) => onViewport(viewport), [onViewport]), closeActive = useCallback3(() => setActiveExtra(null), []), onMoveStart = useCallback3(() => {
+  ), onNodeContextMenu = useCallback4(() => hideTooltip(), [hideTooltip]), onMoveEnd = useCallback4((_event, viewport) => onViewport(viewport), [onViewport]), closeActive = useCallback4(() => setActiveExtra(null), []), onMoveStart = useCallback4(() => {
     hideTooltip(), closeActive();
-  }, [hideTooltip, closeActive]), frameUi = useMemo3(
+  }, [hideTooltip, closeActive]), frameUi = useMemo5(
     () => ({
       activeId: active?.id ?? null,
       activate(id2, element) {
@@ -10152,19 +10859,19 @@ function GraphCanvas(props) {
       }
     }),
     [active, hideTooltip]
-  ), onInit = useCallback3(
+  ), onInit = useCallback4(
     (instance) => {
       let box = wrapper.current?.getBoundingClientRect();
       frameLayout && style2.frame && !mountViewport && box && box.width > 0 && instance.setViewport(frameLayout.fit(box.width, box.height, MIN_ZOOM));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
     []
-  ), onMenuOpen = useCallback3(
+  ), onMenuOpen = useCallback4(
     (node) => {
       hideTooltip(), onSelect(node.id);
     },
     [hideTooltip, onSelect]
-  ), restoreFocus = useCallback3(() => {
+  ), restoreFocus = useCallback4(() => {
     let attempt = () => {
       let active2 = document.activeElement;
       (!active2 || active2 === document.body) && wrapper.current?.focus({ preventScroll: !0 });
@@ -10173,8 +10880,8 @@ function GraphCanvas(props) {
     for (let ms of [0, 50, 150, 400])
       ctx.setTimeout(attempt, ms);
   }, [ctx]);
-  useEffect3(() => (actions?.setMenuHost(wrapper.current), () => actions?.setMenuHost(null)), [actions]);
-  let onNodeMouseEnter = useCallback3(
+  useEffect5(() => (actions?.setMenuHost(wrapper.current), () => actions?.setMenuHost(null)), [actions]);
+  let onNodeMouseEnter = useCallback4(
     (event, flowNode) => {
       let node = graphNode(flowNode), target = event.currentTarget;
       !node || !wrapper.current || (tooltipTimer.current?.(), tooltipTimer.current = ctx.setTimeout(() => {
@@ -10186,7 +10893,7 @@ function GraphCanvas(props) {
     },
     [ctx, graphNode]
   );
-  useEffect3(() => {
+  useEffect5(() => {
     let element = wrapper.current;
     if (!element)
       return;
@@ -10231,9 +10938,9 @@ function GraphCanvas(props) {
       })
     ];
     return () => offs.forEach((off) => off());
-  }, [ctx, onSelect]), useEffect3(() => () => tooltipTimer.current?.(), []);
-  let Under = frame2?.Under, Over = frame2?.Over;
-  return /* @__PURE__ */ jsx8(SessionMenu, { model, onOpenFor: onMenuOpen, onRestoreFocus: restoreFocus, children: /* @__PURE__ */ jsxs8(
+  }, [ctx, onSelect]), useEffect5(() => () => tooltipTimer.current?.(), []);
+  let Under = frame2?.Under, Over = frame2?.Over, Layer = style2.Layer;
+  return /* @__PURE__ */ jsx11(SessionMenu, { model, onOpenFor: onMenuOpen, onRestoreFocus: restoreFocus, children: /* @__PURE__ */ jsxs10(
     "div",
     {
       ref: wrapper,
@@ -10245,9 +10952,9 @@ function GraphCanvas(props) {
       "data-grid": style2.grid,
       "data-draggable": style2.draggable ? "true" : "false",
       children: [
-        /* @__PURE__ */ jsxs8(FrameUiCtx.Provider, { value: frameUi, children: [
-          Under && frameLayout && /* @__PURE__ */ jsx8(Under, { layout: frameLayout, nowMs }),
-          /* @__PURE__ */ jsx8(
+        /* @__PURE__ */ jsxs10(FrameUiCtx.Provider, { value: frameUi, children: [
+          Under && frameLayout && /* @__PURE__ */ jsx11(Under, { layout: frameLayout, nowMs }),
+          /* @__PURE__ */ jsx11(StyleProviders, { model, children: /* @__PURE__ */ jsxs10(
             index,
             {
               nodes,
@@ -10289,10 +10996,28 @@ function GraphCanvas(props) {
               defaultViewport: mountViewport,
               onMoveEnd,
               proOptions: { hideAttribution: !0 },
-              children: snap && /* @__PURE__ */ jsx8(Background, { variant: BackgroundVariant.Dots, gap: style2.grid, size: 1.3 })
+              children: [
+                snap && /* @__PURE__ */ jsx11(Background, { variant: BackgroundVariant.Dots, gap: style2.grid, size: 1.3 }),
+                Layer && /* @__PURE__ */ jsx11(
+                  Layer,
+                  {
+                    model,
+                    positions,
+                    shown,
+                    nodeSize: style2.nodeSize,
+                    showAll: spec.includeSingles,
+                    selectedId,
+                    onSelect,
+                    onOpen,
+                    nowMs,
+                    panelOpen,
+                    onPanel: (open) => onPanel?.(open)
+                  }
+                )
+              ]
             }
-          ),
-          Over && frameLayout && /* @__PURE__ */ jsx8(
+          ) }),
+          Over && frameLayout && /* @__PURE__ */ jsx11(
             Over,
             {
               layout: frameLayout,
@@ -10305,7 +11030,7 @@ function GraphCanvas(props) {
             }
           )
         ] }),
-        tooltip && /* @__PURE__ */ jsx8(
+        tooltip && /* @__PURE__ */ jsx11(
           "div",
           {
             className: "session-tree__tooltip",
@@ -10336,21 +11061,21 @@ import {
   isSubmitEnter,
   randomUuid
 } from "@hermes/plugin-sdk";
-import { useEffect as useEffect4, useMemo as useMemo4, useRef as useRef4, useState as useState5 } from "react";
-import { Fragment as Fragment7, jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
+import { useEffect as useEffect6, useMemo as useMemo6, useRef as useRef5, useState as useState6 } from "react";
+import { Fragment as Fragment9, jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
 var errorText = (error) => restErrorText(error), rpcReason = (error) => error?.data?.reason;
 function useRowOverrides(serverRows) {
-  let [overrides, setOverrides] = useState5(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState5(serverRows);
+  let [overrides, setOverrides] = useState6(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState6(serverRows);
   return settledFor !== serverRows && (setSettledFor(serverRows), overrides.size > 0 && setOverrides(settleOverrides(serverRows, overrides))), [overrides, setOverrides];
 }
 function useSessionActionsController(options) {
-  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState5(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState5(), [deleting, setDeleting] = useState5(), [mutate] = useState5(() => createFencedMutation(randomUuid)), [branchFlights] = useState5(
+  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState6(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState6(), [deleting, setDeleting] = useState6(), [mutate] = useState6(() => createFencedMutation(randomUuid)), [branchFlights] = useState6(
     () => createBranchFlights((method, params) => host2.request(method, params), randomUuid)
-  ), [branchCooldown] = useState5(() => createBranchCooldown(BRANCH_COOLDOWN_MS)), latest = useRef4({ options, labels, colors }), menuHost = useRef4(null), requestedMenuNode = useRef4(null), dialogFromMenu = useRef4(!1);
-  useEffect4(() => {
+  ), [branchCooldown] = useState6(() => createBranchCooldown(BRANCH_COOLDOWN_MS)), latest = useRef5({ options, labels, colors }), menuHost = useRef5(null), requestedMenuNode = useRef5(null), dialogFromMenu = useRef5(!1);
+  useEffect6(() => {
     latest.current = { options, labels, colors };
   });
-  let actions = useMemo4(() => {
+  let actions = useMemo6(() => {
     let patch = (id2, override) => setOverrides((previous) => new Map(previous).set(id2, { ...previous.get(id2), ...override })), unpatch = (id2) => setOverrides((previous) => {
       if (!previous.has(id2))
         return previous;
@@ -10478,8 +11203,8 @@ function useSessionActionsController(options) {
       () => fetchMutationSnapshot(ctx, node.profile, row.id),
       (identity4) => postRename(ctx, node.profile, row.id, title, identity4)
     ))?.title;
-  }, dialogs = /* @__PURE__ */ jsxs9(Fragment7, { children: [
-    /* @__PURE__ */ jsx9(
+  }, dialogs = /* @__PURE__ */ jsxs11(Fragment9, { children: [
+    /* @__PURE__ */ jsx12(
       RenameDialog,
       {
         node: renaming,
@@ -10500,7 +11225,7 @@ function useSessionActionsController(options) {
       },
       renaming?.id ?? "none"
     ),
-    /* @__PURE__ */ jsx9(
+    /* @__PURE__ */ jsx12(
       DeleteDialog,
       {
         node: deleting,
@@ -10532,7 +11257,7 @@ function RenameDialog({
   onClose,
   onSubmit
 }) {
-  let current = node?.row?.title ?? "", [value2, setValue] = useState5(current), [busy, setBusy] = useState5(!1), [error, setError] = useState5(null), submit = async () => {
+  let current = node?.row?.title ?? "", [value2, setValue] = useState6(current), [busy, setBusy] = useState6(!1), [error, setError] = useState6(null), submit = async () => {
     if (!node || busy)
       return;
     let next = value2.trim();
@@ -10549,9 +11274,9 @@ function RenameDialog({
       setBusy(!1);
     }
   };
-  return /* @__PURE__ */ jsx9(Dialog, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs9(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
-    /* @__PURE__ */ jsx9(DialogHeader, { children: /* @__PURE__ */ jsx9(DialogTitle, { children: labels.renameTitle }) }),
-    /* @__PURE__ */ jsx9(
+  return /* @__PURE__ */ jsx12(Dialog, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs11(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
+    /* @__PURE__ */ jsx12(DialogHeader, { children: /* @__PURE__ */ jsx12(DialogTitle, { children: labels.renameTitle }) }),
+    /* @__PURE__ */ jsx12(
       Input,
       {
         autoFocus: !0,
@@ -10566,10 +11291,10 @@ function RenameDialog({
         }
       }
     ),
-    error && /* @__PURE__ */ jsx9("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
-    /* @__PURE__ */ jsxs9(DialogFooter, { children: [
-      /* @__PURE__ */ jsx9(Button, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
-      /* @__PURE__ */ jsx9(Button, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
+    error && /* @__PURE__ */ jsx12("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
+    /* @__PURE__ */ jsxs11(DialogFooter, { children: [
+      /* @__PURE__ */ jsx12(Button, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
+      /* @__PURE__ */ jsx12(Button, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
         submit();
       }, children: labels.save })
     ] })
@@ -10585,12 +11310,12 @@ function DeleteDialog({
 }) {
   let note = branchNote(branches), description = node ? [labels.deleteDesc(node.title), note, blocked ?? ""].filter(Boolean).join(`
 `) : "";
-  return /* @__PURE__ */ jsx9(
+  return /* @__PURE__ */ jsx12(
     ConfirmDialog,
     {
       open: !!node,
       title: labels.deleteTitle,
-      description: /* @__PURE__ */ jsx9("span", { "data-testid": "session-tree-delete-text", children: description }),
+      description: /* @__PURE__ */ jsx12("span", { "data-testid": "session-tree-delete-text", children: description }),
       confirmLabel: labels.delete,
       busyLabel: labels.deleting,
       doneLabel: labels.deleted,
@@ -10605,7 +11330,7 @@ function DeleteDialog({
 // src/page/services.ts
 init_define_import_meta_env();
 import { host as host3 } from "@hermes/plugin-sdk";
-import { useCallback as useCallback4, useSyncExternalStore } from "react";
+import { useCallback as useCallback5, useSyncExternalStore as useSyncExternalStore2 } from "react";
 
 // src/model/layout-sync.ts
 init_define_import_meta_env();
@@ -11082,18 +11807,18 @@ function createServices(ctx) {
   }, POLL_MS), { sync, prefs: new DevicePrefs(ctx.storage) };
 }
 function useSyncVersion(sync) {
-  let subscribe = useCallback4((listener) => sync.subscribe(listener), [sync]);
-  return useSyncExternalStore(subscribe, () => sync.changeVersion);
+  let subscribe = useCallback5((listener) => sync.subscribe(listener), [sync]);
+  return useSyncExternalStore2(subscribe, () => sync.changeVersion);
 }
 function usePrefsVersion(prefs) {
-  let subscribe = useCallback4((listener) => prefs.subscribe(listener), [prefs]);
-  return useSyncExternalStore(subscribe, () => prefs.changeVersion);
+  let subscribe = useCallback5((listener) => prefs.subscribe(listener), [prefs]);
+  return useSyncExternalStore2(subscribe, () => prefs.changeVersion);
 }
 
 // src/page/toolbar.tsx
 init_define_import_meta_env();
-import { Codicon as Codicon7 } from "@hermes/plugin-sdk";
-import { Fragment as Fragment8, jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
+import { Codicon as Codicon9 } from "@hermes/plugin-sdk";
+import { Fragment as Fragment10, jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
 var noFocus = (event) => event.preventDefault();
 function ToolButton({
   testId,
@@ -11103,7 +11828,7 @@ function ToolButton({
   children: children2,
   className
 }) {
-  return /* @__PURE__ */ jsx10(
+  return /* @__PURE__ */ jsx13(
     "button",
     {
       type: "button",
@@ -11121,13 +11846,13 @@ function ToolButton({
 var ZOOM_STEP = 1.2;
 function Toolbar(props) {
   let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope);
-  return /* @__PURE__ */ jsxs10("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
-    /* @__PURE__ */ jsxs10("span", { className: "st-brand", children: [
-      /* @__PURE__ */ jsx10(Codicon7, { name: "type-hierarchy", size: 14 }),
+  return /* @__PURE__ */ jsxs12("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
+    /* @__PURE__ */ jsxs12("span", { className: "st-brand", children: [
+      /* @__PURE__ */ jsx13(Codicon9, { name: "type-hierarchy", size: 14 }),
       "Session tree"
     ] }),
-    /* @__PURE__ */ jsxs10("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
-      /* @__PURE__ */ jsx10(
+    /* @__PURE__ */ jsxs12("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
+      /* @__PURE__ */ jsx13(
         "button",
         {
           type: "button",
@@ -11141,7 +11866,7 @@ function Toolbar(props) {
           children: "All"
         }
       ),
-      scoped.map((project) => /* @__PURE__ */ jsxs10(
+      scoped.map((project) => /* @__PURE__ */ jsxs12(
         "button",
         {
           type: "button",
@@ -11153,16 +11878,16 @@ function Toolbar(props) {
           onMouseDown: noFocus,
           onClick: () => props.onScope(project.id),
           children: [
-            /* @__PURE__ */ jsx10(ProjectGlyph, { project, size: 11 }),
+            /* @__PURE__ */ jsx13(ProjectGlyph, { project, size: 11 }),
             project.label
           ]
         },
         project.id
       ))
     ] }),
-    /* @__PURE__ */ jsxs10("label", { className: "st-profile", title: "Profile", children: [
-      /* @__PURE__ */ jsx10(Codicon7, { name: "account", size: 12 }),
-      /* @__PURE__ */ jsxs10(
+    /* @__PURE__ */ jsxs12("label", { className: "st-profile", title: "Profile", children: [
+      /* @__PURE__ */ jsx13(Codicon9, { name: "account", size: 12 }),
+      /* @__PURE__ */ jsxs12(
         "select",
         {
           "data-testid": "session-tree-profile",
@@ -11175,20 +11900,20 @@ function Toolbar(props) {
             event.key === "Escape" && event.currentTarget.blur();
           },
           children: [
-            props.profiles.map((name) => /* @__PURE__ */ jsx10("option", { value: name, children: name }, name)),
-            /* @__PURE__ */ jsx10("option", { value: ALL_PROFILES, children: "All profiles" })
+            props.profiles.map((name) => /* @__PURE__ */ jsx13("option", { value: name, children: name }, name)),
+            /* @__PURE__ */ jsx13("option", { value: ALL_PROFILES, children: "All profiles" })
           ]
         }
       )
     ] }),
-    /* @__PURE__ */ jsxs10(
+    /* @__PURE__ */ jsxs12(
       "label",
       {
         className: "st-profile st-style",
         title: props.styleSource === "device" ? "View style (this device only — Settings → Plugins → Session Tree)" : "View style (synced to every device)",
         children: [
-          /* @__PURE__ */ jsx10(Codicon7, { name: "layout", size: 12 }),
-          /* @__PURE__ */ jsx10(
+          /* @__PURE__ */ jsx13(Codicon9, { name: "layout", size: 12 }),
+          /* @__PURE__ */ jsx13(
             "select",
             {
               "data-testid": "session-tree-style",
@@ -11201,14 +11926,14 @@ function Toolbar(props) {
               onKeyDown: (event) => {
                 event.key === "Escape" && event.currentTarget.blur();
               },
-              children: props.styles.map((style2) => /* @__PURE__ */ jsx10("option", { value: style2.id, children: style2.label }, style2.id))
+              children: props.styles.map((style2) => /* @__PURE__ */ jsx13("option", { value: style2.id, children: style2.label }, style2.id))
             }
           )
         ]
       }
     ),
-    /* @__PURE__ */ jsx10("span", { className: "st-spacer" }),
-    /* @__PURE__ */ jsxs10(
+    /* @__PURE__ */ jsx13("span", { className: "st-spacer" }),
+    /* @__PURE__ */ jsxs12(
       ToolButton,
       {
         testId: "session-tree-show-all",
@@ -11216,12 +11941,12 @@ function Toolbar(props) {
         pressed: props.showAll,
         onClick: () => props.onShowAll(!props.showAll),
         children: [
-          /* @__PURE__ */ jsx10(Codicon7, { name: "list-flat", size: 13 }),
+          /* @__PURE__ */ jsx13(Codicon9, { name: "list-flat", size: 13 }),
           "Show all"
         ]
       }
     ),
-    /* @__PURE__ */ jsxs10(
+    /* @__PURE__ */ jsxs12(
       ToolButton,
       {
         testId: "session-tree-show-archived",
@@ -11229,16 +11954,16 @@ function Toolbar(props) {
         pressed: props.showArchived,
         onClick: () => props.onShowArchived(!props.showArchived),
         children: [
-          /* @__PURE__ */ jsx10(Codicon7, { name: "archive", size: 13 }),
+          /* @__PURE__ */ jsx13(Codicon9, { name: "archive", size: 13 }),
           "Archived"
         ]
       }
     ),
-    props.canRearrange !== !1 && /* @__PURE__ */ jsx10(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx10(Codicon7, { name: "refresh", size: 13 }) }),
-    /* @__PURE__ */ jsx10("span", { className: "st-sep" }),
+    props.canRearrange !== !1 && /* @__PURE__ */ jsx13(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx13(Codicon9, { name: "refresh", size: 13 }) }),
+    /* @__PURE__ */ jsx13("span", { className: "st-sep" }),
     props.snapUnavailable ? (
       // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
-      /* @__PURE__ */ jsx10("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs10(
+      /* @__PURE__ */ jsx13("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs12(
         "button",
         {
           type: "button",
@@ -11250,12 +11975,12 @@ function Toolbar(props) {
           disabled: !0,
           onMouseDown: noFocus,
           children: [
-            /* @__PURE__ */ jsx10(Codicon7, { name: "symbol-numeric", size: 13 }),
+            /* @__PURE__ */ jsx13(Codicon9, { name: "symbol-numeric", size: 13 }),
             "Snap"
           ]
         }
       ) })
-    ) : /* @__PURE__ */ jsxs10(
+    ) : /* @__PURE__ */ jsxs12(
       ToolButton,
       {
         testId: "session-tree-snap",
@@ -11263,38 +11988,38 @@ function Toolbar(props) {
         pressed: props.snap,
         onClick: () => props.onSnap(!props.snap),
         children: [
-          /* @__PURE__ */ jsx10(Codicon7, { name: "symbol-numeric", size: 13 }),
+          /* @__PURE__ */ jsx13(Codicon9, { name: "symbol-numeric", size: 13 }),
           "Snap"
         ]
       }
     ),
-    /* @__PURE__ */ jsx10("span", { className: "st-sep" }),
-    /* @__PURE__ */ jsx10(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+    /* @__PURE__ */ jsx13("span", { className: "st-sep" }),
+    /* @__PURE__ */ jsx13(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
       zoomTo(clamp2(getZoom() / ZOOM_STEP));
     }, children: "−" }),
-    /* @__PURE__ */ jsx10(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+    /* @__PURE__ */ jsx13(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
       zoomTo(1);
-    }, className: "st-zoom", children: /* @__PURE__ */ jsxs10("span", { "data-testid": "session-tree-zoom", children: [
+    }, className: "st-zoom", children: /* @__PURE__ */ jsxs12("span", { "data-testid": "session-tree-zoom", children: [
       Math.round(zoom3 * 100),
       "%"
     ] }) }),
-    /* @__PURE__ */ jsx10(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+    /* @__PURE__ */ jsx13(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
       zoomTo(clamp2(getZoom() * ZOOM_STEP));
     }, children: "+" }),
-    /* @__PURE__ */ jsxs10(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-      /* @__PURE__ */ jsx10(Codicon7, { name: "screen-full", size: 13 }),
+    /* @__PURE__ */ jsxs12(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+      /* @__PURE__ */ jsx13(Codicon9, { name: "screen-full", size: 13 }),
       "Fit"
     ] }),
-    props.hasPanel && /* @__PURE__ */ jsxs10(Fragment8, { children: [
-      /* @__PURE__ */ jsx10("span", { className: "st-sep" }),
-      /* @__PURE__ */ jsx10(
+    props.hasPanel && /* @__PURE__ */ jsxs12(Fragment10, { children: [
+      /* @__PURE__ */ jsx13("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsx13(
         ToolButton,
         {
           testId: "session-tree-panel",
           title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
           pressed: props.panelOpen,
           onClick: () => props.onPanel(!props.panelOpen),
-          children: /* @__PURE__ */ jsx10(Codicon7, { name: "layout-sidebar-right", size: 13 })
+          children: /* @__PURE__ */ jsx13(Codicon9, { name: "layout-sidebar-right", size: 13 })
         }
       )
     ] })
@@ -11303,13 +12028,13 @@ function Toolbar(props) {
 
 // src/page/use-live-refresh.ts
 init_define_import_meta_env();
-import { useEffect as useEffect5, useRef as useRef5 } from "react";
+import { useEffect as useEffect7, useRef as useRef6 } from "react";
 var POLL_MS2 = 1e4;
 function useLiveRefresh(ctx, refresh) {
-  let latest = useRef5(refresh);
-  useEffect5(() => {
+  let latest = useRef6(refresh);
+  useEffect7(() => {
     latest.current = refresh;
-  }), useEffect5(() => {
+  }), useEffect7(() => {
     let offSessions = ctx.onEvent("sessions.changed", () => latest.current.sessions()), offProjects = ctx.onEvent("projects.changed", () => {
       latest.current.projects(), latest.current.sessions();
     }), offPoll = ctx.setInterval(() => {
@@ -11322,16 +12047,16 @@ function useLiveRefresh(ctx, refresh) {
 }
 
 // src/page/session-tree-page.tsx
-import { Fragment as Fragment9, jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+import { Fragment as Fragment11, jsx as jsx14, jsxs as jsxs13 } from "react/jsx-runtime";
 var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx, services }) {
-  return /* @__PURE__ */ jsx11(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx11(ReactFlowProvider, { children: /* @__PURE__ */ jsx11(PageBody, { ctx, services }) }) });
+  return /* @__PURE__ */ jsx14(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx14(ReactFlowProvider, { children: /* @__PURE__ */ jsx14(PageBody, { ctx, services }) }) });
 }
 function PageBody({ ctx, services: { sync, prefs } }) {
   let activeProfile = useValue(host4.state.profile) || "default", syncVersion = useSyncVersion(sync);
   usePrefsVersion(prefs);
-  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState6(ALL_PROJECTS), [selectedChoice, setSelectedId] = useState6(null), [fitRequest, setFitRequest] = useState6(0), [nowMs, setNowMs] = useState6(() => Date.now()), [toast, setToast] = useState6(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
-  useEffect6(() => sync.watch(profile), [sync, profile]);
+  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState7(ALL_PROJECTS), [selectedChoice, setSelectedId] = useState7(null), [fitRequest, setFitRequest] = useState7(0), [nowMs, setNowMs] = useState7(() => Date.now()), [toast, setToast] = useState7(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
+  useEffect8(() => sync.watch(profile), [sync, profile]);
   let health = useQuery({
     queryKey: ["session-tree", "health", activeProfile],
     queryFn: () => fetchHealth(ctx, activeProfile),
@@ -11350,7 +12075,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === profile ? previous : void 0,
     retry: !1,
     refetchOnWindowFocus: !1
-  }), profileNames = useMemo5(() => {
+  }), profileNames = useMemo7(() => {
     let names = new Set(profiles.data?.profiles ?? []);
     return names.add(activeProfile), profile !== ALL_PROFILES && names.add(profile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
   }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
@@ -11368,29 +12093,32 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     projects: () => {
       projects.refetch();
     }
-  }), useEffect6(() => ctx.setInterval(() => setNowMs(Date.now()), 6e4), [ctx]);
-  let projectList = useMemo5(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo5(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo5(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo5(
+  }), useEffect8(() => ctx.setInterval(() => setNowMs(Date.now()), 6e4), [ctx]);
+  let projectList = useMemo7(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo7(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo7(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo7(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo5(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo5(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo5(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState6(createFrameCache), frameLayout = useMemo5(
+  ), spec = useMemo7(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo7(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo7(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo7(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState7(createFrameCache), frameLayout = useMemo7(
     () => ready && style2.frame ? frameCache.get({ frame: style2.frame, model, showAll, collapsed, nowMs }) : void 0,
     [ready, style2, model, showAll, collapsed, nowMs, frameCache]
-  ), layout = useMemo5(
+  ), layout = useMemo7(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
     () => style2.frame ? frameLayout ?? EMPTY_LAYOUT : ready ? sync.place(ref, (previous) => style2.layout(model, previous, spec), { save: style2.savesLayout && !projects.isError, keys }) : EMPTY_LAYOUT,
     // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
     [ready, sync, ref, style2, model, keys, spec, syncVersion, projects.isError, frameLayout]
-  ), busy = useValue(host4.state.busy), busyBySession = useValue(host4.state.busyBySession), focusedSessionId = useValue(host4.state.focusedSessionId), focusedStoredSessionId = useValue(host4.state.focusedStoredSessionId), hostStatus = useMemo5(
+  ), busy = useValue(host4.state.busy), busyBySession = useValue(host4.state.busyBySession), focusedSessionId = useValue(host4.state.focusedSessionId), focusedStoredSessionId = useValue(host4.state.focusedStoredSessionId), [needsInput, setNeedsInput] = useState7(NO_NEEDS_INPUT);
+  useEffect8(() => {
+  }, [ctx]);
+  let hostStatus = useMemo7(
     () => ({
       busy: !!busy,
       busyBySession: busyBySession ?? {},
       focusedSessionId: focusedSessionId ?? null,
       focusedStoredSessionId: focusedStoredSessionId ?? null,
-      needsInput: NO_NEEDS_INPUT
+      needsInput
     }),
-    [busy, busyBySession, focusedSessionId, focusedStoredSessionId]
-  ), statusOf = useCallback5((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback5(() => {
+    [busy, busyBySession, focusedSessionId, focusedStoredSessionId, needsInput]
+  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback6(() => {
     if (frameLayout) {
       let { width, height } = flowStore.getState();
       width > 0 && height > 0 && flow.setViewport(frameLayout.fit(width, height, MIN_ZOOM), { duration: 0 });
@@ -11399,11 +12127,11 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
     flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : void 0 });
   }, [flow, flowStore, frameLayout, model, spec, scope]);
-  useEffect6(() => {
+  useEffect8(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback5(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef6(vpKey), canvasShown = ready && model.nodes.length > 0 && !sessions.isError, appliedKey = useRef6(null), appliedScope = useRef6(scope);
-  useEffect6(() => {
+  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef7(vpKey), canvasShown = ready && model.nodes.length > 0 && !sessions.isError, appliedKey = useRef7(null), appliedScope = useRef7(scope);
+  useEffect8(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
       appliedKey.current = null;
       return;
@@ -11419,7 +12147,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       saved && !refit ? flow.setViewport(saved, { duration: 0 }) : fit();
     }
   }, [vpKey, canvasShown, prefs, flow, fit, scope, style2]);
-  let onViewport = useCallback5((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback5(
+  let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback6(
     (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;
       if (id2 && (!node || node.readOnly))
@@ -11432,10 +12160,10 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       }
     },
     [model, layout, flow, style2, setSelectedId]
-  ), onMove = useCallback5(
+  ), onMove = useCallback6(
     (moves) => sync.drop(ref, new Map([...moves].map(([id2, point]) => [keys.toStore(id2), point]))),
     [sync, ref, keys]
-  ), onDragging = useCallback5((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback5(() => setToast(void 0), [setToast]), onRearrange = useCallback5(() => {
+  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), onRearrange = useCallback6(() => {
     if (!style2.savesLayout)
       return;
     let previous = sync.rearrange(ref), id2 = Date.now();
@@ -11447,17 +12175,17 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       }
     });
   }, [sync, ref, style2, requestFit, setToast]);
-  useEffect6(() => {
+  useEffect8(() => {
     if (toast)
       return ctx.setTimeout(() => setToast((current) => current?.id === toast.id ? void 0 : current), UNDO_TOAST_MS);
   }, [ctx, toast]);
-  let onOpen = useCallback5(
+  let onOpen = useCallback6(
     (node) => {
       !node.row || node.readOnly || host4.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
     },
     [activeProfile]
-  ), [pendingSelect, setPendingSelect] = useState6(null), [reveal, setReveal] = useState6(null);
-  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelectedId(pendingSelect), setReveal({ id: pendingSelect })), useEffect6(() => {
+  ), [pendingSelect, setPendingSelect] = useState7(null), [reveal, setReveal] = useState7(null);
+  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelectedId(pendingSelect), setReveal({ id: pendingSelect })), useEffect8(() => {
     let point = reveal ? layout.positions.get(reveal.id) : void 0;
     if (point) {
       let { zoom: zoom3 } = flow.getViewport();
@@ -11479,31 +12207,31 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     onBranched: (id2) => setPendingSelect(id2),
     onMoved: (id2) => sync.forget(profile, keys.toStore(id2)),
     onRemoved: (id2) => setSelectedId((current) => current === id2 ? null : current)
-  }), visibleCount = useMemo5(() => visibleRows(rows).length, [rows]), onCanvas = useMemo5(
+  }), visibleCount = useMemo7(() => visibleRows(rows).length, [rows]), onCanvas = useMemo7(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
-  ), onToggleLane = useCallback5((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id), offline = sync.offline(profile), onStyle = useCallback5(
+  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), offline = sync.offline(profile), onStyle = useCallback6(
     (id2) => {
       prefs.get().styleOverride ? prefs.set({ styleOverride: id2 }) : sync.setSettings(profile, { style: id2 });
     },
     [prefs, sync, profile]
   );
   if (health.isError)
-    return /* @__PURE__ */ jsx11("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx11("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx11(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
+    return /* @__PURE__ */ jsx14("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx14("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx14(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
   let body;
   if (sessions.isError || projects.isError) {
     let failed = sessions.isError ? sessions : projects;
-    body = /* @__PURE__ */ jsx11("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessions.isError ? "sessions" : "projects", children: /* @__PURE__ */ jsx11(ErrorState, { title: sessions.isError ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx11(Button2, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
+    body = /* @__PURE__ */ jsx14("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessions.isError ? "sessions" : "projects", children: /* @__PURE__ */ jsx14(ErrorState, { title: sessions.isError ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx14(Button2, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
       failed.refetch();
     }, children: failed.isFetching ? "Retrying…" : "Retry" }) }) });
   } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile))
-    body = /* @__PURE__ */ jsx11("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx11(EmptyState, { title: "Loading sessions…" }) });
+    body = /* @__PURE__ */ jsx14("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx14(EmptyState, { title: "Loading sessions…" }) });
   else if (model.nodes.length === 0)
-    body = /* @__PURE__ */ jsx11("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx11(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
+    body = /* @__PURE__ */ jsx14("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx14(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
   else {
     let saved = prefs.viewport(vpKey);
-    body = /* @__PURE__ */ jsxs11(Fragment9, { children: [
-      /* @__PURE__ */ jsx11(
+    body = /* @__PURE__ */ jsxs13(Fragment11, { children: [
+      /* @__PURE__ */ jsx14(
         GraphCanvas,
         {
           style: style2,
@@ -11522,13 +12250,15 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           initialViewport: saved,
           onViewport,
           frameLayout,
-          onToggleLane
+          onToggleLane,
+          panelOpen,
+          onPanel
         }
       ),
-      onCanvas === 0 && /* @__PURE__ */ jsx11("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : "No branched sessions here — the sessions without branches are listed on the right." })
+      onCanvas === 0 && /* @__PURE__ */ jsx14("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : "No branched sessions here — the sessions without branches are listed on the right." })
     ] });
   }
-  return /* @__PURE__ */ jsx11(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs11(
+  return /* @__PURE__ */ jsx14(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs13(
     "div",
     {
       className: "session-tree",
@@ -11544,7 +12274,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       "data-projects": projects.isError ? "error" : projects.data ? String(projectList.length) : "loading",
       title: projects.isError ? `projects.tree: ${errorText2(projects.error)}` : void 0,
       children: [
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx14(
           Toolbar,
           {
             projects: projectList,
@@ -11579,16 +12309,16 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             onPanel: (open) => prefs.setPanelOpen(style2.id, open)
           }
         ),
-        offline && /* @__PURE__ */ jsx11("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
-        sync.storeReadOnly && /* @__PURE__ */ jsx11("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
-        /* @__PURE__ */ jsxs11("div", { className: "session-tree__main", children: [
-          /* @__PURE__ */ jsx11("div", { className: "session-tree__stage", children: body }),
-          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx11(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+        offline && /* @__PURE__ */ jsx14("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
+        sync.storeReadOnly && /* @__PURE__ */ jsx14("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
+        /* @__PURE__ */ jsxs13("div", { className: "session-tree__main", children: [
+          /* @__PURE__ */ jsx14("div", { className: "session-tree__stage", children: body }),
+          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx14(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
         ] }),
-        toast && /* @__PURE__ */ jsxs11("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
-          /* @__PURE__ */ jsx11("span", { children: toast.message }),
-          /* @__PURE__ */ jsx11("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
-          /* @__PURE__ */ jsx11("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
+        toast && /* @__PURE__ */ jsxs13("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
+          /* @__PURE__ */ jsx14("span", { children: toast.message }),
+          /* @__PURE__ */ jsx14("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
+          /* @__PURE__ */ jsx14("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
         ] }),
         dialogs
       ]
@@ -11602,30 +12332,30 @@ function errorText2(error) {
 // src/settings/settings-page.tsx
 init_define_import_meta_env();
 import { host as host5, ListRow, SegmentedControl, ToggleRow, useValue as useValue2 } from "@hermes/plugin-sdk";
-import { useEffect as useEffect7 } from "react";
-import { jsx as jsx12, jsxs as jsxs12 } from "react/jsx-runtime";
+import { useEffect as useEffect9 } from "react";
+import { jsx as jsx15, jsxs as jsxs14 } from "react/jsx-runtime";
 var USE_SYNCED = "synced";
 function SettingsPage({ services: { sync, prefs } }) {
   let profile = useValue2(host5.state.profile) || "default";
-  useSyncVersion(sync), usePrefsVersion(prefs), useEffect7(() => sync.watch(profile), [sync, profile]);
+  useSyncVersion(sync), usePrefsVersion(prefs), useEffect9(() => sync.watch(profile), [sync, profile]);
   let styles = registeredStyles().map((style2) => ({ id: style2.id, label: style2.label })), settings = sync.settings(profile), synced = isRegisteredStyle(settings.style) ? settings.style : DEFAULT_STYLE_ID, override = prefs.get().styleOverride, device = isRegisteredStyle(override) ? override : USE_SYNCED, offline = sync.offline(profile);
-  return /* @__PURE__ */ jsxs12("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
-    /* @__PURE__ */ jsx12(
+  return /* @__PURE__ */ jsxs14("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
+    /* @__PURE__ */ jsx15(
       ListRow,
       {
         id: "session-tree-view-style",
         title: "View style",
         description: "How the session graph is drawn, on every device that uses this Hermes.",
-        action: /* @__PURE__ */ jsx12("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx12(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
+        action: /* @__PURE__ */ jsx15("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx15(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
       }
     ),
-    /* @__PURE__ */ jsx12(
+    /* @__PURE__ */ jsx15(
       ListRow,
       {
         id: "session-tree-device-style",
         title: "On this device",
         description: "Use the synced style here, or pick one for this device only.",
-        action: /* @__PURE__ */ jsx12("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx12(
+        action: /* @__PURE__ */ jsx15("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx15(
           SegmentedControl,
           {
             options: [{ id: USE_SYNCED, label: "Use synced style" }, ...styles],
@@ -11635,7 +12365,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         ) })
       }
     ),
-    /* @__PURE__ */ jsx12("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx12(
+    /* @__PURE__ */ jsx15("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx15(
       ToggleRow,
       {
         id: "session-tree-snap-default",
@@ -11645,7 +12375,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         onChange: (on) => sync.setSettings(profile, { snap: on })
       }
     ) }),
-    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx12("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
+    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx15("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
   ] });
 }
 
@@ -13021,10 +13751,562 @@ g.is-dimmed {
   color: var(--ui-text-primary);
   font-weight: 600;
 }
+
+/* --- Rich cards (card 6) --------------------------------------------------------------------
+   Mockup variants/rich-cards/. Status hues come from the theme's semantic colours (--ui-green
+   running, --ui-yellow needs input); everything else from --ui-* and the project colour. */
+
+@property --st-rc-ang {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.session-tree__block.st-rich {
+  display: block;
+  padding: 0;
+  overflow: visible;
+  border-radius: 16px;
+  background: var(--ui-bg-elevated);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--ui-text-primary) 12%, transparent);
+  font-size: 12px;
+  line-height: 1.3;
+  transition: opacity 0.2s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.session-tree__block.st-rich::before {
+  display: none;
+}
+
+.st-rc-body {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 13px 16px 12px;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.session-tree__block.st-rich.is-selected {
+  border-color: var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 7%, var(--ui-bg-elevated));
+}
+
+.session-tree__block.st-rich.is-open {
+  border-color: var(--ui-accent);
+  box-shadow:
+    0 0 0 2px var(--ui-accent),
+    0 0 26px 2px color-mix(in srgb, var(--ui-accent) 38%, transparent);
+}
+
+/* Running: a rotating conic shimmer on the border. */
+.session-tree__block.st-rich.is-running::after {
+  position: absolute;
+  inset: -1.5px;
+  z-index: 0;
+  padding: 1.5px;
+  border-radius: 17px;
+  background: conic-gradient(
+    from var(--st-rc-ang),
+    transparent 0 55%,
+    color-mix(in srgb, var(--ui-green) 55%, transparent) 70%,
+    var(--ui-green) 84%,
+    transparent 100%
+  );
+  animation: st-rc-spin 2.6s linear infinite;
+  content: '';
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+@keyframes st-rc-spin {
+  to {
+    --st-rc-ang: 360deg;
+  }
+}
+
+.session-tree__block.st-rich.is-archived {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.session-tree__block.st-rich.is-out-of-scope {
+  opacity: 0.16;
+}
+
+/* Compacted ×N: ghost cards stacked behind (offset down), plus the tag. */
+.st-rc-ghost {
+  position: absolute;
+  z-index: -1;
+  right: calc(var(--st-g) * 6px);
+  bottom: calc(var(--st-g) * -9px);
+  left: calc(var(--st-g) * 6px);
+  height: 40px;
+  border: 1px solid color-mix(in srgb, var(--ui-text-primary) 18%, var(--ui-stroke-secondary));
+  border-radius: 0 0 14px 14px;
+  background: color-mix(in srgb, var(--ui-text-primary) 3%, var(--ui-bg-elevated));
+}
+
+.st-rc-ctag {
+  position: absolute;
+  right: 14px;
+  bottom: -30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-bg-elevated));
+  color: var(--ui-text-primary);
+  font-size: 10.5px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Needs input: an amber banner strip on top of the card. */
+.st-rc-banner {
+  position: absolute;
+  right: -1px;
+  bottom: 100%;
+  left: -1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border-radius: 15px 15px 0 0;
+  background: var(--ui-yellow);
+  color: color-mix(in srgb, var(--ui-yellow) 12%, #000);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.st-rc-banner span {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.session-tree__block.st-rich.is-asking {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.st-rc-hd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 20px;
+}
+
+.st-rc-proj {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  max-width: 120px;
+  padding: 1px 8px 1px 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--st-pc, var(--ui-text-quaternary)) 16%, transparent);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-rc-arch {
+  --st-pc: var(--ui-text-quaternary);
+}
+
+.st-rc-udot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 22%, transparent);
+}
+
+.st-rc-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ui-green);
+  font-size: 11px;
+}
+
+.st-rc-run::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-green);
+  animation: st-pulse 1.6s infinite;
+  content: '';
+}
+
+.st-rc-grow {
+  flex: 1;
+}
+
+.st-rc-spark {
+  display: inline-block;
+  flex: none;
+  width: 50px;
+  height: 18px;
+}
+
+.st-rc-spark svg {
+  display: block;
+  overflow: visible;
+}
+
+.st-rc-spark polyline {
+  fill: none;
+  stroke: var(--ui-accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.st-rc-spark path {
+  fill: color-mix(in srgb, var(--ui-accent) 16%, transparent);
+}
+
+.st-rc-spark circle {
+  fill: var(--ui-accent);
+}
+
+.st-rc-spark.is-loading {
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ui-text-primary) 7%, transparent);
+}
+
+.session-tree__block.st-rich .st-more.st-rc-more {
+  position: static;
+  display: inline-flex;
+  width: 0;
+  overflow: hidden;
+  transform: none;
+  transition: width 0.12s;
+}
+
+.session-tree__block.st-rich:hover .st-more.st-rc-more,
+.session-tree__block.st-rich.is-selected .st-more.st-rc-more {
+  width: 20px;
+}
+
+.st-rc-ttl {
+  display: -webkit-box;
+  height: 37.7px;
+  margin-top: 9px;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 520;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.session-tree__block.st-rich.is-unread .st-rc-ttl {
+  font-weight: 750;
+}
+
+.st-rc-pv {
+  display: -webkit-box;
+  height: 34.8px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.st-rc-pv b,
+.st-rc-single-p b {
+  color: var(--ui-text-primary);
+  font-weight: 600;
+}
+
+.st-rc-pv.is-loading {
+  display: block;
+}
+
+.st-rc-sk {
+  display: block;
+  height: 9px;
+  margin-top: 7px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ui-text-primary) 7%, transparent) 30%,
+    color-mix(in srgb, var(--ui-text-primary) 14%, transparent) 50%,
+    color-mix(in srgb, var(--ui-text-primary) 7%, transparent) 70%
+  );
+  background-size: 300% 100%;
+  animation: st-rc-sk 2.4s ease-in-out infinite;
+}
+
+@keyframes st-rc-sk {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.st-rc-none {
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+}
+
+.st-rc-ft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.st-rc-model {
+  flex: none;
+  max-width: 80px;
+  padding: 1px 7px;
+  overflow: hidden;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 6px;
+  color: var(--ui-text-primary);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+.st-rc-tok {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.st-rc-bar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+}
+
+.st-rc-bar b {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+}
+
+/* The stand-in: a dashed skeleton card. */
+.session-tree__block.st-rich.is-standin {
+  border: 1.5px dashed color-mix(in srgb, var(--ui-text-tertiary) 50%, transparent);
+  background: color-mix(in srgb, var(--ui-bg-elevated) 70%, transparent);
+  box-shadow: none;
+  opacity: 0.8;
+}
+
+.session-tree__block.st-rich.is-standin .st-rc-ttl {
+  height: auto;
+  color: var(--ui-text-tertiary);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.session-tree__block.st-rich.is-standin .st-rc-pv {
+  height: auto;
+}
+
+.session-tree__block.st-rich.is-standin.is-out-of-scope {
+  opacity: 0.16;
+}
+
+/* Links: soft curves; "continued as" dashed accent with a pill. */
+.session-tree__link.st-rich-link {
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 55%, transparent);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+}
+
+.session-tree__link.st-rich-link.session-tree__link--reset {
+  stroke: var(--ui-accent);
+  stroke-dasharray: 7 6;
+}
+
+.session-tree__link.st-rich-link.session-tree__link--standin {
+  stroke-dasharray: 2 6;
+}
+
+.session-tree__link.st-rich-link.is-highlighted {
+  stroke: var(--ui-accent);
+  stroke-width: 2.6;
+}
+
+.st-rich-link-end {
+  fill: var(--ui-bg-elevated);
+  stroke: color-mix(in srgb, var(--ui-text-tertiary) 70%, transparent);
+  stroke-width: 2;
+}
+
+.st-rich-link-end.is-reset,
+.st-rich-link-end.is-highlighted {
+  stroke: var(--ui-accent);
+}
+
+.session-tree__link-label.st-rich-pill {
+  padding: 2px 9px;
+  border: 1px dashed color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The singles drawer (R8): slides in from the right edge, behind its grip. */
+.st-rc-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 300px;
+  border-left: 1px solid var(--ui-stroke-secondary);
+  background: color-mix(in srgb, var(--ui-bg-elevated) 96%, transparent);
+  box-shadow: -14px 0 30px color-mix(in srgb, var(--ui-text-primary) 14%, transparent);
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  user-select: none;
+}
+
+.st-rc-drawer.is-open {
+  transform: none;
+}
+
+.st-rc-grip {
+  position: absolute;
+  top: 50%;
+  left: -32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 32px;
+  padding: 12px 0;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: var(--ui-bg-elevated);
+  box-shadow: -4px 0 12px color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+}
+
+.st-rc-grip:hover {
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-bg-elevated));
+}
+
+.st-rc-grip b {
+  color: var(--ui-accent);
+}
+
+.st-rc-dr-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 16px 8px;
+  font-weight: 650;
+}
+
+.st-rc-dr-h small {
+  color: var(--ui-text-tertiary);
+  font-weight: 400;
+}
+
+.st-rc-dr-list {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0 10px 12px;
+  overflow: auto;
+}
+
+.st-rc-single {
+  display: grid;
+  box-sizing: border-box;
+  grid-template-columns: 8px 1fr auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 3px 9px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: default;
+}
+
+.st-rc-single:hover {
+  background: color-mix(in srgb, var(--ui-text-primary) 6%, transparent);
+}
+
+.st-rc-single.is-selected {
+  background: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+}
+
+.st-rc-single.is-archived {
+  opacity: 0.55;
+}
+
+.st-rc-single-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--st-pc);
+}
+
+.st-rc-single-t {
+  overflow: hidden;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-rc-single-a {
+  color: var(--ui-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-rc-single-p {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 `;
 
 // src/plugin.tsx
-import { jsx as jsx13 } from "react/jsx-runtime";
+import { jsx as jsx16 } from "react/jsx-runtime";
 var PLUGIN_ID = "session-tree", ROUTE_PATH = "/session-tree";
 function injectStyles(ctx) {
   let style2 = document.createElement("style");
@@ -13043,7 +14325,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx13(SessionTreePage, { ctx, services })
+        render: () => /* @__PURE__ */ jsx16(SessionTreePage, { ctx, services })
       },
       {
         id: "nav",
@@ -13064,7 +14346,7 @@ var plugin = {
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx13(SettingsPage, { services })
+      render: () => /* @__PURE__ */ jsx16(SettingsPage, { services })
     });
   }
 }, plugin_default = plugin;
