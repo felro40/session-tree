@@ -66,8 +66,11 @@ Session actions (card 3; `session_profile` names one profile, `*` is a 400; an u
   a 409 `revision_conflict`, a missing one a 409, a running turn a 409 `session_busy`. Archiving
   also unpins, like the app.
 - `POST /sessions/{id}/delete` `{…fence}` → the core `DELETE /api/sessions/{id}` handler itself
-  (fenced `delete` mutation and on-disk scrub). Branch children stay, orphaned.
-- `GET /sessions/{id}/export` → the core `GET /api/sessions/{id}/export` stream, byte for byte.
+  (fenced `delete` mutation and on-disk scrub). Branch children stay, orphaned. An id already gone
+  answers the core's idempotent `{ok: true, already_absent: true}`.
+- `GET /sessions/{id}/export` → the core `GET /api/sessions/{id}/export` stream's exact bytes,
+  base64 in `{ok, session_id, title, encoding: "base64", content_type, bytes, sha256, body}`
+  (`ctx.rest` parses every answer as JSON; the page writes the decoded bytes verbatim).
 - Nothing in the backend writes `state.db` itself.
 
 Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (Pin, Appearance),

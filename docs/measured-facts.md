@@ -384,8 +384,8 @@ Each route was read in the cited contracts and in the app's own code
 | Rename… | `renameSessionPreferringRpc`: `session.title` RPC when the window knows a live runtime for the session and the title is not empty, else fenced `PATCH /api/sessions/{id} {title}` | the same choice: `session.title` for the session focused in the app (`focusedStoredSessionId` ↔ `focusedSessionId`, the only runtime mapping the SDK exposes), else the backend's fenced `POST /sessions/{id}/rename` → `_mutate_session_request` | backend path read back through `SessionDB` and the core detail; a stale fence → 409 `revision_conflict`. In the Webapp a session opened in a tab covers the page; back on the page no session is focused, so the e2e rename of an open session took the backend path (the RPC choice is unit-tested). |
 | Move to project ▸ | `MoveToProjectItems`: tree minus the current project and folderless projects → `session.workspace.move {session_key, cwd: projectRootCwd, profile}` | the same | works on a session the window never opened; the row's `cwd` and `git_repo_root` change and `projects.tree` regroups it. |
 | Copy ID | `CopyButton` (context-menu item, keeps the menu open showing "Copied") | the SDK `CopyButton`, plus a toast | clipboard reads the stored id. |
-| Branch | `session.branch_stored {parent_session_id, idempotency_key, cwd, profile, source}` | the same; the page stays (no tab) | the child is persisted at once (`_seed_branch_row`), `_branched_from` = the parent; the result's `session_id` equals the stored id (no separate runtime to release). |
-| Export | `exportSession`: client-side pages of `/api/sessions/{id}/messages` wrapped in its own JSON, `<title>-<id8>.json` | the card's choice: the backend's `GET /sessions/{id}/export` = the core `GET /api/sessions/{id}/export` handler, same file name rule | bytes equal to the core endpoint's (pytest, in-process); the downloaded file parses equal to the core export. |
+| Branch | `session.branch_stored {parent_session_id, idempotency_key, cwd, profile, source}` | the same, one request per parent in flight (`createBranchFlights`, like the app's `branchCreateFlightsRef`); the page stays (no tab) | the child is persisted at once (`_seed_branch_row`), `_branched_from` = the parent; the result's `session_id` equals the stored id (no separate runtime to release). |
+| Export | `exportSession`: client-side pages of `/api/sessions/{id}/messages` wrapped in its own JSON, `<title>-<id8>.json` | the card's choice: the backend's `GET /sessions/{id}/export` runs the core `GET /api/sessions/{id}/export` handler and returns its bytes base64 in an envelope; the page writes them verbatim; same file name rule | **byte for byte** the core endpoint's (fix r1): pytest decodes the envelope and compares with the core's bytes (whole-number float and `Infinity` rows included); the e2e compares the downloaded file with the core endpoint's raw bytes (`Buffer.equals` + sha256). |
 | Mark as read / unread | `markSessionUnread` → fenced `PATCH {unread}` | the backend's fenced `POST /sessions/{id}/read {unread}` → `_mutate_session_request` | the row's `unread` and `SessionDB.session_unread` follow. |
 | Archive / Unarchive | `setSessionArchived` → fenced `PATCH {archived, pinned:false}` (REST, not the RPC) | **the backend's fenced `POST /sessions/{id}/archive`** → `_mutate_session_request` with the same payload | **`session.archive` from a Webapp window fails client-side** (`api/canonical-protocol.ts` `retainedMutation`: "Session revision unavailable; reopen the session before editing metadata") for any session the window never opened; the app itself archives over REST. |
 | Delete | `deleteSession` → fenced `DELETE /api/sessions/{id}` after `ConfirmDialog` | **the backend's fenced `POST /sessions/{id}/delete`** → the core `delete_session_endpoint` itself | **`session.delete` is not served to a Webapp window** (`-32601 unknown method`, `data.reason: unknown_method`). The core delete takes the block's compression chain and leaves branch children (orphaned, `_branched_from` kept). |
@@ -461,7 +461,86 @@ No action needed a direct `state.db` write, so nothing was blocked.
 - **Appearance read-back** is the store `host.sessions.setColor` writes (localStorage); blocks keep
   the project colour (R11 asks for the project colour on blocks).
 
+## Fix r1 (card 3) — export bytes, Branch flights, rename limits, idempotent delete
+
+**B1: the export is byte-identical to the core export.**
+- Before: `ctx.rest` parsed the backend's JSON (which was the core's bytes) and the page wrote
+  `JSON.stringify(data)`. Not verbatim: Python's `"estimated_cost_usd":2.0` came out as `:2`
+  (r1: 2 047 B core vs 2 045 B file, first difference at byte 739), and a non-finite float
+  (`Infinity`) would make the parse throw.
+- `ctx.rest` cannot return raw text: in the Webapp it is `browserApi`
+  (`apps/desktop/src/lib/browser-transport.ts:182-220`), which reads the body as text and returns
+  `JSON.parse(text)` (an empty body is `null`, an HTML body throws). So the core body travels as
+  data, not as the response.
+- Now: the backend still runs the core `export_session_endpoint` (no re-implementation, no SQL),
+  drains its `StreamingResponse` exactly as Starlette sends it (each `str` chunk encoded with the
+  response charset, UTF-8) and answers
+  `{ok, session_id, title, encoding: "base64", content_type, bytes, sha256, body}`. The page
+  decodes `body` (`decodeExportEnvelope`: `atob` → `Uint8Array`, length checked against `bytes`)
+  and puts those bytes in the `Blob` unchanged. File name unchanged (`<title>-<id8>.json`).
+- Tests: pytest decodes the envelope and compares it with the core endpoint's bytes for
+  `st-sys-tip`, `st-md-v2`, a whole-number-cost row (`"estimated_cost_usd":2.0`) and an
+  `Infinity` row; the envelope's `bytes`/`sha256` match. Unit tests: verbatim decode (`2.0`,
+  `Infinity`, non-ASCII). e2e: right-click → Export on `st-md-v2` (5 450 B) and on
+  `st-export-whole` (`seed-fixtures.py --whole-cost-branch`, 2 854 B), each download
+  `Buffer.equals` the core `GET /api/sessions/{id}/export` raw bytes (fetched by the signed-in
+  page with the tab's own session token) and has the same sha256. Mutation check: with the old
+  parse + stringify put back in the page, the whole-cost check failed (2 852 vs 2 854 B, first
+  differing byte 834); `st-md-v2` still matched (its floats are fractional).
+- **Non-finite floats in Hermes:** `SessionDB.update_token_counts(estimated_cost_usd=nan)` is
+  refused (SQLite stores NaN as NULL: `IntegrityError: NOT NULL constraint failed:
+  session_model_usage.estimated_cost_usd`), so a NaN cannot be stored. `inf` is stored and the
+  core export writes `"estimated_cost_usd":Infinity`. That row exists only inside its pytest (added
+  through `SessionDB`, removed after); it is not an e2e fixture.
+
+**NB1: Branch double-submit.** The page minted a new key per call and claimed retry stability.
+Now `createBranchFlights` keeps one `session.branch_stored` flight per (profile, parent): a second
+Branch while the first is in flight joins it (one RPC, one key for the attempt), and only the first
+caller places, selects and toasts; the flight is dropped once it settles, so a later Branch is a
+new attempt with a new key. Unit test: two rapid invocations on the same parent → 1 RPC; other
+parents/profiles are separate; a failure drops the flight. In the Webapp the canonical client turns
+`session.branch_stored` into a retained `session.mutate` and drops the key itself
+(`apps/desktop/src/api/canonical-protocol.ts:461-466` → `retainedMutation`, `:331-350`); r1 measured
+the same key sent twice giving 2 children there, so the page-side guard is what holds on every
+transport.
+
+**NB2: rename limits.** The dialog's `maxLength={100}` silently cut a pasted title. Removed, as
+in the app's dialog: the full text is sent and Hermes decides. 101–400 characters: the core
+answers 400 `Title too long (N chars, max 100)`; over 400: the plugin refuses first (422,
+`string_too_long` on `title`), and `restErrorText` words it the same way (`Title too long (5000
+chars, max 100)`). The dialog stays open with the error inline (plus the app's error toast, as
+the app's own rename does); nothing is saved. An empty title still clears it (the app's REST
+clear). e2e: paste (clipboard + Ctrl+V) 5 000 and then 150 characters — the input keeps 5 000 / 150,
+answers 422 then 400, both messages shown, the title unchanged in the backend rows, the core detail
+and the block. pytest: 150 → 400, 5 000 → 422, the stored title unchanged.
+
+**NB3: delete of an already-absent row.** The backend's delete no longer pre-checks with a 404:
+the core `delete_session_endpoint` decides. Measured (pytest): a fenced delete of an id already
+gone answers `{"ok": true, "already_absent": true}`; without a fence the core guard answers 409
+first (`client_upgrade_required`); a fence with revision 0 and no generation is 400
+`invalid_params`. The page treats `already_absent`, and the 404 "Session not found" of the fence
+read (the row vanished before the confirm), as deleted. e2e: the confirm is open, another client
+deletes the row through the backend, Delete then closes the confirm as deleted, no error shown.
+
+**NB4: Space on the focused profile select (not changed).** Since the card-2 carry-forward, a
+Space keydown aimed at the profile `<select>` is taken as the pan key, so a keyboard user cannot
+open the select with Space. Trade-off kept: only Space is intercepted (`graph-canvas.tsx` keydown
+capture returns for any other `code`), so the select's other keys and a click are left to the
+browser; letting Space open it again would bring back the bug that fix closed (Space + drag not
+panning after a profile change). Not a trivial safe change, so left as is.
+
+**NB5:** the stale comment in `test_router_mutations_are_only_the_fenced_session_actions` now
+names the four writes it asserts.
+
 ## Gates, bundle and numbers (HEAD of this card)
+
+- **Fix r1:** `desktop/plugin.js` **505 406 bytes** (52 esbuild inputs; was 503 398), byte-identical
+  over two rebuilds (sha256 `f8f3a2c2…3abcba92`). lint 0; build 0; `npm test` 134/134 (was 128);
+  `test:py` 80 (was 77; the unknown-session 404 case for delete is gone, NB3, and five tests are
+  new); `test:e2e` 74/74 — foundation 19 + core-dense 28 + actions 27 (was 24). 500-session
+  fixture: first render 314 ms, pan 121 frames in 2003 ms = 60.4 fps.
+
+Card 3 (implementation, `93318b5`):
 
 - **`desktop/plugin.js`: 503 398 bytes** (52 esbuild inputs; was 471 726), byte-identical over
   rebuilds (sha256 `c30c0d15…f139950`). Loader cap 16 MiB; test budget 2 MiB. No new dependency.
