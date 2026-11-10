@@ -1055,3 +1055,99 @@ disagrees with the card-5 sections above, this section is current.
   `react`, `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
 - lint 0; build 0; `npm test` 217/217 (was 205); `test:py` 177 (unchanged); `test:e2e` 124/124 —
   foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 25 (was 21).
+
+## Fix r2 (card 5) — a data refresh re-routed every link (B1-r2) + NB1
+
+Measured 2026-11-10 by the card-5 fix-r2 coder, same isolated homes and ports (19350–19354), fresh
+homes (`scripts/test-hermes reset`, then `npm run test:e2e`). Fix start commit `92c59f1`
+(`git status --short` empty); code commit `51367d4`, docs commit after it. Where this section
+disagrees with the sections above, this section is current. In particular, fix r1's "a spurious
+recompute does not re-route either" was untrue: its unit "canvas memo chain" was a test-local copy
+that, like the real canvas, keyed the routes on the model.
+
+### B1-r2 — the router keys on structure, not on the model
+
+- **Cause (review r2):** `graph-canvas.tsx` memoised the routes on `[model, rects, style]` and the
+  shown set on `[model, spec, frameShown]` (always a new `Set`). Every refetch gives a new model,
+  so `routeLinks` ran the A* detour over every block although positions and the shown set were
+  reused: 617 + 762 ms (Show all off) and 466 ms (on) per chat turn on the 500 fixture (reviewer).
+- **Fix (`src/page/canvas-routing.ts`):** the canvas's routing chain, as one object the canvas
+  holds (`useState(createCanvasRouting)`) and asks on every render. Stages: shown set (a framed
+  style's as given; else the laid-out families, from the model) → rectangles (shown, positions,
+  spec) → link ends (per link: edge id, source, target, kind — all the router and the style's ports
+  read from the model) → routes (link ends, rectangles, `style.ports`, `style.router`). Each stage
+  reruns only when one of its inputs is a new object and keeps its previous output when the new one
+  is equal, so the routes never depend on the model object.
+- **Memo-chain audit (`graph-canvas.tsx`):** what feeds the router or its obstacles — shown,
+  rectangles, link ends, routes — is in that chain, with no model key. Left on the model, as it must
+  be: `lineage`, `baseNodes` (block content: title, last used, messages, tokens, status, pinned),
+  `edges` (flow edge props; `data.route` is the stable route object), `graphNode`, the menu. The
+  frame cache still recomputes the Swimlanes layout on a new model (cheap; it reuses equal
+  positions / shown) — it does not route.
+- **Dense:** the same chain. A drop changes the committed positions → new rectangles → every link
+  re-routed once (R13); during a drag nothing changes in the chain (links draw live, as before). The
+  only difference: a Dense refetch with equal positions also no longer re-routes (it cost 3–4 ms).
+  core-dense's e2e (28, unchanged) passes.
+- **Unit (`tests/js/canvas-routing.test.ts`, 4 tests, through `createCanvasRouting`):** Swimlanes,
+  Show all off and on: a new model (new row objects) with one changed `message_count`,
+  `last_active` and tokens → **0 router calls**, `routes`, link ends, rectangles and shown `===`, and
+  the new model's node (what the block draws) carries the new count; a new `/branch` child → routed
+  once more, its link present; the same rows again → nothing. Dense: a content-only refetch with an
+  equal new positions map keeps the routes; a moved block re-routes once and the link end follows.
+  `tests/js/frame-cache.test.ts` now drives the same object (its test-local copy is gone); its
+  "same rows, new model" test asserts 0 router calls and `routes ===`, and its former control is
+  now "without the cache every tick gives a new positions map; the chain routes nothing while the
+  rectangles are equal, and once more when a block moves".
+- **The displayed count:** asserted in the DOM by the e2e below (the block's `messages` field).
+- **e2e (`scripts/e2e-swimlanes.ts`):** profile `scale`, Swimlanes, first render settled + 3 s, a
+  `PerformanceObserver('longtask')`, then `seed-fixtures.py --append st-scale-0000 scale` (one
+  user/assistant pair through Hermes's `SessionDB.append_message` in the isolated home), wait until
+  the block shows the new count, then 2 s more. Final run:
+  - Show all off: **2 → 4 msgs after 1022 ms, 0 long tasks**;
+  - Show all on (500 blocks): **4 → 6 msgs after 669 ms, 0 long tasks**.
+- **Fails on `92c59f1`:** a `git archive 92c59f1` export outside the repo with the new
+  `e2e-swimlanes.ts` and `seed-fixtures.py` laid over it: the new check fails with long tasks of
+  **666 ms and 664 ms** (Show all off; the check stops at the first failing run), the other 25
+  checks pass. The unit tests on the same export, with a probe shim that ports 92c59f1's inline
+  memo deps to the `createCanvasRouting` interface: all 4 canvas-routing tests and the 2 changed
+  frame-cache tests fail (e.g. "the router ran on a content-only refetch: 22 !== 11").
+- **Minute tick (still):** the idle check across a real tick, final run: Show all off 1 tick, 0 long
+  tasks; on 1 tick, 0 long tasks.
+
+### NB1 — local midnight that does not exist
+
+- `localCalendar.midnight`: when the guess is not the day's first second (`dayOf(start) === day &&
+  dayOf(start − 1) === day − 1` fails, a spring-forward at 00:00), binary-search the boundary within
+  ±4 h. Ordinary days keep the guess.
+- Unit: an injected America/Havana function (2026-03-08 starts at 01:00 CDT = 05:00 UTC, not 04:00;
+  the 23 h day's fraction); with the real zones (`TZ=` + `browserOffsetAt`) Havana, Santiago, New
+  York and Lord Howe, every one of 400 days starts at its first local second. On `92c59f1` the
+  injected test and the Havana and Santiago runs fail (`day start 2026-03-08T04:00:00.000Z`).
+
+### NB2 — not taken
+
+- The shifted pill still sits right of today's label, away from its line in the morning, and can
+  clip at the axis's right edge at high zoom. Keeping it inside the axis conflicts with "never cover
+  today's label" when the label is near the right edge; that needs a design call, and the line
+  itself is exact.
+
+### 500-session fixture (final run, fresh homes, `51367d4`)
+
+- **Swimlanes** (Show all): first render **638 ms**, pan **123 frames / 2003 ms = 61.4 fps**
+  (development run: 603 ms / 61.4 fps).
+- **Dense** (Show all), at the end of the swimlanes suite: **339 ms, 61.4 fps**; core-dense's own
+  check: 315 ms, 60.9 fps.
+
+### No position writes
+
+- Unchanged and proven by the e2e network log: during Swimlanes only `PATCH /settings` and the
+  Move's `POST /state/forget`; Dense → Swimlanes → Dense left all 20 stored Dense entries exact.
+  `--append` writes only messages in the isolated home's scale profile.
+
+### Gates, bundle and numbers (code commit `51367d4`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 602 455 bytes** (was 600 383), byte-identical over two builds and to the
+  committed file (sha256 `78d4d63e…d7bec869b7`). Imports: `@hermes/plugin-sdk`, `react`,
+  `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
+- lint 0; build 0; `npm test` 226/226 (was 217); `test:py` 177 (unchanged); `test:e2e` 125/125 —
+  foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 26 (was 25).

@@ -8,8 +8,9 @@ toolbar's style switcher, like every registered style (card 4).
 Source: `src/styles/swimlanes/` — `layout.ts` (the pure layout), `spec.ts` (geometry, ports, the
 shared layout spec), `swim-flow.tsx` (blocks, stand-in, links, lane chip), `layers.tsx` (the
 layers around the flow), `index.ts` (the style definition); `src/page/frame-cache.ts` (when the
-page recomputes it). Unit tests: `tests/js/swimlanes-layout.test.ts`,
-`tests/js/frame-cache.test.ts`; e2e: `scripts/e2e-swimlanes.ts`.
+page recomputes it), `src/page/canvas-routing.ts` (when the canvas re-routes links). Unit tests:
+`tests/js/swimlanes-layout.test.ts`, `tests/js/frame-cache.test.ts`,
+`tests/js/canvas-routing.test.ts`; e2e: `scripts/e2e-swimlanes.ts`.
 
 ## How it plugs into the canvas shell
 
