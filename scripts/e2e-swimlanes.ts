@@ -160,10 +160,12 @@ async function switchStyle(page: Page, to: string): Promise<void> {
   const steps = options.indexOf(to) - options.indexOf(current)
 
   assert(options.includes(to), `no style ${to} in ${options.join(', ')}`)
-  await select.focus()
 
+  // One option per key press: the select blurs after every change, so focus it before each press.
   for (let i = 0; i < Math.abs(steps); i += 1) {
+    await select.focus()
     await page.keyboard.press(steps > 0 ? 'ArrowDown' : 'ArrowUp')
+    await page.waitForTimeout(250)
   }
 
   await page.waitForTimeout(500)

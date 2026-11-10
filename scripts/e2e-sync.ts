@@ -276,10 +276,13 @@ async function switchStyle(page: Page, to: string): Promise<void> {
   const steps = options.indexOf(to) - options.indexOf(current)
 
   assert(options.includes(to), `no style ${to} in ${options.join(', ')}`)
-  await select.focus()
 
+  // One option per key press: the select hands the keyboard back (blurs) after every change, so
+  // it is focused again before each press (card 5: a third style sits between Dense and E2E alt).
   for (let i = 0; i < Math.abs(steps); i += 1) {
+    await select.focus()
     await page.keyboard.press(steps > 0 ? 'ArrowDown' : 'ArrowUp')
+    await page.waitForTimeout(250)
   }
 
   await page.waitForTimeout(400)
