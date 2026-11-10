@@ -48,50 +48,91 @@ MAX_TZ_OFFSET = 14 * 60
 _ROLES = ("user", "assistant")
 
 # --- plain text --------------------------------------------------------------------------------
+#
+# Bounded cost (review r1 B1). Only the start of a message is shown, so ``plain_text`` reads at
+# most ``INPUT_MAX`` characters of it, and every pattern below is linear in its input:
+#
+# * an inline construct (emphasis, inline code, link / image text, URL, tag name) stays on one
+#   line and has a fixed maximum length (``SPAN``, ``URL_MAX``), so an opener without a closer
+#   scans a bounded distance, never to the end of the text;
+# * a block construct that may span lines (a dropped tool-call / reasoning block, a code fence,
+#   an HTML comment) ends at its closer *or at the end of the text*: an opener without a closer
+#   matches once and consumes the rest, so nothing is rescanned. That is also why a fence or a
+#   tool-call payload cut by ``INPUT_MAX`` still gives inert text (the code is kept, the payload
+#   dropped), and ``_TAG_TAIL`` removes a tag cut open at the end;
+# * runs of blanks are possessive (``*+`` / ``++``) or start at a run's first character, so two
+#   adjacent blank runs cannot trade characters back and forth.
+#
+# Longer emphasis / code / link text than ``SPAN`` simply keeps its markers as text.
 
+#: Characters of a message's text the excerpt reads (only the start is shown).
+INPUT_MAX = 4096
+#: Longest inline span (emphasis, inline code, link or image text) that is unwrapped.
+SPAN = EXCERPT_MAX
+#: Longest link / image / autolink target.
+URL_MAX = 512
+
+_BLOCK_NAMES = "tool_call|tool_calls|function_call|tool_result|think|thinking|reasoning|script|style"
 _DROP_BLOCKS = re.compile(
-    r"<(tool_call|tool_calls|function_call|tool_result|think|thinking|reasoning|script|style)\b[^>]*>.*?(</\1\s*>|$)",
+    rf"<({_BLOCK_NAMES})\b[^<>]{{0,{URL_MAX}}}+>.*?(?:</\1\s{{0,16}}+>|\Z)",
     re.IGNORECASE | re.DOTALL,
 )
-_FENCE = re.compile(r"(^|\n)[ \t]*(`{3,}|~{3,})[^\n]*\n(.*?)(\n[ \t]*\2[ \t]*(?=\n|$)|$)", re.DOTALL)
-_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
-_REF_LINK = re.compile(r"\[([^\]]+)\]\[[^\]]*\]")
-_AUTOLINK = re.compile(r"<((?:https?|mailto|ftp):[^>\s]+)>", re.IGNORECASE)
-_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?/?>|<!--.*?-->", re.DOTALL)
-_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+", re.MULTILINE)
-_HEADING_TAIL = re.compile(r"[ \t]+#+[ \t]*$", re.MULTILINE)
-_QUOTE = re.compile(r"^[ \t]{0,3}(>[ \t]?)+", re.MULTILINE)
-_LIST = re.compile(r"^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+(\[[ xX]\][ \t]+)?", re.MULTILINE)
-_RULE = re.compile(r"^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*$", re.MULTILINE)
-_TABLE_RULE = re.compile(r"^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*$", re.MULTILINE)
+_FENCE = re.compile(r"(^|\n)[ \t]*+(`{3,}+|~{3,}+)[^\n]*+\n(.*?)(?:\n[ \t]*+\2[ \t]*+(?=\n|\Z)|\Z)", re.DOTALL)
+# A link target: no blanks-only rule, one level of nested parentheses (``javascript:alert(x)``,
+# ``Foo_(bar)``), at most URL_MAX characters on each side of it.
+_TARGET = rf"\((?:[^()\n]{{0,{URL_MAX}}}+(?:\([^()\n]{{0,64}}+\)[^()\n]{{0,{URL_MAX}}}+)?)\)"
+_LABEL = rf"[^\[\]\n]{{1,{SPAN}}}+"
+_IMAGE = re.compile(rf"!\[([^\[\]\n]{{0,{SPAN}}}+)\]{_TARGET}")
+_LINK = re.compile(rf"\[({_LABEL})\]{_TARGET}")
+_REF_LINK = re.compile(rf"\[({_LABEL})\]\[[^\[\]\n]{{0,{SPAN}}}+\]")
+# A reference definition (``[1]: https://…``) is not text: the whole line goes.
+_REF_DEF = re.compile(rf"^[ \t]{{0,3}}\[{_LABEL}\]:[^\n]*+", re.MULTILINE)
+_AUTOLINK = re.compile(rf"<((?:https?|mailto|ftp):[^<>\s]{{1,{URL_MAX}}}+)>", re.IGNORECASE)
+_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:-]*+(?:\s[^<>]*+)?/?>|<!--.*?(?:-->|\Z)", re.DOTALL)
+# A tag cut open at the end of the text (by INPUT_MAX, or a truncated message).
+_TAG_TAIL = re.compile(r"<[!/]?[A-Za-z][^<>]*+\Z")
+_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]++", re.MULTILINE)
+_HEADING_TAIL = re.compile(r"(?<![ \t])[ \t]++#++[ \t]*+$", re.MULTILINE)
+_QUOTE = re.compile(r"^[ \t]{0,3}(?:>[ \t]?)++", re.MULTILINE)
+_LIST = re.compile(r"^[ \t]*+(?:[-*+]|\d{1,9}[.)])[ \t]++(?:\[[ xX]\][ \t]++)?", re.MULTILINE)
+_RULE = re.compile(r"^[ \t]*+([-*_])(?:[ \t]*+\1){2,}+[ \t]*+$", re.MULTILINE)
+_TABLE_RULE = re.compile(r"^[ \t]*+\|?[ \t]*+:?-{2,}+:?[ \t]*+(?:\|[ \t]*+:?-{2,}+:?[ \t]*+)*+\|?[ \t]*+$", re.MULTILINE)
 _EMPHASIS = (
-    re.compile(r"(\*\*|__)(?=\S)(.+?)(?<=\S)\1", re.DOTALL),
-    re.compile(r"(?<![\w*])\*(?=\S)(.+?)(?<=\S)\*(?![\w*])", re.DOTALL),
-    re.compile(r"(?<![\w_])_(?=\S)(.+?)(?<=\S)_(?![\w_])", re.DOTALL),
-    re.compile(r"~~(?=\S)(.+?)(?<=\S)~~", re.DOTALL),
+    re.compile(rf"(\*\*|__)(?=\S)([^\n]{{1,{SPAN}}}?)(?<=\S)\1"),
+    re.compile(rf"(?<![\w*])\*(?=\S)([^\n]{{1,{SPAN}}}?)(?<=\S)\*(?![\w*])"),
+    re.compile(rf"(?<![\w_])_(?=\S)([^\n]{{1,{SPAN}}}?)(?<=\S)_(?![\w_])"),
+    re.compile(rf"~~(?=\S)([^\n]{{1,{SPAN}}}?)(?<=\S)~~"),
 )
-_INLINE_CODE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
+# A code span: a backtick run (not inside a longer run) up to the same run on the same line.
+_INLINE_CODE = re.compile(rf"(?<!`)(`{{1,16}}+)(?!`)([^\n]{{1,{SPAN}}}?)(?<!`)\1(?!`)")
 _SPACE = re.compile(r"\s+")
 
 
-def _text_of(content: Any) -> str:
-    """The text of a message's content: a string, or the text parts of a multimodal list."""
+def _text_of(content: Any, limit: int = INPUT_MAX) -> str:
+    """The first ``limit`` characters of a message's text: a string, or the text parts of a
+    multimodal list."""
     if isinstance(content, str):
-        return content
+        return content[:limit]
     if isinstance(content, list):
-        parts = []
+        parts, size = [], 0
         for part in content:
+            if size >= limit:
+                break
             if isinstance(part, str):
-                parts.append(part)
+                text = part
             elif isinstance(part, dict) and part.get("type") in {"text", "input_text", "output_text"} and isinstance(part.get("text"), str):
-                parts.append(part["text"])
-        return "\n".join(parts)
+                text = part["text"]
+            else:
+                continue
+            parts.append(text[: limit - size])
+            size += len(parts[-1]) + 1
+        return "\n".join(parts)[:limit]
     return ""
 
 
 def plain_text(content: Any) -> str:
-    """Markdown / HTML-looking message text as plain readable text on one line."""
+    """Markdown / HTML-looking message text as plain readable text on one line (from the first
+    ``INPUT_MAX`` characters; linear time, see above)."""
     text = _text_of(content)
     if not text:
         return ""
@@ -100,6 +141,7 @@ def plain_text(content: Any) -> str:
     # Fenced code keeps its code (fences and the language tag go).
     text = _FENCE.sub(lambda m: f"{m.group(1)}{m.group(3)}\n", text)
     text = _INLINE_CODE.sub(lambda m: m.group(2).strip(), text)
+    text = _REF_DEF.sub("", text)
     text = _IMAGE.sub(lambda m: m.group(1), text)
     text = _LINK.sub(lambda m: m.group(1), text)
     text = _REF_LINK.sub(lambda m: m.group(1), text)
@@ -108,6 +150,7 @@ def plain_text(content: Any) -> str:
     text = html.unescape(text)
     # An entity-escaped tag (``&lt;b&gt;``) is a tag again after unescaping: remove it too.
     text = _TAG.sub(" ", text)
+    text = _TAG_TAIL.sub(" ", text)
     text = _TABLE_RULE.sub(" ", text)
     text = _RULE.sub(" ", text)
     text = _HEADING_TAIL.sub("", _HEADING.sub("", text))

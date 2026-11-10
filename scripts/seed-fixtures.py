@@ -232,6 +232,55 @@ RICH_TOOL_PROMPT = "Run the full test suite and fix every failure"
 #: Tool-call rounds in the tool-run fixture: 2 rows each, more than the excerpt's paged read.
 RICH_TOOL_ROUNDS = 35
 
+#: Card 6 fix r1 (review r1 B1): 200 KB last messages that made the old excerpt patterns
+#: super-linear (every opener without a closer scanned to the end of the text). The first ten
+#: are the review's list; the rest cover the other patterns of ``session_details.py``.
+PATHOLOGICAL_SIZE = 200_000
+PASTED_CODE = "    value = self._cache.get(key_name, None)  # look up _cache\n"
+
+
+def _repeat(unit: str, size: int = PATHOLOGICAL_SIZE) -> str:
+    return (unit * (size // len(unit) + 1))[:size]
+
+
+PATHOLOGICAL = {
+    "underscore": _repeat("_x "),
+    "strong": _repeat("**x "),
+    "star": _repeat("*x "),
+    "strike": _repeat("~~x "),
+    "bracket": _repeat("[x "),
+    "link-open": _repeat("[x]("),
+    "backtick": _repeat("`x "),
+    "angle": _repeat("<x "),
+    "fence": "```python\n" + _repeat("x = 1\n"),
+    "pasted-code": PASTED_CODE * 4000,  # the review's real-API case (~244 KB)
+    "strong-under": _repeat("__x "),
+    "image-open": _repeat("![x "),
+    "comment-open": _repeat("<!--x "),
+    "autolink-open": _repeat("<http:"),
+    "think-open": _repeat("<think "),
+    "tool-call-open": "<tool_call>" + _repeat("{\"a\": 1} "),
+    "blanks": _repeat(" \t") + "x",
+    "heading-tail": _repeat("#  "),
+    "dashes": _repeat("- "),
+    "table": _repeat("| -- "),
+}
+
+
+def seed_pathological(db: SessionDB, prefix: str = "st-patho", copies: int = 1) -> dict:
+    """``--pathological``: one session per ``PATHOLOGICAL`` body (``copies`` of each), the body its
+    last (assistant) message. Through ``create_session`` / ``append_message``."""
+    ids: dict[str, str] = {}
+    stamp = NOW - HOUR
+    for copy in range(copies):
+        for name, body in PATHOLOGICAL.items():
+            sid = f"{prefix}-{name}" if copies == 1 else f"{prefix}-{copy}-{name}"
+            db.create_session(sid, "desktop", model="fixture-model")
+            db.append_message(sid, "user", f"Paste {name}", timestamp=stamp)
+            db.append_message(sid, "assistant", body, timestamp=stamp + 1)
+            ids[sid] = name
+    return ids
+
 
 def seed_rich(db: SessionDB, *, age_h: float = 30) -> dict:
     """``--rich``: one hermes-plugins family whose children end with Markdown, a code block, HTML-
@@ -399,6 +448,16 @@ def main() -> None:
                 print(json.dumps({"rich": "st-rich-root", "created": False}))
                 return
             print(json.dumps({**seed_rich(db), "created": True}))
+        finally:
+            db.close()
+        return
+    if "--pathological" in sys.argv:
+        args = sys.argv[sys.argv.index("--pathological") + 1:]
+        profile = args[0] if args else None
+        home = HOME / "profiles" / profile if profile and profile != "default" else HOME
+        db = SessionDB(db_path=home / "state.db")
+        try:
+            print(json.dumps({"profile": profile or "default", "ids": seed_pathological(db)}))
         finally:
             db.close()
         return

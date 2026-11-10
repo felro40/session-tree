@@ -73,11 +73,14 @@ grey sparkline box while they load), so the details arriving never move or resiz
 - Sparkline: 7 values, oldest first, today last; its tooltip (`title`) lists each local day
   (`Wed 11-04: 3 msgs`).
 - Compacted ×N: up to two ghost cards stacked behind the card (offset 9 px each) plus a
-  `compacted ×N` tag under its bottom-right corner.
+  `compacted ×N` tag under its bottom-right corner. Ghost borders are `--ui-text-tertiary` at full
+  strength (≥ 3:1 composited against the canvas, light and dark; e2e).
 - Status (R11): running is a rotating conic border (`@property --st-rc-ang`, the theme's
   `--ui-green`); needs input an amber banner strip on top of the card (`--ui-yellow`); open in the
   app an accent ring with a 26 px glow; archived dashed and faded; out of scope 16 % (R5).
-- Stand-in (R7): a dashed skeleton card, "Parent not loaded".
+- Stand-in (R7): a dashed skeleton card, "Parent not loaded". Faded by its see-through fill, the
+  dashes and the italic tertiary title, not by group opacity (opacity 1, not the Dense stand-in's
+  0.6), so the title and the dashes stay ≥ 3:1. Link strokes are `--ui-text-tertiary` too.
 
 ## Links
 
@@ -118,7 +121,17 @@ routing key). Read-only, one read-only `SessionDB` open per request, bounded per
   keeps fenced code's code without fences, unwraps links / images / inline code / emphasis, strips
   headings, quotes, list markers, rules and table rules, removes HTML tags (also entity-escaped
   ones, after `html.unescape`), collapses whitespace; `clip` cuts to 240 characters with `…`.
-  Tool-call payloads never reach it (only `content` is read; tool rows are skipped);
+  Tool-call payloads never reach it (only `content` is read; tool rows are skipped).
+  **Bounded cost (fix r1, review r1 B1):** `plain_text` reads only the first `INPUT_MAX` = 4,096
+  characters of a message, and every pattern is linear: inline spans (emphasis, inline code, link
+  and image text) stay on one line and are at most `SPAN` = 240 characters, link targets at most
+  512 (one level of nested parentheses, so `[a](javascript:alert(x))` unwraps to `a`); block
+  constructs (dropped blocks, fences, HTML comments) end at their closer or at the end of the text,
+  so an opener without a closer matches once; blank runs are possessive. A fence or a tool-call
+  payload cut by the cap stays inert (code kept, payload dropped), a tag cut open at the end is
+  removed, reference definitions (`[1]: …`) are dropped. Longer inline spans keep their markers;
+  emphasis no longer spans lines. The read itself stays Hermes's `get_messages` (whole `content`
+  of ≤ 60 rows; no `substr` query), read-only;
 - the activity: one `COUNT(DISTINCT role || ':' || timestamp) … GROUP BY` local day over the 7-day
   timestamp range on the `(session_id, active, timestamp)` index, through SessionDB's read-only
   reader (`_read_all`; Hermes has no per-day count API). It covers the conversation's compression

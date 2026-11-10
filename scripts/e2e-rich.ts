@@ -26,6 +26,8 @@ import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2
 import type { Session } from './e2e/browser.ts'
 import { buildTestPackage, E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
+import { compositedContrast, parseColor, rgbText } from './e2e/contrast.ts'
+import type { Kind, Layer } from './e2e/contrast.ts'
 
 const t = testHermes(undefined, { variant: 'rich' })
 const shots = join(t.root, 'shots')
@@ -453,6 +455,119 @@ async function themeProbe(page: Page) {
 
     return { actual: getComputedStyle(card).backgroundColor, expected }
   })
+}
+
+interface ContrastTarget {
+  name: string
+  selector: string
+  /** Which match (a card has 1–2 ghosts). */
+  index?: number
+  kind: Kind
+}
+
+/** Review r1 B2 (and N3): the elements whose composited contrast must be ≥ 3:1, light and dark. */
+const CONTRAST_TARGETS: ContrastTarget[] = [
+  { name: 'ghost border (1st)', selector: `${CARD('st-sys-tip')} [data-testid="session-tree-ghost"]`, index: 0, kind: 'border' },
+  { name: 'ghost border (2nd)', selector: `${CARD('st-sys-tip')} [data-testid="session-tree-ghost"]`, index: 1, kind: 'border' },
+  { name: 'stand-in title', selector: '[data-testid="session-tree-standin"] .st-rc-ttl', kind: 'text' },
+  { name: 'stand-in border', selector: '[data-testid="session-tree-standin"]', kind: 'border' },
+  { name: 'link stroke', selector: '[data-testid="session-tree-link"][data-source="st-hp-root"][data-target="st-hp-routing"] path.react-flow__edge-path', kind: 'stroke' }
+]
+
+/**
+ * The composited contrast of one element where it is drawn: the colour (text colour, bottom
+ * border colour or SVG stroke × stroke-opacity) at its alpha, inside every ancestor's opacity, over
+ * the backgrounds of the ancestors whose box covers the probed point (scripts/e2e/contrast.ts).
+ * Probe point: the bottom border's middle (border), the box centre (text), the path's midpoint.
+ */
+async function contrastOf(page: Page, target: ContrastTarget) {
+  const raw = await page.evaluate(({ selector, index, kind }) => {
+    const el = document.querySelectorAll(selector)[index ?? 0] as HTMLElement | SVGGraphicsElement | undefined
+
+    if (!el) {
+      return null
+    }
+
+    const rect = el.getBoundingClientRect()
+    let point = { x: rect.left + rect.width / 2, y: kind === 'border' ? rect.bottom - 0.5 : rect.top + rect.height / 2 }
+
+    if (kind === 'stroke') {
+      const path = el as SVGPathElement
+      const mid = path.getPointAtLength(path.getTotalLength() / 2)
+      const m = path.getScreenCTM()!
+
+      point = { x: m.a * mid.x + m.c * mid.y + m.e, y: m.b * mid.x + m.d * mid.y + m.f }
+    }
+
+    const chain: Element[] = []
+
+    for (let node: Element | null = el; node; node = node.parentElement) {
+      chain.unshift(node)
+    }
+
+    const cs = getComputedStyle(el)
+
+    return {
+      point,
+      fg: kind === 'text' ? cs.color : kind === 'border' ? cs.borderBottomColor : cs.stroke,
+      fgOpacity: kind === 'stroke' ? Number(cs.strokeOpacity) : 1,
+      borderStyle: cs.borderBottomStyle,
+      layers: chain.map(node => {
+        const r = node.getBoundingClientRect()
+        const style = getComputedStyle(node)
+        const whole = node === document.documentElement || node === document.body
+
+        return {
+          tag: `${node.tagName.toLowerCase()}${node.classList.length ? `.${[...node.classList].slice(0, 2).join('.')}` : ''}`,
+          background: style.backgroundColor,
+          opacity: Number(style.opacity),
+          covers: whole || (point.x >= r.left && point.x <= r.right && point.y >= r.top && point.y <= r.bottom)
+        }
+      })
+    }
+  }, target)
+
+  assert(raw, `no element for ${target.name} (${target.selector})`)
+  const layers: Layer[] = raw.layers.map(l => ({ background: parseColor(l.background), opacity: l.opacity, covers: l.covers }))
+  const fg = parseColor(raw.fg)
+  const result = compositedContrast(layers, { ...fg, a: fg.a * raw.fgOpacity }, target.kind)
+  const alpha = fg.a * raw.fgOpacity * raw.layers.reduce((product, l) => product * l.opacity, 1)
+
+  return {
+    ratio: Math.round(result.ratio * 100) / 100,
+    shown: rgbText(result.fg),
+    against: result.against.map(rgbText),
+    colour: raw.fg,
+    alpha: Math.round(alpha * 1000) / 1000,
+    behind: raw.layers.filter(l => l.covers && parseColor(l.background).a > 0).map(l => `${l.tag} ${l.background}`).slice(-2)
+  }
+}
+
+/** Bring an element to the canvas centre (a real middle-drag pan, R3), zoom in on it with the
+ * real wheel (toward the cursor), clip a screenshot around it, then Fit again. */
+async function zoomShot(page: Page, selector: string, file: string): Promise<void> {
+  const target = page.locator(selector).first()
+  const at = await target.boundingBox()
+  const pane = await box(page, '.react-flow__pane')
+
+  assert(at, `no box for ${selector}`)
+  const centre = { x: pane.x + pane.width / 2, y: pane.y + pane.height / 2 }
+
+  await drag(page, await emptySpot(page), { x: centre.x - (at.x + at.width / 2), y: centre.y - (at.y + at.height / 2) }, 'middle')
+  await page.mouse.move(centre.x, centre.y)
+
+  for (let i = 0; i < 4; i += 1) {
+    await page.mouse.wheel(0, -240)
+    await page.waitForTimeout(120)
+  }
+
+  await page.waitForTimeout(400)
+  const zoomed = (await target.boundingBox())!
+  const x = Math.max(pane.x, zoomed.x - 40)
+  const y = Math.max(pane.y, zoomed.y - 40)
+
+  await page.screenshot({ path: join(shots, file), clip: { x, y, width: Math.min(pane.x + pane.width - x, zoomed.width + 80), height: Math.min(pane.y + pane.height - y, zoomed.height + 90) } })
+  await fit(page)
 }
 
 function freshHome(): void {
@@ -1054,6 +1169,82 @@ async function main(): Promise<void> {
       assert(light.actual === light.expected && dark.actual === dark.expected && dark.actual !== light.actual, `theme ${JSON.stringify({ light, dark })}`)
 
       return { light: light.actual, dark: dark.actual }
+    })
+
+    await check('contrast ≥ 3:1 in light and dark (review r1 B2, N3), composited: colour alpha × every ancestor\'s opacity over the backdrop behind it — ghost borders, stand-in title, stand-in dashed border, link stroke; zoomed screenshots of the ghosts and the stand-in', async () => {
+      const out: Record<string, Record<string, Awaited<ReturnType<typeof contrastOf>>>> = {}
+
+      try {
+        for (const scheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme: scheme })
+          await fit(page)
+          await page.waitForTimeout(800)
+          out[scheme] = {}
+
+          for (const target of CONTRAST_TARGETS) {
+            out[scheme][target.name] = await contrastOf(page, target)
+          }
+
+          await zoomShot(page, CARD('st-sys-tip'), `rich-ghosts-${scheme}.png`)
+          await zoomShot(page, '[data-testid="session-tree-standin"]', `rich-standin-${scheme}.png`)
+        }
+      } finally {
+        await page.emulateMedia({ colorScheme: 'light' })
+        await page.waitForTimeout(500)
+      }
+
+      const low = Object.entries(out).flatMap(([scheme, measured]) => Object.entries(measured).filter(([, m]) => m.ratio < 3).map(([name, m]) => `${scheme} ${name} ${m.ratio}:1 (${JSON.stringify(m)})`))
+
+      const ratios = Object.fromEntries(Object.entries(out).map(([scheme, measured]) => [scheme, Object.fromEntries(Object.entries(measured).map(([name, m]) => [name, m.ratio]))]))
+
+      facts.contrast = out
+      assert(out.light['stand-in border'].against[0] !== out.dark['stand-in border'].against[0], 'light and dark measured the same backdrop')
+      assert(low.length === 0, `below 3:1: ${low.join('; ')} | all: ${JSON.stringify(ratios)}`)
+
+      return ratios
+    })
+
+    await check('review r1 B1 through the real API: 200 KB pathological last messages (the review\'s pasted code among them) answer fast, and a plugin /health sent meanwhile is not stalled', async () => {
+      const seeded = seedFixtures(t, ['--pathological', 'work']) as { ids?: Record<string, string> }
+      const ids = Object.keys(seeded.ids ?? {})
+
+      assert(ids.length >= 20 && ids.includes('st-patho-pasted-code'), `seeded ${JSON.stringify(seeded)}`)
+      const timing = await page.evaluate(async list => {
+        const bridge = (window as unknown as { hermesDesktop: { api(req: { path: string; method?: string; body?: unknown }): Promise<unknown> } }).hermesDesktop
+        const tz = -new Date().getTimezoneOffset()
+        const timed = async (req: { path: string; method?: string; body?: unknown }) => {
+          const started = performance.now()
+          const out = (await bridge.api(req)) as { details?: Record<string, { excerpt: null | string }> }
+
+          return { ms: performance.now() - started, out }
+        }
+        const details = (which: string[]) => timed({ path: '/api/plugins/session-tree/sessions/details', method: 'POST', body: { profile: 'work', ids: which, tz_offset_minutes: tz } })
+        const pasted = await details(['st-patho-pasted-code'])
+        const idle = await timed({ path: '/api/plugins/session-tree/health?session_profile=default' })
+        const all = details(list)
+
+        await new Promise(resolve => setTimeout(resolve, 15))
+        const during = await timed({ path: '/api/plugins/session-tree/health?session_profile=default' })
+        const done = await all
+
+        return {
+          pastedMs: Math.round(pasted.ms),
+          pastedExcerpt: pasted.out.details?.['st-patho-pasted-code']?.excerpt?.slice(0, 60),
+          allMs: Math.round(done.ms),
+          allCount: Object.keys(done.out.details ?? {}).length,
+          healthIdleMs: Math.round(idle.ms),
+          healthDuringMs: Math.round(during.ms)
+        }
+      }, ids)
+
+      assert(timing.allCount === ids.length, `answered ${timing.allCount} of ${ids.length}`)
+      assert(timing.pastedExcerpt?.startsWith('value = self._cache.get(key_name, None)'), `excerpt ${timing.pastedExcerpt}`)
+      // Wall times through the Webapp (bridge + HTTP + read-only open); the old code took 8,173 ms
+      // for the pasted code alone and stalled /health for 7,882 ms.
+      assert(timing.pastedMs < 500 && timing.allMs < 2000 && timing.healthDuringMs < 500, JSON.stringify(timing))
+      facts.pathological = { ids: ids.length, ...timing }
+
+      return facts.pathological
     })
 
     await check('500-session fixture (Show all): time to first render, a scripted 2 s middle-drag pan at ≥ 30 fps; only viewport-near ids asked for', async () => {

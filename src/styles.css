@@ -1453,7 +1453,9 @@ g.is-dimmed {
   opacity: 0.16;
 }
 
-/* Compacted ×N: ghost cards stacked behind (offset down), plus the tag. */
+/* Compacted ×N: ghost cards stacked behind (offset down), plus the tag. The border is the
+   tertiary text colour at full strength: ≥ 3:1 against the canvas in light and dark (review r1
+   B2; e2e-rich measures it composited). */
 .st-rc-ghost {
   position: absolute;
   z-index: -1;
@@ -1461,9 +1463,9 @@ g.is-dimmed {
   bottom: calc(var(--st-g) * -9px);
   left: calc(var(--st-g) * 6px);
   height: 40px;
-  border: 1px solid color-mix(in srgb, var(--ui-text-primary) 18%, var(--ui-stroke-secondary));
+  border: 1px solid var(--ui-text-tertiary);
   border-radius: 0 0 14px 14px;
-  background: color-mix(in srgb, var(--ui-text-primary) 3%, var(--ui-bg-elevated));
+  background: color-mix(in srgb, var(--ui-text-primary) 4%, var(--ui-bg-elevated));
 }
 
 .st-rc-ctag {
@@ -1731,12 +1733,15 @@ g.is-dimmed {
   background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
 }
 
-/* The stand-in: a dashed skeleton card. */
+/* The stand-in: a dashed skeleton card. Faded by its see-through fill, the dashes and the italic
+   tertiary title, not by group opacity: the title and the dashes stay ≥ 3:1 in light and dark
+   (review r1 B2). */
 .session-tree__block.st-rich.is-standin {
-  border: 1.5px dashed color-mix(in srgb, var(--ui-text-tertiary) 50%, transparent);
+  border: 1.5px dashed var(--ui-text-tertiary);
   background: color-mix(in srgb, var(--ui-bg-elevated) 70%, transparent);
   box-shadow: none;
-  opacity: 0.8;
+  /* Not the shared stand-in's 0.6 (Dense): full strength, see above. */
+  opacity: 1;
 }
 
 .session-tree__block.st-rich.is-standin .st-rc-ttl {
@@ -1754,9 +1759,10 @@ g.is-dimmed {
   opacity: 0.16;
 }
 
-/* Links: soft curves; "continued as" dashed accent with a pill. */
+/* Links: soft curves; "continued as" dashed accent with a pill. The stroke is the tertiary text
+   colour at full strength: ≥ 3:1 against the canvas (review r1 N3). */
 .session-tree__link.st-rich-link {
-  stroke: color-mix(in srgb, var(--ui-text-tertiary) 55%, transparent);
+  stroke: var(--ui-text-tertiary);
   stroke-width: 2.25;
   stroke-linecap: round;
 }
