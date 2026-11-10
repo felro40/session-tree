@@ -538,7 +538,10 @@ names the four writes it asserts.
   over two rebuilds (sha256 `f8f3a2c2…3abcba92`). lint 0; build 0; `npm test` 134/134 (was 128);
   `test:py` 80 (was 77; the unknown-session 404 case for delete is gone, NB3, and five tests are
   new); `test:e2e` 74/74 — foundation 19 + core-dense 28 + actions 27 (was 24). 500-session
-  fixture: first render 314 ms, pan 121 frames in 2003 ms = 60.4 fps.
+  fixture: first render 314 ms, pan 121 frames in 2003 ms = 60.4 fps. (Card-4 note: these figures
+  are from one fix-r1 run; the fix-r1 handoff quoted another run, 317 ms / 61.4 fps, and the card-3
+  reviewer measured 314 ms / 61.4 fps at `e951f2a`. Run-to-run spread is a few ms and ±0.5 fps;
+  card 4 re-measured, see its section.)
 
 Card 3 (implementation, `93318b5`):
 
@@ -556,4 +559,143 @@ Card 3 (implementation, `93318b5`):
 - Light and dark: the menu is the UI kit's (dark: background `rgb(22 24 29 / .96)`, text
   `rgb(230 237 243 / .94)` from the theme); our additions (⋯, the disabled-item note, the dialog
   error) use `var(--ui-*)` only.
+
+---
+
+# Measured facts — Session Tree 4/7 (synced layout, settings, style switching)
+
+Measured 2026-11-10 by the card-4 coder in the isolated test Hermes `~/.cache/session-tree-e2e/c4-coder/home`
+(ports 19340–19344; the harness default card is now 4) and, for the mutating suites, their own fresh
+homes `c4-coder-actions/home` and `c4-coder-sync/home` on the same ports. The mechanism is described
+in `docs/layout-sync.md`.
+
+## Step 0
+
+HEAD `e951f2a304b1ccd39b58baa69697e9c4adc9f39e`, `git status --short` empty. Baseline (card-3
+reviewer, lint and unit tests re-checked here): lint 0, build 0 (505 406 B), `npm test` 134/134,
+`test:py` 80, `test:e2e` 74/74 (foundation 19 + core-dense 28 + actions 27); 500 fixture 314 ms /
+61.4 fps.
+
+## Push or poll: push, with a 5 s poll as the fallback
+
+- Decided from pre-check 5: a plugin `ctx.socket` never dials in the Webapp; `broadcast_plugin_event`
+  from the backend reaches `host.onEvent` there. Re-measured for this card with a throwaway probe
+  (not committed): a `PATCH /state/positions` from one tab took 24 ms, and the same tab's
+  `host.onEvent('plugin.session-tree.layout.changed')` fired 28 ms after it was sent, with
+  `{"type":"plugin.session-tree.layout.changed","payload":{"rev":3,"profile":"default","kind":"positions"},…}`.
+- So the backend pushes `layout.changed` after every change and the page refreshes on it; the page
+  also polls `GET /state?since_rev=` every 5 s while visible (a missed push, a window that was
+  hidden). e2e: B fetched the new state 22 ms after the store had A's drop, before the e2e's own 50 ms
+  poll of the store noticed it (reported latency 0–1 ms), i.e. by push, not by B's 5 s poll.
+- The plugin route runs in the gateway process (pre-check of card 3), so the broadcast goes out from
+  the request's worker thread (`tui_gateway/ws.py` `WSTransport.write` is thread-safe).
+
+## Store: concurrency and atomicity (pytest)
+
+- **Cross-process lock:** a process-level `threading.Lock` plus `fcntl.flock(LOCK_EX)` on the sidecar
+  `session-tree/state.lock`; every mutation re-reads the file under both locks. Two processes × 60
+  rounds (a distinct block each round + the shared block each round) lose no distinct block, the
+  shared block holds the write with the latest `updated_at`, and `rev` is exactly 240. Eight threads ×
+  25 rounds: the same.
+- **Killed writer:** a second process rewrites a 4 000-entry layout (~300 KB) in a loop and is
+  `SIGKILL`ed at a random moment, 30 times. After each kill the file parses, validates and is one whole
+  generation; at least one kill left a temp file behind (a kill mid-write), and no `.bak` appeared.
+  Mutation check: with the temp-file + rename replaced by a direct, two-step write of `state.json`,
+  the test failed 3 runs out of 3.
+- **Corrupt file:** six corrupt contents (truncated JSON, empty, a list, a bad `rev` type, a bad
+  coordinate type, invalid UTF-8) each serve `{rev: 0, layouts: {}}`, are kept byte for byte as
+  `state.json.corrupt-<time>-<random>.bak`, and the next write makes a fresh valid file. A newer
+  schema is never overwritten (writes answer 409). e2e: a hand-written truncated `state.json` in the
+  sync home → `GET /state` served rev 0, the page reloaded with its blocks, one `.bak` with the
+  original bytes, and the next save wrote rev 1.
+
+## Page: what the e2e measured (`scripts/e2e-sync.ts`, 19 checks)
+
+- **First view on a fresh store:** one `if_absent` save of the auto-layout (20 positions: 17 blocks
+  shown + 3 group labels), the second window's identical placements skipped server-side; no save at
+  all during 6 s idle.
+- **No save during a drag:** a 1.5 s drag (15 mouse moves 100 ms apart, then the drop) → zero
+  `/state/*` writes between mouse-down and mouse-up (network log), then exactly one `PATCH
+  /state/positions` (`mode: set`) 301 ms after the browser's `mouseup`. Reload → the block at the
+  stored spot (113.6, 128.8).
+- **Concurrent drags** of `st-hp-root` (A) and `st-sys-mcp` (B) at the same time: both stored, both
+  pages show both.
+- **Zoom and pan per device:** A zoomed (wheel) and panned (middle-drag) to (14.5, −23.0, 1.743);
+  6 s later B was still at (75.5, 69.75, 1.25); no viewport ever went to the backend; A got exactly
+  its view back after a reload (`ctx.storage` `viewport.v1:<style>|<profile>|<scope>`).
+- **Settings page round-trip:** View style → E2E alt stored `{style: "e2e-alt"}`, B switched by push,
+  the settings page showed it after a reload; Snap grid default on → B's canvas `data-snap="on"`,
+  then off; back to Dense.
+- **Device override:** A "On this device = E2E alt" → A draws `e2e-alt` (switcher `data-source=device`),
+  B and the synced setting stay Dense for 6 s.
+- **Toolbar switcher:** with the override set it changed only A (no `/settings` write); without it,
+  B's switcher changed the synced style and A followed. Positions are per style: `st-sys-tip` is at
+  (113.6, 128.8) in Dense and (0, 82) in E2E alt.
+- **Re-arrange + Undo:** Re-arrange stored the fresh layout (`st-sys-tip` (113.6, 128.8) → (0, 60))
+  on both pages; Undo restored all 20 entries (DELETE then PUT in A's network log), on both pages.
+- **A new seeded session** (`--branch st-sync-new st-sys-tip`) was placed at (557.6, 139.6); all 20
+  stored coordinates unchanged in the store (exactly) and on screen (±0.01 px).
+- **Backend unreachable:** (a) *simulated*: the browser blocks `/api/plugins/session-tree/state*`
+  and the page is reloaded — it lays out the cached layout (`st-sys-tip` at its stored spot), shows
+  "offline: showing last saved layout", and recovers when the route is unblocked. (b) *real*: the
+  gateway is stopped with A open — A keeps working, a drop is queued in `ctx.storage`
+  (`layoutPending.v1`, 1 entry), the banner shows; after the restart the same tab recovered without a
+  new sign-in and the drop was stored.
+- **Reloads land on `#/`:** every `page.reload()` of `#/session-tree` landed on `#/` in this Webapp
+  build (4 of 4), so the e2e navigates back to the route after a reload. The cause was not
+  investigated (the app's router on a cold load); the page itself does not navigate.
+
+## Carry-forward items from the card-3 review
+
+1. **Branch double-click** — fixed twice over: the inspector's Branch ignores `event.detail > 1` (a
+   real double-click), and the actions controller ignores a Branch on the child a Branch has just
+   made for 800 ms (`createBranchCooldown`; playwright's two `mouse.click` calls both carry
+   `detail: 1`). e2e (actions suite, 2 new checks): two real clicks 150 ms apart on `st-hp-mockup`
+   and 300 ms apart on `st-md-katex` each make exactly one child and no grandchild. Mutation check:
+   with both guards off, the 300 ms check failed (a child and a grandchild); the 150 ms one still
+   passed in this environment because the first request had not returned yet (the flight guard
+   joined it). Unit test for the cooldown.
+2. **`isAlreadyAbsent`** — now only the backend's own fence-read 404 `{"detail": "Session not found"}`
+   (parsed) and the core's `already_absent` answer; the core's 404 `not_found` (an existing row it
+   could not restore) is not treated as deleted. Unit test (fails on the old regex).
+3. **500-fixture numbers** — the card-3 doc line now says which run its 314 ms / 60.4 fps came from.
+   Re-measured on this card's final run (fresh home, `0cf2ac0`): **first render 317 ms, pan 122 frames
+   in 2002 ms = 60.9 fps** (other runs this card: 315 ms / 60.9 fps, 316 ms / 61.4 fps).
+4. **Endless "Loading sessions…"** — reproduced: with a session whose cost is infinite
+   (`seed-fixtures.py --inf-cost-branch`), the plugin's `/sessions` still answered, but the gateway's
+   `projects.tree` RPC never answered (still pending after 25 s), so the page stayed on "Loading
+   sessions…". Now each `projects.tree` attempt times out after 8 s (`withTimeout`, `ctx.setTimeout`),
+   and after 3 retries a failed projects load is an error state ("Could not load projects" + Retry),
+   like a failed sessions load ("Could not load sessions" + Retry). e2e: the error state with Retry
+   within 60 s; after the row is removed, Retry brings the canvas back. Unit test for the timeout.
+   The app's own session list also fails on that row (core bug, out of scope; Hermes unchanged).
+
+## Deviations
+
+- A failed `projects.tree` is now an error state with Retry (card 2 drew the graph without
+  projects). Drawing without projects would group every block under "no project", and with card 4
+  that layout would also be saved; the page also saves no placement while projects are missing.
+- One more endpoint than the card listed: `POST /state/forget` — a session moved to another project
+  (card 3's Move to project) must leave every stored layout so each places it in its new band;
+  without it, the old spot would come back after a reload.
+- `session_profile=*` is accepted by the state endpoints (the All profiles view has its own
+  layouts); `profile=` stays the gateway's routing key, as in card 1.
+- The inspector got a show/hide toggle (toolbar, per device, per style): R16 lists the panel's open
+  state as per-device state, and there was no way to close it before.
+
+## Simulated or not exercised end to end
+
+- The offline reload (a) blocks the store route in the browser; (b) stops the real gateway.
+- Running / needs input stay as in cards 2–3 (simulated at `host.state` in unit tests).
+- The test-only style exists only in the e2e's own build; the shipped bundle cannot register it.
+
+## Gates, bundle and numbers (HEAD of this card)
+
+- **`desktop/plugin.js`: 534 773 bytes** (56 esbuild inputs; was 505 406), byte-identical over two
+  builds (sha256 `34eae9ee…6c57419e`). Loader cap 16 MiB; test budget 2 MiB. No new dependency.
+- lint 0; build 0; `npm test` 157/157 (was 134); `test:py` 162 (was 80); `test:e2e` 95/95 —
+  foundation 19 + core-dense 28 + actions 29 (was 27) + sync 19 (new).
+- Re-running core-dense on a reused home fails 5 checks (its live-refresh branches and titles from
+  the earlier run stay in the home); on a fresh home (as every card's final run) it is 28/28. The
+  harness now also moves the layout store aside on setup, so synced state cannot carry over.
 
