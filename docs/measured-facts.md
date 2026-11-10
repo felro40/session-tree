@@ -1256,3 +1256,118 @@ disagrees with the sections above, this section is current.
   `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
 - lint 0; build 0; `npm test` 242/242 (was 226); `test:py` 177 (unchanged); `test:e2e` 127/127 —
   foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 (was 26).
+
+---
+
+# Measured facts — Session Tree 6/7 (Rich cards)
+
+Measured 2026-11-10 by the card-6 coder in the isolated test Hermes (`~/.cache/session-tree-e2e/
+c6-coder*`, ports 19360–19364; the harness default card is now 6). Style notes: `docs/rich-cards.md`.
+
+## Step 0
+
+HEAD `a3b93b2`, `git status --short` empty. Baseline (card 5 final review): lint 0, build 0
+(603 051 B), `npm test` 242/242, `test:py` 177, `test:e2e` 127/127.
+
+## R22 "branched at msg N": not drawn
+
+Pre-check 9 (card 1, above) found no reliable branch-point source: the child keeps only
+`_branched_from`; the copied-message count lives only in a fingerprint-keyed mutation receipt of one
+runtime path; a common-prefix comparison breaks after compression, rewind or delete. R22: omit.
+
+## `POST /sessions/details`
+
+- Excerpt: one `SessionDB.get_messages(id, latest=True, limit=60)` (Hermes's paged read on
+  `idx_messages_session_id`). Activity: one `COUNT(DISTINCT role || ':' || timestamp) … GROUP BY`
+  local day over the 7-day range on `idx_messages_session_active (session_id, active, timestamp)`
+  through SessionDB's read-only `_read_all` (Hermes has no per-day count API), over the compression
+  lineage (≤ 32 segments). Both bounded per id; no whole-transcript scan.
+- **Per-id time on a 5,000-message session: median 1.79 ms, max 2.09 ms** (7 runs, read-only
+  open, `test_per_id_cost_on_a_5000_message_session_is_under_50_ms`); the whole
+  `POST /sessions/details` for it (open + read) **4.98 ms**.
+- Plain text, measured on the `--rich` fixtures (pytest and e2e): Markdown →
+  `Plan Bold move: see the docs and run npm test. first item second item quoted line`; a code block →
+  `Here is the fix: def add(a, b): return a + b Done.`; HTML-looking text (`<script>…</script><b>Bold</b>
+  &amp; … &lt;img onerror…&gt; … 2 < 3 > 1`) → `Bold & italic link 2 < 3 > 1`; a tool call with text →
+  `I'll run the tests.` (no `tool_calls` payload, no inline `<tool_call>`, no tool result); a
+  400-word message → 232 characters + `…`; a 35-round tool run (no text in the newest 60 rows) →
+  `null`, and the row's `preview` is the first prompt.
+- Activity across a day boundary and an offset: a message a minute before local midnight is
+  yesterday at the offset and today two hours further east; a message 7 days + 10 s back is outside
+  at the offset and inside further east (`[1,0,0,0,0,1,1]` → `[2,0,0,0,0,0,2]`). A compression
+  continuation's carried copy of a message counts once.
+- Cap: 100 ids → 200, 101 → 422; unknown ids omitted; duplicates answered once; malformed id 400;
+  unknown profile 404, `*` 400; `tz_offset_minutes` outside ±840 or a string 422; unknown fields 422.
+- Read-only: sha256 + mtime + size of `state.db` and `state.db-wal` of the default home and of the
+  rich home unchanged over details requests (`test_details_are_read_only`).
+
+## The page (e2e `scripts/e2e-rich.ts`, final run: 19/19)
+
+- Opens at Fit: 22 cards on the canvas, every card inside it, zoom 0.418; cards 280 × 164.
+- **Excerpt = backend** for all 22 cards; the tool run shows `First prompt:` + its `preview`.
+- **No layout jump:** answers delayed 1.5 s (`page.route`); 22 cards loading with 44 skeleton lines,
+  every card rectangle identical (± 0.5 px) after the answers.
+- **Token bar:** width = 54 px × tokens / 480 000 (the largest session) within ± 2 px for 22 bars
+  (sample: 480k → 54.0001 px); scoped to mdesign the scale is 15 000 and the bars follow.
+- **Sparkline = backend** activity for 22 cards (7 points each); the tooltip lists the 7 local days.
+- Ghosts: ×3 → 2 ghost cards 3 and 7 px below the card's bottom, z-index −1, tag `compacted ×3`; ×1 →
+  1 ghost, `compacted ×1`.
+- Status: running (after `--activate`) → `::after` animation `st-rc-spin` 2.6 s + `running`; needs
+  input (test hook) → banner `● Needs input · waiting on your reply`, background = `--ui-yellow`,
+  touching the card's top edge; unread (the real Mark as unread) → title weight 750 (others 520) +
+  dot; pinned → glyph; open (double-click → tab, `focusedStoredSessionId` = it) → 2 px ring + 26 px
+  accent glow.
+- **Drawer:** closed at first (off the canvas's right edge), grip `24 unbranched`, 24 rows (the
+  `st-single-*` sessions); open after a click, still open after a reload, closed in a second browser
+  context (another device); the first rows load their excerpts, the last row (below the scroll
+  view) is never asked for; right-click → the session menu; double-click → a tab for that session.
+- **R13:** `st-hp-routing` dropped 320 px lower, `st-md-redline` dropped across the link: the link
+  detours, 0 of 201 path samples inside the dropped card; only `PATCH /state/positions` written;
+  the `rich` layout stored (28 entries) and restored after a reload with the detour; every stored
+  Dense position unchanged and Dense still draws them.
+- **Viewport-near only (network log):** zoomed to 250 % on a corner and reloaded: one request, the
+  4 ids near the view, none of the 18 far ones; after a middle-drag pan the 4 newly near cards were
+  asked for, nothing outside the span of the pan.
+- **`sessions.changed`:** `--append st-hp-mockup` → one request with exactly `["st-hp-mockup"]`, its
+  sparkline today 6 → 8, no card moved.
+- Theme: card background = `--ui-bg-elevated` resolved in place, light and dark, and they differ.
+- **500-session fixture (Show all): first render 319 ms, pan 124 frames / 2008 ms = 61.8 fps**
+  (≥ 30 required); 143 of the 500 cards asked for at open (zoom 0.30).
+- No page error from the plugin; the only Rich writes are position saves.
+
+## Found on the way (fixed, with regression tests)
+
+- **Detours failed at fractional coordinates** (`src/model/route.ts`): the A* grid rounds to 0.01 px
+  but the inflated obstacles did not, so the goal stub 12 px above a dropped child (y 611.989…)
+  rounded to 599.99, 0.001 px inside the child's own inflated rectangle: no route, the link stayed a
+  curve through the dropped card (seen in the e2e, reproduced from the page's dumped state). The
+  inflated rectangles now sit on the same 0.01 px lattice. Two `route.test.ts` tests fail without
+  the change and pass with it. Whole-pixel coordinates route exactly as before.
+- **One long row of families:** the transposed tidy layout stacks project groups along one axis;
+  with 280 × 164 cards the 22-card fixture was 10 000 px wide and did not fit at 30 %. Families now
+  flow in rows wrapped near 16:10 (unit test: aspect 0.8–3).
+
+## Simulated
+
+- Needs input: injected through the e2e build's `session-tree:test-needs-input` event (no SDK
+  source); folded away in `npm run build` (guard test).
+- Running: the real backend `is_active` heuristic from `--activate` (fixture-only SQL on the
+  timestamp); `host.state.busy*` stays unit-tested.
+
+## Forwarded findings
+
+- **r4 N1 fixed** (`scripts/e2e/real-hermes-guard.ts`): `pluginsListing` leaves out `*_state.json`,
+  `__pycache__`, `node_modules` and directory mtimes under `~/.hermes/plugins`, still naming every
+  entry; `tests/js/real-hermes-guard.test.ts` (an atomic `*_state.json` rewrite is ignored; a new
+  link and a changed file are seen). The guard passed in every suite of the final run.
+- Still open: r4 N2 (e2e-sync "backend stopped for real" flake; it passed 22/22 here), card 4
+  NB1–NB3 (settings read-only note; 401/403 deterministic; `refusedPlacements` never cleared).
+  r3 N2/N3 excluded by the user.
+
+## Gates and bundle (code commit `ca15fd1`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 652 523 bytes** (was 603 051; 72 esbuild inputs), byte-identical over two
+  builds and to the committed file (sha256 `5dfaeced…eb18923c7c`). Imports: `@hermes/plugin-sdk`,
+  `react`, `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
+- lint 0; build 0; `npm test` 264/264 (was 242); `test:py` 201 (was 177); `test:e2e` 146/146 —
+  foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 19 (new).
