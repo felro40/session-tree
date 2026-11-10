@@ -1,38 +1,94 @@
 # Session Tree
 
-A Hermes Desktop / Webapp plugin that shows sessions as an interactive branch graph.
-Work happens on `feature/session-tree` (Kanban tenant `session-tree`).
+A Hermes Desktop / Webapp plugin that shows your chat sessions as an interactive graph of how they
+were branched from each other. Work happens on `feature/session-tree` (Kanban tenant `session-tree`).
 
-Each chat session is a block; `/branch` children hang off their parent, compression segments of
-one conversation fold into one block, and `/new` resets show as a dashed "continued as" link. The
-page is reached from the sidebar ("Session Tree"), from ⌘K ("Open Session Tree") and at the route
-`/session-tree`; double-clicking a block opens that session in a new tab.
+**Status: 7/7 — complete** (four view styles, session actions, synced layout, settings; the set's
+final check is `scripts/e2e-final.ts`). Installing it into your Hermes is a separate step with the
+user (below).
 
-**Status: 6/7 Rich cards.** The page draws the session families as a real graph in the
-*Dense + inspector* style: tidy-tree auto-layout grouped by project, `/branch` links,
-"compacted ×N" blocks, dashed "continued as" links, "Parent not loaded" stand-ins, singles in the
-inspector's list (or on the canvas with **Show all**), archived on request, a project scope with
-read-only dimmed blocks outside it, a profile filter, wheel zoom / middle-drag pan / snap grid, the
-on-drop link router, live refresh, and the inspector. Every block in scope has the PROJECTS
-pane's session menu (right-click, the block's ⋯, the inspector's ⋯ and buttons): Rename…, Pin,
-Mark as read/unread, Appearance ▸, Copy ID, Branch, Export, Move to project ▸, Archive/Unarchive,
-Delete. Block positions, the view style and Snap are saved by the backend and synced to every
-window and device of the gateway (push, with a 5 s poll as the fallback); zoom/pan and the view
-toggles stay per device; Re-arrange has Undo; Settings → Plugins → Session Tree and the toolbar
-switch the style (see `docs/layout-sync.md`). Card 5 adds the *Project swimlanes* style: one lane
-per project with a fixed header column (counts, tokens, collapse per device), a local-day time axis
-(9-day window, an "earlier" zone, a now marker), trees left to right, lane chips with the singles,
-and a project scope that collapses the other lanes and shows a cross-project parent as a read-only
-ghost; it is laid out from the data on every render and never saves positions (see
-`docs/swimlanes.md`). Card 6 adds the *Rich cards* style: airy 280 px cards in top-down trees with
-a project chip, a two-line title, a two-line excerpt of the last message (or the first prompt), a
-7-day activity sparkline, a model chip, last used, messages and a token bar scaled to the largest
-session in scope; ghost cards for ×N, status as an animated border / amber banner / bold title /
-pin / accent glow; soft curved links; singles in a right slide-out drawer; draggable with its own
-saved positions. Excerpts and activity come from `POST /sessions/details`, fetched only for the
-cards near the viewport (see `docs/rich-cards.md`). Subway map comes in card 7.
+## Using it
 
-### Source map
+- **Open it** from the sidebar ("Session Tree"), from ⌘K ("Open Session Tree") or at the route
+  `/session-tree`. It is a full page, in the desktop app and in the Webapp.
+- **What you see.** Each session is a block (in Subway: a station) with its title, project colour,
+  last used, messages and tokens, plus its live status (running; needs input where a source exists),
+  unread, pinned, cost and model. `/branch` children hang off their parent (solid links); the
+  compression segments of one conversation fold into one block marked "compacted ×N"; a `/new` or
+  idle reset is a dashed "continued as" link; a parent that is deleted, hidden or not loaded shows as
+  a faded "Parent not loaded" stand-in. Delegate children and cron / kanban / tool sessions are
+  hidden, like in the sidebar. The session open in the app is highlighted.
+- **Navigate.** The plain wheel zooms toward the cursor (30–250 %); drag with the middle button (or
+  Space + left-drag) to pan; a left-drag on empty canvas clears the selection. The toolbar has −,
+  zoom %, + and Fit.
+- **Arrange.** Drag blocks (every style but Swimlanes); dragging never re-parents. Links follow the
+  dragged block and re-route around other blocks on drop. **Snap** shows a dot grid and snaps
+  dragged blocks to it. **Re-arrange** resets the current style + scope layout, with Undo.
+- **Open** a session in a new tab with a double-click.
+- **Act** on a session with a right-click (or its ⋯): Appearance ▸, Pin / Unpin, Rename…, Move to
+  project ▸, Copy ID, Branch, Export, Mark as read / unread, Archive / Unarchive, Delete — the
+  PROJECTS pane's menu. Delete asks first, says that branches stay as separate sessions, and is
+  refused while the session runs. After Branch the page stays and selects the new child.
+- **Filter.** The scope picker shows All projects or one project (other projects' blocks dimmed and
+  read-only; Swimlanes collapses the other lanes instead). The profile filter defaults to the active
+  profile and offers All profiles. **Show all** puts the sessions without branches on the canvas;
+  **Show archived** shows archived sessions greyed out (their menu offers Unarchive).
+
+## The four styles
+
+| Style | Look | Where singles go | Positions |
+|---|---|---|---|
+| **Dense + inspector** (default) | compact pills, thin curved links, tidy trees left to right, an inspector panel on the right | the inspector's list | saved per scope |
+| **Project swimlanes** | one lane per project (alphabetical, no project last) with a header column, a local-day time axis, orthogonal links | a "no branches N" chip per lane | none: laid out from the data (no dragging, no Snap) |
+| **Subway map** | each lineage a thick coloured line, sessions as stations, `/branch` as the line splitting into a new track, octilinear tracks, ×N capsules, a dotted planned line for "continued as", a map key | the depot strip at the bottom | saved per scope |
+| **Rich cards** | airy 280 px cards with a last-message excerpt, a 7-day sparkline, model, a token bar; soft curved links | a right slide-out drawer | saved per scope |
+
+Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.md`,
+`docs/rich-cards.md`; the layout store: `docs/layout-sync.md`.
+
+## Settings and sync
+
+- **Settings → Plugins → Session Tree**: *View style* (synced), *On this device* (use the synced
+  style, or one of the four), and the *Snap grid* default. The toolbar's style switcher changes the
+  synced style, or this device's override when one is set.
+- **Synced** across windows and devices of the gateway (through the plugin backend: push, with a
+  5 s poll as the fallback): the style, block positions (per style, profile and scope) and Snap.
+  Positions are saved on drop (debounced, never per mouse move); when the backend is unreachable the
+  page keeps the last saved layout ("offline: showing last saved layout") and queues drops.
+- **Per device** (`ctx.storage`): zoom and pan, the panel / drawer / depot open state, Show all,
+  Show archived, the profile filter and the style override.
+
+## Known limitations
+
+- **Needs input** has no SDK source (no `host.state` atom; card 1 pre-check 10): the styles draw it,
+  but nothing sets it in a real Hermes today. The e2e shows it through a test-only hook in its own
+  build (`--test-styles`), which the committed bundle does not contain.
+- **Token bar track (Rich cards):** the track's contrast is 1.20:1 (light) / 1.27:1 (dark), and in
+  dark the fill against the track is 2.87:1; the value label next to the bar carries the number.
+  (Card 6 review r1 N3 / r2 NB4.)
+- **7-day activity (Rich cards):** `COUNT(DISTINCT role || ':' || timestamp)` counts two messages of
+  the same role with the same timestamp as one. (Card 6 review r1 N4.)
+- **Excerpts (Rich cards):** some Markdown markers stay as text: emphasis across a soft line break,
+  link targets over 512 characters, inline code over 240 characters (all inert plain text). The e2e's
+  real-API excerpt timing uses 20 ids; 100 ids in one request are covered in pytest only.
+  (Card 6 review r2 NB2, NB3.)
+- **Space on the profile select:** while the toolbar's profile `<select>` has the focus, Space is
+  given back to the canvas (it pans) instead of opening the list; a click and the select's other
+  keys still work. A documented trade-off (card 3 NB4; `docs/measured-facts.md`).
+- **Project swimlanes, excluded by the user** (card 5 review r3):
+  - *N2:* a session that starts in the future (clock skew) re-routes about every 10 minutes — the
+    future-start clamp uses the `nowMs` captured at each recompute, and every refetch recomputes.
+  - *N3:* the now pill's gap and clipping noted in review r2 (its NB2) were not taken.
+- **Subway map:** more than five splits from one station pack into the last slots (their drops
+  overlap visually); every split drops below its parent (no up-splits); labels avoid stations and
+  labels but not tracks after a drag; new sessions placed by the merge are not guaranteed
+  corridor-free (Re-arrange gives the corridor-free auto-layout again). See `docs/subway.md`.
+- **Rich cards merge:** when a group has no free room inside its shelf segment, a new card goes
+  under everything below a continuation label of its group, which can be far from its parent.
+- **No sidebar highlighting from the graph** (R19: no SDK verb); highlighting works the other way.
+- Multi-select, bulk actions and keyboard navigation between blocks are not part of this set.
+
+## Source map
 
 | Path | What |
 |---|---|
@@ -40,10 +96,10 @@ cards near the viewport (see `docs/rich-cards.md`). Subway map comes in card 7.
 | `src/model/graph.ts` | Rows + `projects.tree` → nodes, edges, families, singles, stand-ins, scope (`buildGraph`). |
 | `src/model/layout.ts`, `layout-memory.ts` | Deterministic tidy-tree layout and the merge that places new sessions inside their own project group's band without moving placed blocks; the cards 2–3 in-memory positions (now only unit-tested). |
 | `src/model/layout-sync.ts`, `device-prefs.ts` | Card 4: the synced layout store client (snapshot + queued changes, debounced batched saves, never during a drag, offline cache and retry, push/poll refresh, Re-arrange/Undo) and the per-device preferences (`ctx.storage`). |
-| `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense, Rich cards: `curveRouter`; Swimlanes: `orthogonalRouter`, elbows with rounded corners); on-drop detours on a sparse orthogonal grid (A*, on a 0.01 px lattice obstacles included). |
+| `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense, Rich cards: `curveRouter`; Swimlanes: `orthogonalRouter`, elbows with rounded corners; Subway: `octilinearRouter`, straight while dragging, 45°-chamfered on drop); on-drop detours on a sparse orthogonal grid (A*, on a 0.01 px lattice obstacles included), drawn rounded or chamfered. |
 | `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
 | `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
-| `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
+| `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`), the Subway map style (`subway/`: the track plan `plan.ts`, metro layout `layout.ts`, label placement `labels.ts`, geometry `spec.ts`, stations/tracks `subway-flow.tsx`, label driver + map key + depot `layer.tsx`, `subway.css`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
 | `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`, with a framed style's layers), toolbar (with the style switcher), the block menu (`session-menu.tsx`, SDK ContextMenu), the actions controller with its dialogs (`session-actions.tsx`) and the shared services (`services.ts`: layout store, device prefs, push + poll). |
 
 ## Package layout (one unified Hermes package)
@@ -61,7 +117,7 @@ cards near the viewport (see `docs/rich-cards.md`). Subway map comes in card 7.
 | `scripts/` | build, the test-Hermes harness, the fixture seeder, e2e suites. |
 | `docs/measured-facts.md` | Pre-check results and other measured facts. |
 | `docs/layout-sync.md` | Card 4: the synced layout store, its endpoints, the page's sync rules, the test-only style. |
-| `docs/swimlanes.md`, `docs/rich-cards.md` | Cards 5 and 6: the Project swimlanes and Rich cards styles. |
+| `docs/swimlanes.md`, `docs/subway.md`, `docs/rich-cards.md` | Cards 5–7: the Project swimlanes, Subway map and Rich cards styles. |
 
 ### Backend API
 
@@ -127,7 +183,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5) and `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook). The actions, sync, swimlanes and rich suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` on the same ports, the previous one moved to the e2e trash. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook) and `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style). The actions, sync, swimlanes, rich, subway and final suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` on the same ports, the previous one moved to the e2e trash. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
 ### The isolated test Hermes
@@ -145,10 +201,11 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
 ```
 
 - Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
-  current card, 6): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
-  (+0..+4 coder, +5..+9 reviewer). Card 6: coder home `c6-coder/home`, ports 19360–19364 (the
-  Webapp on 19360); reviewer `c6-reviewer`, ports 19365–19369. The actions, sync, swimlanes and rich suites' own
-  homes are `c6-<role>-actions`, `c6-<role>-sync`, `c6-<role>-swim` and `c6-<role>-rich` (same ports, never running at the same time as
+  current card, 7): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
+  (+0..+4 coder, +5..+9 reviewer). Card 7: coder home `c7-coder/home`, ports 19370–19374 (the
+  Webapp on 19370); reviewer `c7-reviewer`, ports 19375–19379. The actions, sync, swimlanes, rich,
+  subway and final suites' own homes are `c7-<role>-actions`, `-sync`, `-swim`, `-rich`, `-subway`
+  and `-final` (same ports, never running at the same time as
   the other suites). Setup moves the shared home's layout store aside first
   (`<root>/layout-store-old/`), so synced positions and Snap from an earlier run do not carry over.
 - Setup writes the test config with `hermes config set` (`webapp.enabled true`, `webapp.host
@@ -166,7 +223,10 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
   `--unowned-branch NEW PARENT [TITLE]` adds one without the owner stamp (card 3's real refusal);
   `--inf-cost-branch NEW PARENT [TITLE]` one with an infinite cost and `--delete ID` removes a row
   (card 4's failed-load check); `--rich` adds the card-6 family `st-rich-*` whose last messages hold
-  Markdown, a code block, HTML-looking text, a very long message, a tool call and a long tool run.
+  Markdown, a code block, HTML-looking text, a very long message, a tool call and a long tool run;
+  `--pathological [PROFILE]` adds 200 KB pathological last messages (card 6 B1) and, since card 7,
+  five 200 KB messages that start with dropped blocks (`st-patho-lead-*`: a leading `<think>`, tool
+  call, `<style>` + `<script>`, 28 reasoning blocks, an unclosed one).
 - The desktop half ships disabled; the e2e enables it in Capabilities → Plugins like a user.
 
 ## Dependencies and licenses
@@ -199,13 +259,26 @@ eslint-plugin-react-hooks 7.1.1 (MIT), playwright-core 1.65.0 (Apache-2.0), es-m
 
 ## Install into your Hermes (later, with the user)
 
-Not done yet, and never by a worker: it happens after the whole set is reviewed, with the user's
-go-ahead. The steps, for reference only:
+Not done by any worker: it happens after the whole set is reviewed, by the parent session, with the
+user's go-ahead (R21). The steps, for that session to run:
 
-1. Link the package into your Hermes: `ln -s /home/david/work_projects/session-tree ~/.hermes/plugins/session-tree`
-   (from the merged main checkout).
-2. Allow the backend: `hermes config set plugins.enabled '[…existing…, "session-tree"]'`
-   (keep the plugins already listed).
-3. Restart the gateway so the backend mounts: `hermes gateway restart`.
-4. Enable the desktop half: Capabilities → Plugins → Installed → Session Tree → **Desktop** switch
-   (it ships disabled), in the desktop app and in each Webapp browser.
+1. **Merge** `feature/session-tree` into `main` in `/home/david/work_projects/session-tree` (the
+   user merges). The package needs no build: `desktop/plugin.js` is committed.
+2. **Check the gateway is not mid-turn** for anything you care about (step 5 restarts it).
+3. **Link the package** into your Hermes:
+   `ln -s /home/david/work_projects/session-tree ~/.hermes/plugins/session-tree`
+   (the merged main checkout; never the worktree).
+4. **Allow the backend half**, keeping the plugins already listed:
+   `hermes config get plugins.enabled`, then
+   `hermes config set plugins.enabled '[…the existing entries…, "session-tree"]'`.
+5. **Restart the gateway** so the backend mounts: `hermes gateway restart`. Check
+   `GET /api/plugins/session-tree/health?session_profile=default` answers `{"ok": true, …}` (in the
+   Webapp: the page no longer says "Session Tree's backend is off").
+6. **Enable the desktop half**: Capabilities → Plugins → Installed → Session Tree → the **Desktop**
+   switch (it ships disabled), in the desktop app and in each Webapp browser.
+7. Open **Session Tree** from the sidebar. The first view of each style lays itself out and saves its
+   positions under `~/.hermes/session-tree/state.json` (the only file the plugin writes).
+
+To remove it: switch the desktop half off, take `session-tree` out of `plugins.enabled`, restart the
+gateway, delete the symlink; `~/.hermes/session-tree/` holds the saved layouts (delete it to forget
+them).

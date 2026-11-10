@@ -48,7 +48,11 @@ style id (`rich`), separate from Dense's, through the same `LayoutSync.place()` 
 - **New sessions never move a placed card** (`mergeRichLayout`): every stored position is kept as
   the very same object. A new card goes under its parent (right of its last sibling on that row),
   right of its predecessor, or above its child, at the nearest free lattice spot (right, then left,
-  then the rows below); a new family (or a single with Show all) at the first free spot right of
+  then the rows below) **inside its group** (card 7, review r1 N1: the shelves partition the
+  canvas into group segments — a label's segment runs to the next label on its shelf row and down
+  to the next shelf row — and a new card's centre may not lie in another group's segment; with no
+  room left it goes under everything, below a continuation label of its group); a new family (or a
+  single with Show all) at the first free spot right of
   and below its group's label, row by row; a group with no label yet gets one under everything.
   Overlap checks go through a bucketed rectangle index, so turning Show all on for the 500-session
   fixture after a saved layout places its 400 singles in about 10 ms (unit test).
@@ -123,7 +127,8 @@ routing key). Read-only, one read-only `SessionDB` open per request, bounded per
   ones, after `html.unescape`), collapses whitespace; `clip` cuts to 240 characters with `…`.
   Tool-call payloads never reach it (only `content` is read; tool rows are skipped).
   **Bounded cost (fix r1, review r1 B1):** `plain_text` reads only the first `INPUT_MAX` = 4,096
-  characters of a message, and every pattern is linear: inline spans (emphasis, inline code, link
+  characters of a message (card 7, review r2 NB1: counted after any leading dropped blocks, which a
+  bounded linear scan skips first, so a long leading `<think>` no longer empties the excerpt), and every pattern is linear: inline spans (emphasis, inline code, link
   and image text) stay on one line and are at most `SPAN` = 240 characters, link targets at most
   512 (one level of nested parentheses, so `[a](javascript:alert(x))` unwraps to `a`); block
   constructs (dropped blocks, fences, HTML comments) end at their closer or at the end of the text,
@@ -151,7 +156,9 @@ Measured: **1.8 ms per id** on a 5,000-message session (median of 7, `test_detai
   `last_active` and `message_count`, the local day and the offset. A current entry is never asked
   for again; a `sessions.changed` refetch that changes a row changes its signature, so exactly the
   sessions that changed are asked for again (the old details stay shown meanwhile). A failed
-  request is not retried for 15 s.
+  request is not retried for 15 s. The cache holds only the cards of the loaded data (card 7,
+  review r1 N5: `retain` on every new model drops the rest, answers in flight included) and at
+  most 2 000 entries.
 - Details never enter the graph model, the block data or the routing chain: each card subscribes
   to its own entry (`useSyncExternalStore`), so an answer re-renders that card only.
 

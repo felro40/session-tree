@@ -1471,3 +1471,203 @@ listed above.
   `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
 - lint 0; build 0; `npm test` 272/272 (was 264); `test:py` 246 (was 201); `test:e2e` 148/148 —
   foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 21 (was 19).
+
+---
+
+# Measured facts — Session Tree 7/7 (Subway map + whole-plugin final check)
+
+Measured 2026-11-10 by the card-7 coder in the isolated test Hermes (`~/.cache/session-tree-e2e/
+c7-coder*`, ports 19370–19374; the harness default card is now 7). Style notes: `docs/subway.md`.
+
+## Step 0
+
+HEAD `4892ca9` (card 6 review r2 PASS), `git status --short` empty; the set start commit
+`3806503ec73a59bf9220f0aafe5884b497d2bd0c` is an ancestor. Baseline re-run here: lint 0, build 0
+(652 902 B), `npm test` 272/272, `test:py` 246; e2e 148/148 as the card-6 reviewer measured it.
+
+## The Subway map style
+
+- **How it plugs in:** a normal draggable style (`savesLayout`, its own `subway` layouts) with the
+  card-6 `Provider` / `Layer`, plus two optional contract parts: `linkSlots(model)` (each link's
+  departure slot, structure only; the routing chain carries it in each link end, so a content-only
+  refetch still routes nothing — unit test) and `fitPadding` (room for the labels and the depot).
+- **Tracks** on the default fixture: 5 families, 10 `/branch` edges, 1 "continued as", 5 parents
+  whose first row child is a branch child → **11 tracks**, 5 drawn colours (shades of the theme
+  accent: the fixture projects have no colour). The e2e computes the 11 from the backend's rows and
+  counts the distinct `data-track` of the drawn stations.
+- **Auto-layout** (unit, default and 500-session fixtures, Show all off and on; e2e on the default
+  fixture): every segment within 0.5° of a multiple of 45° (exactly 0° here: chamfered corners are
+  exact), no detour, no two links with a collinear overlap > 0.5 px (unit) / > 1 px (e2e, on the
+  drawn SVG paths), no crossing (unit, Show all off), no station overlapping a station or a label, no
+  label overlapping a label, every label in its place above its station; deterministic (reversed
+  rows give the same positions, slots and SVG). Every coordinate is a multiple of the 25 px grid.
+  Layout + routing of the 500-session fixture: 41 ms (Show all off and on, Node).
+- **Drag (e2e, real mouse):** mid-drag the incoming track of the dragged station is one straight
+  segment (`M28 120 L309.21 340.63`, `data-routed="false"`, 6.9° off octilinear); after the
+  drop it is octilinear (`M28 120 L28 354.42 L53 379.42 L376.59 379.42`) and every track is routed. A station dropped onto the
+  `st-sys-tip → st-sys-comments` track makes it detour (`data-detoured`, 10 points, 0 of 300 path
+  samples inside the station, octilinear); the dropped station's own track re-routes too. The drops
+  are saved as `PATCH /state/positions` with `style: "subway"` only, restored after a reload with the
+  detour; Dense's stored positions and drawing are unchanged. With Snap on a drop lands on the
+  25 px grid and its track is octilinear.
+- **Visuals (e2e):** ×3 capsule with "×3" and the "Compacted ×3: 3 earlier segments…" tooltip;
+  "continued as" dotted (`2px, 9px`) with "continued as ›"; the stand-in hollow, dashed, "not
+  loaded", its line dashed (`10px, 6px`) in `--ui-text-tertiary`; running: the `st-sw-ping`
+  animation, infinite, in `--ui-green` (real `is_active`, `seed-fixtures --activate`); needs input: an
+  amber ring (`--ui-yellow`, 3 px glow) **through the test-only hook** (no SDK source); unread: an
+  accent dot after the title (the real Mark as unread); pinned: the pin glyph; "◉ you are here"
+  under the station opened by a real double-click (`focusedStoredSessionId`); tracks over an 8 px
+  casing in the canvas colour (the halo); the map key (6 entries) in the corner above the depot.
+- **Depot (e2e):** 24 singles, open by default, folded state kept over a reload and not on another
+  device (a second browser context), double-click opens a row in a tab, right-click gives the
+  session menu (9 actions).
+- **Labels:** a candidate search (above, below, above-left, below-left, right, left), stations top
+  to bottom; after a drop that puts a station under another's label, that label moves (seen in the
+  detour screenshot: the dropped station's label went below it).
+
+## Whole-plugin final check (`scripts/e2e-final.ts`, the committed `desktop/plugin.js`)
+
+- The switcher offers exactly the four styles, in R1's order. Each lays itself out on first view;
+  Dense, Subway and Rich store 20 positions each, Swimlanes none; the same block sits elsewhere in
+  each style.
+- Per style, from the block's right-click menu (Subway: the station's ring): Rename (read back from
+  the backend and drawn), Branch (a new `_branched_from` child, drawn and linked), Archive (gone),
+  Show archived → the menu says Unarchive → restored, Delete → the confirm says "Its 1 branch stays
+  as a separate session." → Cancel → the row stays. After each style, the other three styles' stored
+  positions are unchanged (every stored id, 0.01 px), and each style draws its blocks at its stored
+  positions (lineage-root keys for compacted blocks).
+- Two-context sync: a drop in one context shows in the other in 9 ms (Dense) and 10 ms (Subway)
+  after the store has it (push); the synced style follows in the second context.
+- Light and dark: a screenshot per style; the canvas background differs between the schemes in
+  every style (theme variables).
+
+### 500-session fixture (Show all, final full run)
+
+| Style | First render | Pan (scripted 2 s middle-drag) | Bar |
+|---|---|---|---|
+| Dense + inspector | 315 ms | 61.9 fps | ≥ 45 |
+| Project swimlanes | 781 ms | 61.4 fps | ≥ 45 |
+| Subway map | 340 ms | 61.4 fps | ≥ 45 |
+| Rich cards | 336 ms | 61.2 fps | ≥ 30 |
+
+First render: from switching the profile to `scale` (the style already chosen) to 500 on the canvas
+with a block drawn; the view opens at the minimum zoom (30 %). An earlier run: 365 / 787 / 337 /
+339 ms, 61.5 / 61.5 / 61.2 / 61.3 fps.
+
+## Carry-forward fixes (orchestrator rulings)
+
+### c5 r4 N2 — the e2e-sync "backend stopped for real" flake
+
+- **Root cause:** not the test's timing as such. The page polls its rows and projects every 10 s
+  (`use-live-refresh.ts`); a poll while the gateway is down fails (`projects.tree: Hermes gateway is
+  not connected`), and the page treated *any* query error as a failed load: it replaced the canvas
+  with "Could not load projects" even though it had data — so the check passed or failed on whether
+  a poll landed inside the gateway-down window. That is also a real defect against R17 (the cached
+  layout is the fallback while the backend is unreachable).
+- **Shown on the old bundle:** a probe (scratch `c7flake.ts`: open the page, stop the gateway, sample
+  the page every 500 ms for 30 s). `4892ca9`'s committed bundle: the canvas is replaced by the error
+  state **7.2 s** after the stop, page title "projects.tree: Hermes gateway is not connected" (the
+  r4 reviewer's observation). HEAD's bundle: the canvas stays all 30 s (57 samples), the same
+  failure in the title.
+- **Fix:** only a load with nothing to show yet ends in the error with Retry; a failed background
+  refresh keeps the last data (`session-tree-page.tsx`), and the page says so
+  (`data-refresh-failed="true"`). The card-4 failed-load check (a reload with an unserialisable row)
+  still ends in the error with Retry.
+- **The check is deterministic now:** after stopping the gateway it waits for that real condition (a
+  background refresh has failed: `data-refresh-failed="true"`, up to 30 s), then asserts the canvas
+  is still there with the cached position, then drags. Five `e2e-sync` runs in a row: see below.
+
+### c6 r1 N5 — `DetailsStore.entries` never pruned
+
+`DetailsStore.retain(keys)` drops the entries, failure marks, queued wants and answers in flight of
+every card not in the loaded data, then caps the cache at `MAX_ENTRIES` (2 000, oldest first);
+`RichProvider` calls it on every new model. Unit test: a dropped session's entry, queued want and
+late answer are gone and it is fetched again when wanted; 2 050 entries retained → 2 000 kept.
+
+### c6 r1 N1 — Rich merge `nearest()` had no group bounds
+
+Fixed without moving any saved position and without a layout rewrite: the shelves partition the
+canvas into group segments (a label's segment runs to the next label on its shelf row and down to
+the next shelf row; the first segment of a row also owns the room left of it); a new card's centre
+may not lie in another group's segment; when its group has no room, it goes under everything below
+a continuation label of its group. The review's probe: the new child of `st-hp-root` landed at
+(1700, 1104) in mdesign's shelf, 1 553 px away; now at (−340, 1104), next to its siblings in its own
+row. Unit test over six parents (every new card inside its own group's segment, nothing placed
+moves) fails on `4892ca9`'s layout ("the new child of st-hp-root at {x:1700,y:1104} is in
+group:/e2e/projects/mdesign's segment") and passes now. Limitation: a full group's new card can be
+far from its parent (under the continuation label).
+
+### c6 r2 NB1 — a leading dropped block over the 4 KB cap emptied the excerpt
+
+`_text_of` now skips leading dropped blocks before the cap (`_skip_leading_blocks`: an opener at the
+current position, its closer searched once from there; at most 64 blocks; an unclosed one drops the
+rest, as `_DROP_BLOCKS` would). The new opener pattern is linear (a lookbehind lets only the first
+blank of a run start a match: 5.1 ms worst on an uncapped 200 KB body, in the every-pattern test).
+pytest (`tests/py/test_details_leading.py`, 13 tests): the review's repro
+(`'<think>' + 6.4 KB + '</think>The answer is 42.'` → "The answer is 42."), mixed case and
+attributes, `<style>` + `<script>`, a multimodal list, the 64-block bound; five 200 KB bodies (the
+seeder's `LEADING`: think, tool call, style + script, 28 reasoning blocks, unclosed) —
+`plain_text` 0.04–0.05 ms each, `details` 0.19–0.22 ms per id, the endpoint 1.9–2.2 ms; all 25
+pathological bodies in one request 35 ms (1.4 ms per id). 10 of the 13 fail on `4892ca9`'s
+`session_details.py`. Through the real API (e2e-rich's B1 check, now seeding the five leading
+bodies too): 25 ids in one request **39 ms** (1.6 ms per id), the pasted code alone 6 ms, a plugin
+`/health` during the request 8 ms.
+
+## Found on the way
+
+- **A second e2e-sync flake (fixed in the test, `82ed496`).** In the first of the five-run series
+  the card-4 B2 check failed once: "saved under a tip id", the body an `if_absent` placement of
+  `missing:default/st-sys-tip` and `missing:default/st-sys-seg2`. The seeder's `--compact` is four
+  separate `SessionDB` writes (re-open the tip, end it with `compression`, create the continuation,
+  its message); the likely cause (inferred from the saved body, not traced further) is a refetch
+  between them that sees the tip ended with no continuation yet, so its children show for a moment
+  under stand-ins, whose auto-placement is saved under the stand-ins' own keys.
+  That is not the B2 regression (a block saved under the *tip's* id), but the check's regex matched
+  any body containing the tip id. It now compares the saved position ids exactly. The series was
+  restarted after the fix (below). The page side (a transient stand-in during a non-atomic
+  compaction) is recorded as a finding, not changed.
+- The registry now lists the styles in R1's order (Subway between Swimlanes and Rich); the static
+  guard test that pins the shipped registry was updated.
+- `detour()` takes the corner shape (`roundedPolyline` by default, `chamferPolyline` for Subway);
+  the other styles' routes are unchanged (their tests pass untouched).
+
+## Simulated or not exercised end to end
+
+- **Needs input** (every style): no SDK source; the e2e suites that check it (rich, subway) use the
+  test-only `session-tree:test-needs-input` window event of the `--test-styles` build. The committed
+  bundle has no such hook (guard test); `e2e-final` runs the committed bundle and does not check it.
+- **Running**: the real backend `is_active` heuristic (`seed-fixtures --activate`); no model
+  provider runs a real turn.
+
+## e2e-sync five times in a row
+
+After `82ed496`, `scripts/e2e-sync.ts` alone, five times back to back, each in a fresh
+`c7-coder-sync` home: **22/22, 22/22, 22/22, 22/22, 22/22** (exit 0 each). In every run the
+"backend stopped for real" check saw `data-refresh-failed="true"` (a background refresh failed while
+the gateway was down) with the canvas and the cached position kept. (A first series was stopped
+after run 1 failed on the B2 check described above; it was restarted after the fix.)
+
+## Scope sweep (card 7, `git diff 4892ca9..HEAD`)
+
+Every file outside `src/styles/subway/`, `docs/subway.md`, the two new suites and their helpers
+belongs to this card: the router (`route.ts`: the octilinear router, `detour`'s corner option), the
+routing chain and the contract (`canvas-routing.ts`, `types.ts`: link slots, Fit padding), the canvas
+and page (`graph-canvas.tsx`: slots and Fit padding; `session-tree-page.tsx`: the depot hint, Fit
+padding, the N2 fix), registration (`registry.ts`, `plugin.tsx`: the style and its CSS), the N1/N5
+fixes (`rich/layout.ts`, `rich/details.ts`, `rich/context.tsx`) with tests (`rich.test.ts`), the
+NB1 fix (`session_details.py`, the seeder's `LEADING` bodies, `test_details_leading.py`), the N2
+check (`e2e-sync.ts`), the harness's card default (`harness.ts`, `scripts/test-hermes`), the suite
+list (`run-e2e.sh`), the registry guard (`guards.test.ts`), the rebuilt `desktop/plugin.js`, and the
+docs (`README.md`, this file).
+
+## Gates, bundle and numbers
+
+- **`desktop/plugin.js`: 701 199 bytes** (was 652 902: the Subway style and its CSS), sha256
+  `f2e8d03f…8c30b41241`, byte-identical over rebuilds and to the committed file. Imports:
+  `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no `eval(` / `new Function` (guard
+  tests). Well under the 16 MiB loader cap (budget 2 MiB). No new dependency; the license table is
+  unchanged (`node scripts/build.mjs --licenses`).
+- lint 0; build 0; `npm test` **293/293** (was 272: subway 19, rich +2); `test:py` **259** (was
+  246: `test_details_leading.py` 13); `test:e2e` **177/177** at `759c501` — foundation 19 +
+  core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 21 + **subway 15** + **final 14**; and
+  e2e-sync 5 × 22/22 at `82ed496`.
