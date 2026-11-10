@@ -126,7 +126,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // ends and draw live instead.
   const [routing] = useState(createCanvasRouting)
   const frameShown = frameLayout && style.frame ? frameLayout.shown : undefined
-  const { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router })
+  const { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router, slots: style.linkSlots })
   const lineage = useMemo(() => lineageOf(model, selectedId), [model, selectedId])
 
   const baseNodes = useMemo(() => {
@@ -572,7 +572,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
             maxZoom={MAX_ZOOM}
             onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
             fitView={!mountViewport && !style.frame}
-            fitViewOptions={{ padding: 0.08, maxZoom: 1.25 }}
+            fitViewOptions={{ padding: style.fitPadding ?? 0.08, maxZoom: 1.25 }}
             defaultViewport={mountViewport}
             onMoveEnd={onMoveEnd}
             proOptions={{ hideAttribution: true }}

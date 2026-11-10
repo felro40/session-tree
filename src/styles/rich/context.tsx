@@ -63,5 +63,11 @@ export function RichProvider({ model, children }: { model: GraphModel; children:
     return () => store.dispose()
   }, [store])
 
+  // Card 7 (card-6 review r1 N5): the cache holds only the sessions of the loaded data (a
+  // deleted session, another profile's, a refetch without it: dropped).
+  useEffect(() => {
+    store.retain(model.nodes.filter(node => node.kind === 'session').map(node => node.id))
+  }, [store, model])
+
   return <RichEnvCtx.Provider value={value}>{children}</RichEnvCtx.Provider>
 }

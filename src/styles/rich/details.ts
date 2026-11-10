@@ -55,6 +55,8 @@ export const MAX_BATCH = 100
 export const BATCH_MS = 60
 /** A failed id is not asked for again before this long. */
 export const RETRY_AFTER_MS = 15_000
+/** The most entries kept (a bound on top of `retain`; well over the 500-session fixture). */
+export const MAX_ENTRIES = 2000
 const LOG_MAX = 200
 
 /** What a session's details depend on: its row's activity and count, the local day, the offset. */
@@ -136,6 +138,32 @@ export class DetailsStore {
     this.cancelTimer?.()
     this.cancelTimer = undefined
     this.pending.clear()
+  }
+
+  /**
+   * Card 7 (card-6 review r1 N5): forgets every card not in `keys` (the sessions of the loaded
+   * data): its entry, its failure mark, its pending want, and an answer still in flight for it.
+   * Then, past `MAX_ENTRIES`, the oldest entries go too (a bound, whatever the caller passes).
+   */
+  retain(keys: Iterable<string>): void {
+    const keep = new Set(keys)
+
+    for (const map of [this.entries, this.failedAt, this.pending, this.inflight] as Map<string, unknown>[]) {
+      for (const key of [...map.keys()]) {
+        if (!keep.has(key)) {
+          map.delete(key)
+        }
+      }
+    }
+
+    for (const key of [...this.entries.keys()].slice(0, Math.max(0, this.entries.size - MAX_ENTRIES))) {
+      this.entries.delete(key)
+    }
+  }
+
+  /** How many entries are cached (tests and diagnostics). */
+  get size(): number {
+    return this.entries.size
   }
 
   /** Back in use after `dispose` (a remount of the same canvas). */

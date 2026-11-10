@@ -427,12 +427,22 @@ export function nearObstacles(from: Point, to: Point, obstacles: readonly Rect[]
 /** Clearances tried in turn; the last (a 1 px stub) squeezes through a tight gap at a port. */
 export const DETOUR_MARGINS = [12, 6, 3, 1] as const
 
+/** How a detour's orthogonal polyline is drawn: rounded corners, or 45° cuts (Subway, card 7). */
+export type CornerShape = (points: readonly Point[], radius: number) => Path
+
 /** A detour for `from → to` around `obstacles` (and the link's own `ends`), or undefined. The
  *  clearance shrinks when a block sits close to a port (12, 6, 3 px, then a 1 px stub that
  *  leaves through a gap of 2 px or more between the port's block and a neighbour). */
-export function detour(from: Port, to: Port, obstacles: readonly Rect[], radius: number, ends: readonly Rect[] = []): Path | undefined {
+export function detour(
+  from: Port,
+  to: Port,
+  obstacles: readonly Rect[],
+  radius: number,
+  ends: readonly Rect[] = [],
+  corners: CornerShape = roundedPolyline
+): Path | undefined {
   for (const margin of DETOUR_MARGINS) {
-    const path = detourWith(from, to, obstacles, Math.max(0, Math.min(radius, margin - 2)), ends, margin)
+    const path = detourWith(from, to, obstacles, Math.max(0, Math.min(radius, margin - 2)), ends, margin, corners)
 
     if (path) {
       return path
@@ -442,7 +452,15 @@ export function detour(from: Port, to: Port, obstacles: readonly Rect[], radius:
   return undefined
 }
 
-function detourWith(from: Port, to: Port, obstacles: readonly Rect[], radius: number, ends: readonly Rect[], margin: number): Path | undefined {
+function detourWith(
+  from: Port,
+  to: Port,
+  obstacles: readonly Rect[],
+  radius: number,
+  ends: readonly Rect[],
+  margin: number,
+  corners: CornerShape
+): Path | undefined {
   const options = { ...DEFAULT_GRID, margin }
   const near = [...nearObstacles(from, to, obstacles), ...ends]
   const points =
@@ -456,13 +474,13 @@ function detourWith(from: Port, to: Port, obstacles: readonly Rect[], radius: nu
     return undefined
   }
 
-  const rounded = roundedPolyline(points, radius)
+  const rounded = corners(points, radius)
 
   if (!pathHits(rounded, obstacles)) {
     return rounded
   }
 
-  const sharp = roundedPolyline(points, 0)
+  const sharp = corners(points, 0)
 
   return pathHits(sharp, obstacles) ? undefined : sharp
 }
@@ -535,6 +553,146 @@ export function makeOrthogonalRouter(radius = 7, stub = 14): LinkRouter {
 }
 
 export const orthogonalRouter: LinkRouter = makeOrthogonalRouter()
+
+// --- octilinear (Subway, card 7) ---------------------------------------------------------------
+
+/**
+ * An axis-aligned polyline with every corner cut by up to `cut` px on both sides (never more than
+ * half a segment): a 90° corner becomes a 45° segment, so every segment of the result is
+ * horizontal, vertical or diagonal at exactly 45°. Only straight segments (`L`).
+ */
+export function chamferPolyline(points: readonly Point[], cut: number): Path {
+  const segs: Seg[] = []
+
+  for (let k = 1; k < points.length; k += 1) {
+    const corner = points[k]
+
+    if (k === points.length - 1 || cut <= 0) {
+      segs.push({ kind: 'L', to: corner })
+      continue
+    }
+
+    const prev = points[k - 1]
+    const next = points[k + 1]
+    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y)
+    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y)
+    const c = Math.min(cut, inLen / 2, outLen / 2)
+
+    if (c <= 0) {
+      segs.push({ kind: 'L', to: corner })
+      continue
+    }
+
+    segs.push(
+      { kind: 'L', to: { x: corner.x - ((corner.x - prev.x) / inLen) * c, y: corner.y - ((corner.y - prev.y) / inLen) * c } },
+      { kind: 'L', to: { x: corner.x + ((next.x - corner.x) / outLen) * c, y: corner.y + ((next.y - corner.y) / outLen) * c } }
+    )
+  }
+
+  return { start: points[0], segs: mergeCollinear(points[0], segs) }
+}
+
+/** Joins consecutive straight segments that run in the same direction (two 45° cuts in a row). */
+function mergeCollinear(start: Point, segs: Seg[]): Seg[] {
+  const out: Seg[] = []
+  let from = start
+  let before = start
+
+  for (const seg of segs) {
+    if (seg.kind !== 'L') {
+      out.push(seg)
+      before = from
+      from = seg.to
+      continue
+    }
+
+    const last = out[out.length - 1]
+
+    if (Math.hypot(seg.to.x - from.x, seg.to.y - from.y) < 1e-9) {
+      continue
+    }
+
+    if (last?.kind === 'L') {
+      const ax = from.x - before.x
+      const ay = from.y - before.y
+      const bx = seg.to.x - from.x
+      const by = seg.to.y - from.y
+
+      if (Math.abs(ax * by - ay * bx) < 1e-6 * Math.max(1, Math.hypot(ax, ay) * Math.hypot(bx, by)) && ax * bx + ay * by > 0) {
+        last.to = seg.to
+        from = seg.to
+        continue
+      }
+    }
+
+    out.push({ kind: 'L', to: seg.to })
+    before = from
+    from = seg.to
+  }
+
+  return out
+}
+
+/**
+ * The Subway link's axis-aligned skeleton (chamfered into octilinear by the router): a link out
+ * of a bottom port drops straight down, then runs into the target from the side (the mockup's
+ * down-split, which leaves the station at once); a side port runs out `stub` px, turns, and runs
+ * in (`elbowPoints`, without its near-level shortcut, so a link is straight only when it is level).
+ */
+export function octilinearPoints(from: Port, to: Port, stub = 30): Point[] {
+  const start = { x: from.x, y: from.y }
+  const end = { x: to.x, y: to.y }
+
+  if (from.dir === 'down' || from.dir === 'up') {
+    return from.x === to.x ? [start, end] : simplify([start, { x: from.x, y: to.y }, end])
+  }
+
+  if (from.y === to.y && to.x >= from.x) {
+    return [start, end]
+  }
+
+  if (from.dir !== 'right') {
+    return elbowPoints(from, to, stub)
+  }
+
+  if (to.x - stub >= from.x + stub) {
+    const turn = from.x + stub
+
+    return simplify([start, { x: turn, y: from.y }, { x: turn, y: to.y }, end])
+  }
+
+  const middle = (from.y + to.y) / 2
+
+  return simplify([start, { x: from.x + stub, y: from.y }, { x: from.x + stub, y: middle }, { x: to.x - stub, y: middle }, { x: to.x - stub, y: to.y }, end])
+}
+
+/**
+ * Subway (card 7, R13): tracks are straight segments while a station is dragged (`live`); on drop
+ * each is an octilinear polyline (horizontal, vertical and 45° only: the chamfered skeleton), and
+ * one that would cross another station detours around it (the orthogonal grid detour, chamfered
+ * the same way, its cuts kept inside the clearance).
+ */
+export function makeOctilinearRouter(cut = 25, stub = 30): LinkRouter {
+  const plain = (from: Port, to: Port) => chamferPolyline(octilinearPoints(from, to, stub), cut)
+
+  return {
+    shape: 'octilinear',
+    live: (from, to) => routeOf({ start: { x: from.x, y: from.y }, segs: [{ kind: 'L', to: { x: to.x, y: to.y } }] }, false),
+    route({ from, to, obstacles, ends }) {
+      const path = plain(from, to)
+
+      if (!pathHits(path, obstacles)) {
+        return routeOf(path, false)
+      }
+
+      const around = detour(from, to, obstacles, cut, ends, chamferPolyline)
+
+      return around ? routeOf(around, true) : routeOf(path, false)
+    }
+  }
+}
+
+export const octilinearRouter: LinkRouter = makeOctilinearRouter()
 
 export interface LinkEnds {
   id: string

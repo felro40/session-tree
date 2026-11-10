@@ -15,7 +15,7 @@ import { curveRouter } from '../../src/model/route.ts'
 import type { LinkRouter } from '../../src/model/route.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 import { createCanvasRouting } from '../../src/page/canvas-routing.ts'
-import { BATCH_MS, DetailsStore, MAX_BATCH, RETRY_AFTER_MS, detailsSignature, nearIds } from '../../src/styles/rich/details.ts'
+import { BATCH_MS, DetailsStore, MAX_BATCH, MAX_ENTRIES, RETRY_AFTER_MS, detailsSignature, nearIds } from '../../src/styles/rich/details.ts'
 import type { DetailsAnswer } from '../../src/styles/rich/details.ts'
 import { layoutRich, transposedSpec } from '../../src/styles/rich/layout.ts'
 import {
@@ -178,6 +178,40 @@ describe('Rich details store', () => {
     assert.equal(h.store.get('a')?.sig, 's2')
   })
 
+  it('card-6 review r1 N5: retain drops the entries, failure marks, wants and answers in flight of every card not in the loaded data, and bounds the cache', async () => {
+    const h = harness()
+
+    h.store.want([want('keep'), want('gone')])
+    h.advance(BATCH_MS)
+    await h.answerAll()
+    assert.equal(h.store.size, 2)
+    // A want queued and an answer in flight for a session that then leaves the data.
+    h.store.want([want('late', 's1')])
+    h.advance(BATCH_MS)
+    h.store.want([want('queued', 's1')])
+    h.store.retain(['keep'])
+    h.advance(BATCH_MS)
+    await h.answerAll()
+    assert.equal(h.store.get('gone'), undefined, 'a session no longer loaded is still cached')
+    assert.equal(h.store.get('late'), undefined, 'an answer for a dropped session was kept')
+    assert.ok(h.store.get('keep'))
+    assert.equal(h.store.size, 1)
+    assert.ok(!h.calls.some(call => call.ids.includes('queued')), 'a dropped want still went out')
+    // Asked for again later, a dropped session is fetched again (nothing stale remains).
+    h.store.want([want('gone')])
+    h.advance(BATCH_MS)
+    assert.deepEqual(h.calls[h.calls.length - 1].ids, ['gone'])
+    // The bound: never more than MAX_ENTRIES, whatever the caller retains.
+    const many = Array.from({ length: MAX_ENTRIES + 50 }, (_, i) => want(`m${i}`))
+
+    h.store.want(many)
+    h.advance(BATCH_MS)
+    await h.answerAll()
+    h.store.retain(many.map(each => each.key))
+    assert.equal(h.store.size, MAX_ENTRIES)
+    assert.ok(h.store.get(`m${MAX_ENTRIES + 49}`) && !h.store.get('m0'), 'the oldest entries go first')
+  })
+
   it('keys entries by the card (node id), asking the backend for the stored id', async () => {
     const h = harness()
 
@@ -336,6 +370,37 @@ describe('Rich layout (the tidy layout, top-down)', () => {
     }
 
     assert.ok(ms < 1500, `${ms} ms`)
+  })
+
+  it('card-6 review r1 N1: a new card stays inside its own group — never in another group\'s shelf segment; when its group has no room there, under a continuation label of its group', () => {
+    const base = layoutRich(graph(fixture.rows), undefined, spec)
+    const cases: Record<string, { x: number; y: number }> = {}
+
+    for (const parentId of ['st-hp-root', 'st-sys-reply', 'st-md-redline', 'st-orphan-child', 'st-split-child', 'st-sys-pairing']) {
+      const parent = fixture.rows.find(r => r.id === parentId)!
+      const child = row('st-new', { ...parent, id: 'st-new', _branched_from: parent.id, parent_session_id: parent.id, _reset_from: undefined, _lineage_root_id: undefined, started_at: (parent.started_at ?? 0) + 9000, last_active: (parent.started_at ?? 0) + 9500 })
+      const next = graph([...fixture.rows, child])
+      const merged = layoutRich(next, base.positions, spec)
+      const at = merged.positions.get('st-new')!
+      const cx = at.x + RICH_WIDTH / 2
+      const cy = at.y + RICH_HEIGHT / 2
+      // The label that owns the card's spot: on the lowest shelf row at or above it, the last label left of it (the row's first owns its left).
+      const labels = [...merged.positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).map(([id, p]) => ({ id, ...p }))
+      const rowY = Math.max(...labels.filter(label => label.y <= cy).map(label => label.y))
+      const shelf = labels.filter(label => label.y === rowY).sort((a, b) => a.x - b.x)
+      const owner = [...shelf].reverse().find(label => label.x <= cx) ?? shelf[0]
+      const family = next.families.find(each => each.nodeIds.includes('st-new'))!
+
+      for (const [id, point] of base.positions) {
+        assert.equal(merged.positions.get(id), point, `${id} moved`)
+      }
+
+      assert.equal(owner.id.split('\u001f')[0], `${GROUP_PREFIX}${family.projectId ?? '__no_project__'}`, `the new child of ${parentId} at ${JSON.stringify(at)} is in ${owner.id}'s segment`)
+      cases[parentId] = at
+    }
+
+    // The review's probe: st-hp-root's new child used to land 1553 px away, in mdesign's shelf.
+    assert.ok(cases['st-hp-root'].x + RICH_WIDTH / 2 < base.positions.get('group:/e2e/projects/mdesign')!.x, `hp child at ${JSON.stringify(cases['st-hp-root'])}`)
   })
 
   it('the transposed spec swaps sizes and gaps', () => {

@@ -72,8 +72,9 @@ describe('desktop/plugin.js static guards', () => {
     assert.doesNotMatch(source, /["'`]e2e-alt["'`]/)
     assert.doesNotMatch(source, /E2E alt/)
     assert.doesNotMatch(source, /__SESSION_TREE_TEST_STYLES__/)
-    // The registry holds exactly the shipped styles (card 5 adds Project swimlanes, card 6 Rich cards).
-    assert.match(source, /STYLES = \/\* @__PURE__ \*\/ new Map\(\[\s*\[denseStyle\.id, denseStyle\],\s*\[swimlanesStyle\.id, swimlanesStyle\],\s*\[richStyle\.id, richStyle\]\s*\]\)/)
+    // The registry holds exactly the shipped styles, in R1's order (card 5 adds Project swimlanes,
+    // card 6 Rich cards, card 7 Subway map).
+    assert.match(source, /STYLES = \/\* @__PURE__ \*\/ new Map\(\[\s*\[denseStyle\.id, denseStyle\],\s*\[swimlanesStyle\.id, swimlanesStyle\],\s*\[subwayStyle\.id, subwayStyle\],\s*\[richStyle\.id, richStyle\]\s*\]\)/)
     // Card 6: the e2e build's needs-input hook (no SDK source exists) is not in the committed bundle.
     assert.doesNotMatch(source, /session-tree:test-needs-input/)
   })

@@ -6,7 +6,7 @@
  *   ports 19300 + 10·card: coder +0..+4, reviewer +5..+9 (the Webapp listens on the first);
  *         card 5 (the default): coder 19350-19354, reviewer 19355-19359
  *
- * The card number comes from SESSION_TREE_CARD (default: the current card, 6).
+ * The card number comes from SESSION_TREE_CARD (default: the current card, 7).
  *
  * The user's real Hermes is never touched: no writes under ~/.hermes, no build in the
  * Hermes checkout (`hermes webapp --skip-build` always), and the package is linked
@@ -28,7 +28,7 @@ const NODE_BIN = dirname(process.execPath)
 export type Role = 'coder' | 'reviewer'
 
 /** The card whose test home and port block this run uses (each card of the set has its own). */
-export const CARD = Number(process.env.SESSION_TREE_CARD ?? 6)
+export const CARD = Number(process.env.SESSION_TREE_CARD ?? 7)
 
 if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
   throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)

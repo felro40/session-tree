@@ -5,7 +5,7 @@
  *
  * Card 2 registers Dense + inspector; cards 5–7 add the other three; card 4 adds switching.
  */
-import type { EdgeTypes, Node, NodeTypes } from '@xyflow/react'
+import type { EdgeTypes, FitViewOptions, Node, NodeTypes } from '@xyflow/react'
 import type { ComponentType, ReactNode } from 'react'
 
 import type { Viewport } from '../model/device-prefs.ts'
@@ -141,8 +141,12 @@ export interface StyleDefinition {
   savesLayout: boolean
   singles: SinglesContainer
   router: LinkRouter
-  /** Where a link of `kind` leaves its source block and enters its target block. */
-  ports(kind: EdgeKind, source: Rect, target: Rect): { from: Port; to: Port }
+  /** Where a link of `kind` leaves its source block and enters its target block; `slot` is the
+   *  link's departure slot (`linkSlots`; 0 for every style without them). */
+  ports(kind: EdgeKind, source: Rect, target: Rect, slot?: number): { from: Port; to: Port }
+  /** Card 7 (Subway): each link's departure slot, from the model's structure alone (a split's
+   *  own port on its parent station, so tracks never share a corridor). */
+  linkSlots?(model: GraphModel): ReadonlyMap<string, number>
   /** Snap grid pitch (R4). */
   grid: number
   /** x offset (from a block's left edge) where vertical "continued as" links attach. */
@@ -163,4 +167,6 @@ export interface StyleDefinition {
   Layer?: ComponentType<StyleLayerProps>
   /** The panel / drawer's open state on a device that never chose (default: open). */
   panelDefaultOpen?: boolean
+  /** Card 7: Fit's padding (Subway: room for the labels above the top row and the depot below). */
+  fitPadding?: FitViewOptions['padding']
 }

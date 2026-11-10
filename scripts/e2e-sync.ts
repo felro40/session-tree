@@ -645,6 +645,17 @@ async function main(): Promise<void> {
     })
 
     async function gatewayDownChecks() {
+      // c5 r4 N2 (card 7): the flake. The page polls its rows and projects every 10 s
+      // (use-live-refresh.ts); a poll while the gateway is down failed, and the page used to swap
+      // the canvas for "Could not load projects" — so the check passed or failed on whether that
+      // poll landed inside the window. Wait for that real condition (a background refresh has
+      // failed: the page says so) instead, then check the canvas is still the cached one.
+      const before = await flowPos(a.page, 'st-hp-root')
+      const refreshFailed = await waitFor('a background refresh to fail while the gateway is down', () => a.page.getAttribute('[data-testid="session-tree-page"]', 'data-refresh-failed'), value => value === 'true', 30_000)
+      const canvasKept = (await a.page.locator('[data-testid="session-tree-canvas"]').count()) === 1 && (await a.page.locator('[data-testid="session-tree-error"]').count()) === 0
+
+      assert(canvasKept, 'a failed background refresh replaced the canvas')
+      assert(near(await flowPos(a.page, 'st-hp-root'), before), 'the cached layout moved when the refresh failed')
       await dragBlock(a.page, 'st-hp-root', { x: -70, y: 50 })
       const dropped = await flowPos(a.page, 'st-hp-root')
       const banner = await a.page.locator('[data-testid="session-tree-offline"]').waitFor({ timeout: 20_000 }).then(() => true, () => false)
@@ -676,9 +687,9 @@ async function main(): Promise<void> {
         await signIn(t, b.page)
         await openTree(b)
       })
-      facts.gatewayRestart = { route }
+      facts.gatewayRestart = { route, refreshFailed, canvasKept }
 
-      return { dropped, banner, queued: pending, recovery: route, stored: layoutOf(state)['st-hp-root'] }
+      return { dropped, banner, queued: pending, recovery: route, stored: layoutOf(state)['st-hp-root'], refreshFailed, canvasKept }
     }
 
     await check('B2 migration: a conversation stored under its old tip key (as a card-4 page saved it) comes back at that spot, re-keyed to its lineage root on disk', async () => {

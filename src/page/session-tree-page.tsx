@@ -237,8 +237,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
             .filter(id => model.nodeById.get(id)?.outOfScope === false)
             .map(id => ({ id }))
 
-    void flow.fitView({ ...FIT_OPTIONS, nodes: inScope && inScope.length > 0 ? inScope : undefined })
-  }, [flow, flowStore, frameLayout, model, spec, scope])
+    void flow.fitView({ ...FIT_OPTIONS, ...(style.fitPadding ? { padding: style.fitPadding } : {}), nodes: inScope && inScope.length > 0 ? inScope : undefined })
+  }, [flow, flowStore, frameLayout, model, spec, scope, style])
 
   // A new layout (Show all, Re-arrange) is framed once; refreshes are not.
   useEffect(() => {
@@ -254,7 +254,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   // where it was left; a new one is framed.
   const vpKey = viewportKey(style.id, profile, scope)
   const vpKeyRef = useRef(vpKey)
-  const canvasShown = ready && model.nodes.length > 0 && !sessions.isError
+  const canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data)
   const appliedKey = useRef<null | string>(null)
   const appliedScope = useRef(scope)
 
@@ -433,16 +433,21 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   }
 
   let body
+  // Carry-forward c5 r4 N2 (card 7): a background refetch that fails (the gateway stopped, a poll
+  // while it restarts) keeps the data it has: the canvas stays on the last rows and projects (the
+  // cached layout, R17); only a load with nothing to show yet ends in the error with Retry.
+  const sessionsFailed = sessions.isError && !sessions.data
+  const projectsFailed = projects.isError && !projects.data
 
-  if (sessions.isError || projects.isError) {
+  if (sessionsFailed || projectsFailed) {
     // Carry-forward (card 3 review): a failed load is an error with Retry, never an endless
     // spinner. `projects.tree` too: a row the gateway cannot serialise (an infinite cost) leaves
     // that RPC unanswered, so each attempt times out (`PROJECTS_TIMEOUT_MS`) and ends here.
-    const failed = sessions.isError ? sessions : projects
+    const failed = sessionsFailed ? sessions : projects
 
     body = (
-      <div className="session-tree__state" data-testid="session-tree-error" data-failed={sessions.isError ? 'sessions' : 'projects'}>
-        <ErrorState title={sessions.isError ? 'Could not load sessions' : 'Could not load projects'} description={errorText(failed.error)}>
+      <div className="session-tree__state" data-testid="session-tree-error" data-failed={sessionsFailed ? 'sessions' : 'projects'}>
+        <ErrorState title={sessionsFailed ? 'Could not load sessions' : 'Could not load projects'} description={errorText(failed.error)}>
           <Button variant="outline" data-testid="session-tree-retry" disabled={failed.isFetching} onClick={() => void failed.refetch()}>
             {failed.isFetching ? 'Retrying…' : 'Retry'}
           </Button>
@@ -491,7 +496,9 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           <div className="session-tree__hint" data-testid="session-tree-no-branches">
             {style.singles === 'lane-chip'
               ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip."
-              : 'No branched sessions here — the sessions without branches are listed on the right.'}
+              : style.singles === 'depot'
+                ? 'No branched sessions here — the sessions without branches are in the depot below.'
+                : 'No branched sessions here — the sessions without branches are listed on the right.'}
           </div>
         )}
       </>
@@ -512,6 +519,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         data-node-count={sessions.data ? model.nodes.length : undefined}
         data-canvas-count={sessions.data ? onCanvas : undefined}
         data-projects={projects.isError ? 'error' : projects.data ? String(projectList.length) : 'loading'}
+        data-refresh-failed={(sessions.isError && sessions.data) || (projects.isError && projects.data) ? 'true' : undefined}
         title={projects.isError ? `projects.tree: ${errorText(projects.error)}` : undefined}
       >
         <Toolbar

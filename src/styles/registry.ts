@@ -1,11 +1,12 @@
 /**
  * The style registry. Card 2 registers Dense + inspector, card 5 Project swimlanes, card 6 Rich
- * cards; card 7 adds Subway map. Card 4: the synced choice with a per-device override
+ * cards, card 7 Subway map (in R1's order). Card 4: the synced choice with a per-device override
  * (`resolveStyleId`), and a test-only second style behind a build-time flag.
  */
 import { denseStyle } from './dense/index.ts'
 import { makeE2eAltStyle } from './e2e-alt/index.ts'
 import { richStyle } from './rich/index.ts'
+import { subwayStyle } from './subway/index.ts'
 import { swimlanesStyle } from './swimlanes/index.ts'
 import type { StyleDefinition, StyleId } from './types.ts'
 
@@ -22,6 +23,7 @@ export const DEFAULT_STYLE_ID: StyleId = 'dense'
 const STYLES = new Map<StyleId, StyleDefinition>([
   [denseStyle.id, denseStyle],
   [swimlanesStyle.id, swimlanesStyle],
+  [subwayStyle.id, subwayStyle],
   [richStyle.id, richStyle],
   ...(typeof __SESSION_TREE_TEST_STYLES__ !== 'undefined' && __SESSION_TREE_TEST_STYLES__
     ? ([['e2e-alt', makeE2eAltStyle()]] as [StyleId, StyleDefinition][])

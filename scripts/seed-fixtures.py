@@ -266,6 +266,24 @@ PATHOLOGICAL = {
     "table": _repeat("| -- "),
 }
 
+#: Card 7 (card-6 review r2 NB1): 200 KB messages that *start* with blocks the excerpt drops
+#: (reasoning, a tool call, style / script), then the text to show. The cap must apply after them.
+LEADING = {
+    "think": "<think>" + _repeat("I weigh the options once more. ") + "</think>The answer is 42.",
+    "tool-call": "<tool_call>" + _repeat("{\"path\": \"notes.md\", \"text\": \"x\"} ") + "</tool_call>\nSaved the file: notes.md",
+    "style-script": "<STYLE>" + _repeat("a { color: red } ", 100_000) + "</style>  <script type=\"x\">" + _repeat("let a = 1; ", 100_000) + "</script>Rendered the page.",
+    "many": ("<think>" + _repeat("step ", 7_200) + "</think>\n") * 28 + "Final words.",
+    "unclosed": "<thinking>" + _repeat("still thinking "),
+}
+#: The excerpt each ``LEADING`` body gives (the unclosed one falls back to the user message).
+LEADING_EXCERPT = {
+    "think": "The answer is 42.",
+    "tool-call": "Saved the file: notes.md",
+    "style-script": "Rendered the page.",
+    "many": "Final words.",
+    "unclosed": "Paste lead-unclosed",
+}
+
 
 def seed_pathological(db: SessionDB, prefix: str = "st-patho", copies: int = 1) -> dict:
     """``--pathological``: one session per ``PATHOLOGICAL`` body (``copies`` of each), the body its
@@ -279,6 +297,14 @@ def seed_pathological(db: SessionDB, prefix: str = "st-patho", copies: int = 1) 
             db.append_message(sid, "user", f"Paste {name}", timestamp=stamp)
             db.append_message(sid, "assistant", body, timestamp=stamp + 1)
             ids[sid] = name
+    if copies == 1:
+        # Card 7: the leading-block bodies, ``<prefix>-lead-<name>``.
+        for name, body in LEADING.items():
+            sid = f"{prefix}-lead-{name}"
+            db.create_session(sid, "desktop", model="fixture-model")
+            db.append_message(sid, "user", f"Paste lead-{name}", timestamp=stamp)
+            db.append_message(sid, "assistant", body, timestamp=stamp + 1)
+            ids[sid] = f"lead-{name}"
     return ids
 
 

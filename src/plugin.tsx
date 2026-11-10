@@ -11,6 +11,7 @@ import { SessionTreePage } from './page/session-tree-page.tsx'
 import { createServices } from './page/services.ts'
 import { SettingsPage } from './settings/settings-page.tsx'
 import pluginCss from './styles.css'
+import subwayCss from './styles/subway/subway.css'
 
 export const PLUGIN_ID = 'session-tree'
 export const ROUTE_PATH = '/session-tree'
@@ -20,7 +21,7 @@ function injectStyles(ctx: PluginContext): void {
   const style = document.createElement('style')
 
   style.dataset.sessionTree = 'styles'
-  style.textContent = `${flowCss}\n${pluginCss}`
+  style.textContent = `${flowCss}\n${pluginCss}\n${subwayCss}`
   document.head.appendChild(style)
   ctx.onDispose(() => style.remove())
 }

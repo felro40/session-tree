@@ -67,6 +67,8 @@ _ROLES = ("user", "assistant")
 
 #: Characters of a message's text the excerpt reads (only the start is shown).
 INPUT_MAX = 4096
+#: Leading dropped blocks (reasoning, tool calls, ...) skipped before the cap (card 7: c6 r2 NB1).
+LEAD_BLOCKS_MAX = 64
 #: Longest inline span (emphasis, inline code, link or image text) that is unwrapped.
 SPAN = EXCERPT_MAX
 #: Longest link / image / autolink target.
@@ -106,13 +108,36 @@ _EMPHASIS = (
 # A code span: a backtick run (not inside a longer run) up to the same run on the same line.
 _INLINE_CODE = re.compile(rf"(?<!`)(`{{1,16}}+)(?!`)([^\n]{{1,{SPAN}}}?)(?<!`)\1(?!`)")
 _SPACE = re.compile(r"\s+")
+# A dropped block's opener at the start of what is left (after blanks; the lookbehind keeps a
+# search linear: inside a run of blanks only its first one can start a match), and its closer.
+_LEAD_OPEN = re.compile(rf"(?<!\s)\s*+<({_BLOCK_NAMES})\b[^<>]{{0,{URL_MAX}}}+>", re.IGNORECASE)
+_CLOSERS = {name: re.compile(rf"</{name}\s{{0,16}}+>", re.IGNORECASE) for name in _BLOCK_NAMES.split("|")}
+
+
+def _skip_leading_blocks(text: str) -> int:
+    """Where the text starts once leading dropped blocks (``<think>…</think>``, a tool call, …) are
+    skipped: the cap then applies to what is shown, not to a reasoning preamble (card 7, card-6
+    review r2 NB1). Linear: each step matches an opener at the current position and searches its
+    closer once, from there on; at most ``LEAD_BLOCKS_MAX`` blocks. An opener without a closer
+    drops the rest (``len(text)``), as ``_DROP_BLOCKS`` would."""
+    pos = 0
+    for _ in range(LEAD_BLOCKS_MAX):
+        opener = _LEAD_OPEN.match(text, pos)
+        if not opener:
+            return pos
+        closer = _CLOSERS[opener.group(1).lower()].search(text, opener.end())
+        if not closer:
+            return len(text)
+        pos = closer.end()
+    return pos
 
 
 def _text_of(content: Any, limit: int = INPUT_MAX) -> str:
-    """The first ``limit`` characters of a message's text: a string, or the text parts of a
-    multimodal list."""
+    """The first ``limit`` characters of a message's text — after any leading dropped blocks — of
+    a string, or of the text parts of a multimodal list."""
     if isinstance(content, str):
-        return content[:limit]
+        start = _skip_leading_blocks(content)
+        return content[start:start + limit]
     if isinstance(content, list):
         parts, size = [], 0
         for part in content:
@@ -124,6 +149,10 @@ def _text_of(content: Any, limit: int = INPUT_MAX) -> str:
                 text = part["text"]
             else:
                 continue
+            if size == 0:
+                text = text[_skip_leading_blocks(text):]
+                if not text.strip():
+                    continue
             parts.append(text[: limit - size])
             size += len(parts[-1]) + 1
         return "\n".join(parts)[:limit]

@@ -11,7 +11,8 @@
  *   width that keeps the whole canvas near a 16:10 frame (the mockup's arrangement).
  * - `previous` (stored positions) is kept exactly (the same objects). A new card goes under its
  *   parent (right of its last sibling), right of its predecessor or above its child, at the nearest
- *   free spot; a new family at the first free spot of its group's area, scanning right then down.
+ *   free spot inside its group (never in another group's shelf segment, else under a continuation
+ *   label: card 7, review r1 N1); a new family at the first free spot of its group's area.
  */
 import type { Family, GraphModel } from '../../model/graph.ts'
 import { GROUP_PREFIX, LABEL_WIDTH, groupKey, groupOrder, labelGroup, laidOutFamilies, layoutFamily } from '../../model/layout.ts'
@@ -186,8 +187,61 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
     bottom = Math.max(bottom, point.y + (id.startsWith(GROUP_PREFIX) ? spec.labelHeight : spec.nodeHeight))
   }
 
-  /** The nearest free spot on `base`'s row (right first, then left), then the rows below. */
-  const nearest = (base: Point): Point => {
+  /**
+   * Card 7 (card-6 review r1 N1): the search stays inside its group. The shelves partition the
+   * canvas into group segments: a label's segment runs from it to the next label on its shelf
+   * row (or on to the right) and down to the next shelf row (or on down); a continuation label
+   * starts another segment of its group. A new card's centre may not lie in another group's
+   * segment (left of or above every label is nobody's). Nothing placed moves.
+   */
+  const shelfLabels = [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).map(([id, point]) => ({ key: labelGroup(id), x: point.x, y: point.y }))
+  const sameRow = (a: { y: number }, b: { y: number }) => Math.abs(a.y - b.y) < 1
+  // The first segment of a shelf row also owns the room left of it.
+  const segments = shelfLabels.map(label => ({
+    key: label.key,
+    x: shelfLabels.some(other => sameRow(other, label) && other.x < label.x) ? label.x : -Infinity,
+    y: label.y,
+    right: Math.min(Infinity, ...shelfLabels.filter(other => sameRow(other, label) && other.x > label.x).map(other => other.x)),
+    bottom: Math.min(Infinity, ...shelfLabels.filter(other => other.y > label.y + 1).map(other => other.y))
+  }))
+
+  const inOtherGroup = (point: Point, key: string) => {
+    const cx = point.x + spec.nodeWidth / 2
+    const cy = point.y + spec.nodeHeight / 2
+
+    return segments.some(segment => segment.key !== key && cx >= segment.x && cx < segment.right && cy >= segment.y && cy < segment.bottom)
+  }
+
+  /** A continuation label for `key` under everything; returns the spot under it. */
+  const continueGroup = (key: string): Point => {
+    let n = 1
+
+    while (positions.has(`${key}${CONTINUATION}${n}`)) {
+      n += 1
+    }
+
+    const label = { x: 0, y: bottom + spec.groupGap }
+
+    positions.set(`${key}${CONTINUATION}${n}`, label)
+    index.add(labelRect(label))
+
+    // The segments above end where this one starts.
+    for (const segment of segments) {
+      if (segment.y < label.y && segment.bottom > label.y) {
+        segment.bottom = label.y
+      }
+    }
+
+    segments.push({ key, x: -Infinity, y: label.y, right: Infinity, bottom: Infinity })
+    bottom = label.y + spec.labelHeight
+
+    return { x: 0, y: label.y + LABEL_BAND }
+  }
+
+  /** The nearest free spot on `base`'s row (right first, then left), then the rows below, inside
+   *  its group (never in another group's segment); else under everything, below a continuation
+   *  label of its group. */
+  const nearest = (base: Point, key: string): Point => {
     for (let dy = 0; dy < 40; dy += 1) {
       for (let k = 0; k <= 16; k += 1) {
         for (const sign of [1, -1]) {
@@ -197,14 +251,14 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
 
           const point = { x: base.x + sign * k * stepX, y: base.y + dy * stepY }
 
-          if (fits(point)) {
+          if (fits(point) && !inOtherGroup(point, key)) {
             return point
           }
         }
       }
     }
 
-    return { x: base.x, y: bottom + stepY }
+    return continueGroup(key)
   }
 
   const newFamilies: Family[] = []
@@ -244,7 +298,7 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
         base = family.nodeIds.map(other => positions.get(other)).find((point): point is Point => Boolean(point)) ?? { x: 0, y: LABEL_BAND }
       }
 
-      const spot = nearest(base)
+      const spot = nearest(base, groupKey(family.projectId))
 
       place(id, spot)
       bottom = Math.max(bottom, spot.y + spec.nodeHeight)

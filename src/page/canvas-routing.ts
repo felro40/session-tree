@@ -34,9 +34,14 @@ export interface LinkEnd {
   source: string
   target: string
   kind: EdgeKind
+  /** Which of its source's ports the link leaves by (card 7: a Subway split's departure); 0 otherwise. */
+  slot: number
 }
 
-export type PortsOf = (kind: EdgeKind, source: Rect, target: Rect) => { from: Port; to: Port }
+export type PortsOf = (kind: EdgeKind, source: Rect, target: Rect, slot?: number) => { from: Port; to: Port }
+
+/** A style's per-link port slot, from the model's structure alone (card 7, Subway). */
+export type SlotsOf = (model: GraphModel) => ReadonlyMap<string, number>
 
 export interface RoutingInput {
   model: GraphModel
@@ -46,6 +51,8 @@ export interface RoutingInput {
   positions: ReadonlyMap<string, Point>
   ports: PortsOf
   router: LinkRouter
+  /** The style's link slots (Subway); absent: every link uses slot 0. */
+  slots?: SlotsOf
 }
 
 export interface Routing {
@@ -84,7 +91,7 @@ const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 /** Both lists come sorted by id (the links stage), so in-order equality is set equality. */
 const sameLinks = (a: readonly LinkEnd[], b: readonly LinkEnd[]) =>
-  a.length === b.length && a.every((end, i) => end.id === b[i].id && end.source === b[i].source && end.target === b[i].target && end.kind === b[i].kind)
+  a.length === b.length && a.every((end, i) => end.id === b[i].id && end.source === b[i].source && end.target === b[i].target && end.kind === b[i].kind && end.slot === b[i].slot)
 
 /** One stage: reruns when a dependency is a new object; an equal result keeps the old one. */
 function stage<T>(same: (a: T, b: T) => boolean) {
@@ -117,7 +124,7 @@ export function createCanvasRouting(): CanvasRouting {
       return routed
     },
 
-    get({ model, spec, frameShown, positions, ports, router }) {
+    get({ model, spec, frameShown, positions, ports, router, slots }) {
       const shown = frameShown
         ? shownStage([frameShown], () => frameShown)
         : shownStage([model, spec], () => new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds)))
@@ -141,18 +148,22 @@ export function createCanvasRouting(): CanvasRouting {
       // Sorted by edge id (B1-r3): `model.edges` follows the row order, which the backend sorts
       // by `last_active`, so a chat turn in a branched session moves its edge to the front. The
       // same set in another order is then the same list, and keeps the previous array.
-      const links = linksStage([model, rects], () =>
-        model.edges
+      // A style's slots (Subway) come from the model's structure alone, so a content-only refetch
+      // never changes them either.
+      const links = linksStage([model, rects, slots], () => {
+        const slotOf = slots?.(model)
+
+        return model.edges
           .filter(edge => rects.has(edge.source) && rects.has(edge.target))
-          .map(edge => ({ id: edge.id, source: edge.source, target: edge.target, kind: edge.kind }))
+          .map(edge => ({ id: edge.id, source: edge.source, target: edge.target, kind: edge.kind, slot: slotOf?.get(edge.id) ?? 0 }))
           .sort((a, b) => byId(a.id, b.id))
-      )
+      })
 
       // R13 on drop: every link against every other block, from the committed positions. While a
       // block is dragged its links no longer match these ends and draw live instead.
       const routes = routesStage([links, rects, ports, router], () => {
         routed += 1
-        const ends = links.map(link => ({ id: link.id, source: link.source, target: link.target, ...ports(link.kind, rects.get(link.source)!, rects.get(link.target)!) }))
+        const ends = links.map(link => ({ id: link.id, source: link.source, target: link.target, ...ports(link.kind, rects.get(link.source)!, rects.get(link.target)!, link.slot) }))
         const out = new Map<string, RoutedLink>()
         const done = routeLinks(ends, rects, router)
 
