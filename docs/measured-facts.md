@@ -853,8 +853,9 @@ Card start commit `b56708ca991edd4dc142c2bb4519e8965ebaa9d8`, `git status --shor
   block coordinates a detour could fail (the A* grid rounds to 0.01 px, so a stub on the boundary
   of the source's own inflated rectangle read as inside it) and the link fell back to a straight
   line through a block. Swimlanes therefore floors x to whole pixels (Dense positions are already
-  whole or 0.1-px multiples); the e2e and a unit probe on the default fixture show every link of
-  the fixture clear of every block.
+  whole or 0.1-px multiples). A throwaway probe on the default fixture (not committed) showed the
+  `st-md-tip → st-md-v2` link straight through `st-md-katex` before the change and detoured after
+  it; the router's own unit test covers an elbow detour.
 
 ## Time axis (decisions)
 
