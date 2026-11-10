@@ -5,9 +5,25 @@ import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import type { GraphModel } from '../../src/model/graph.ts'
 import { NO_PROJECT_ID } from '../../src/model/projects.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
-import { fitSwimlanes, layoutSwimlanes, localDay } from '../../src/styles/swimlanes/layout.ts'
+import { browserOffsetAt } from '../../src/page/frame-cache.ts'
+import { fitSwimlanes, layoutSwimlanes, localDay, swimNowX } from '../../src/styles/swimlanes/layout.ts'
 import type { SwimInput, SwimLayout } from '../../src/styles/swimlanes/layout.ts'
-import { CHILD_GAP, DAY_WIDTH, EARLIER_GAP, HEADER_WIDTH, LANE_COLLAPSED_HEIGHT, SWIM_HEIGHT, SWIM_WIDTH, swimPorts, tokenLabel, WINDOW_DAYS } from '../../src/styles/swimlanes/spec.ts'
+import {
+  CHILD_GAP,
+  CHIP_GAP,
+  DAY_WIDTH,
+  EARLIER_GAP,
+  EARLIER_WIDTH,
+  GHOST_GAP,
+  HEADER_WIDTH,
+  LANE_COLLAPSED_HEIGHT,
+  popoverPlacement,
+  SWIM_HEIGHT,
+  SWIM_WIDTH,
+  swimPorts,
+  tokenLabel,
+  WINDOW_DAYS
+} from '../../src/styles/swimlanes/spec.ts'
 import { loadFixture, project, row } from './fixtures.ts'
 
 const DAY = 86_400
@@ -244,6 +260,36 @@ describe('Swimlanes layout on the fixtures', () => {
     assert.ok(!forced.lanes.find(lane => lane.key === mdesign.id)!.collapsed)
   })
 
+  it('NB1: the ghost sits just left of the scoped lane\'s leftmost block (never in the day window); the chips follow the expanded lanes only', () => {
+    const mdesign = fixture.projects.find(each => each.label === 'mdesign')!
+    const scoped = buildGraph(fixture.rows, fixture.projects, options(mdesign.id))
+    const out = layout(scoped, { nowMs })
+    const ghost = out.boxes.get('st-split-root')!
+    const inLane = [...out.shown].filter(id => !out.ghosts.has(id)).map(id => out.boxes.get(id)!)
+    const leftmost = Math.min(...inLane.map(box => box.x))
+
+    assert.equal(ghost.x, Math.min(0, leftmost) - GHOST_GAP - SWIM_WIDTH)
+    assert.ok(ghost.x + SWIM_WIDTH < 0, 'the ghost reaches into the day window')
+    // Fit frames from the ghost: the bounds start there.
+    assert.equal(out.bounds.minX, ghost.x - 12)
+    const right = Math.max(WINDOW_DAYS * DAY_WIDTH, ...inLane.map(box => box.x + box.width))
+    const chip = out.lanes.find(lane => lane.key === mdesign.id)!.chip!
+
+    assert.equal(chip.x, right + CHIP_GAP, 'the chip is placed from collapsed lanes too')
+    // A collapsed lane's far-right block does not push the other lanes' chips out.
+    const open = layout(model, { nowMs })
+    const widest = open.lanes.reduce((best, lane) => {
+      const r = Math.max(...[...open.shown].map(id => open.boxes.get(id)!).filter(box => box.lane === lane.key).map(box => box.x + box.width))
+
+      return r > best.r ? { key: lane.key, r } : best
+    }, { key: '', r: -Infinity })
+    const without = layout(model, { nowMs, collapsed: new Set([widest.key]) })
+    const others = Math.max(WINDOW_DAYS * DAY_WIDTH, ...[...without.shown].map(id => without.boxes.get(id)!).map(box => box.x + box.width))
+
+    assert.ok(without.lanes.filter(lane => lane.chip).every(lane => lane.chip!.x === others + CHIP_GAP))
+    assertInvariants(scoped, out)
+  })
+
   it('fit frames every lane right of the header column, under the axis, inside the zoom limits', () => {
     const out = layout(model, { nowMs })
     const view = fitSwimlanes(out, 1200, 700, 0.3)
@@ -390,5 +436,105 @@ describe('Swimlanes time axis edge cases', () => {
 
     assert.deepEqual([below.from.dir, below.to.dir], ['down', 'left'])
     assert.deepEqual([level.from.dir, level.to.dir], ['right', 'left'])
+  })
+
+  it('NB1: a ghost in a lane with no earlier-zone block sits just left of the day window, not in a fixed far-left column', () => {
+    const projects2 = [project('p', []), project('q', [])]
+    const rows = [
+      row('g-parent', { cwd: '/repos/q', git_repo_root: '/repos/q', started_at: now - 3 * DAY, last_active: now - 3 * DAY + 60 }),
+      row('g-child', { cwd: '/repos/p', git_repo_root: '/repos/p', _branched_from: 'g-parent', parent_session_id: 'g-parent', started_at: now - 2 * DAY, last_active: now - 2 * DAY + 60 })
+    ]
+    const scoped = buildGraph(rows, projects2, options('p'))
+    const out = layout(scoped, { nowMs })
+    const ghost = out.boxes.get('g-parent')!
+
+    assert.equal(ghost.zone, 'ghost')
+    assert.equal(ghost.x, -GHOST_GAP - SWIM_WIDTH)
+    assert.ok(ghost.x > -EARLIER_WIDTH, 'the ghost is still left of the earlier zone')
+    assertInvariants(scoped, out)
+  })
+})
+
+describe('Swimlanes time axis across a DST change (NB4, card-5 review)', () => {
+  // America/New_York: EDT (UTC-4) until 2026-11-01 06:00 UTC (02:00 EDT), then EST (UTC-5).
+  const DST_END = Date.UTC(2026, 10, 1, 6, 0, 0)
+  const newYork = (ms: number) => (ms < DST_END ? -240 : -300)
+  const projects = [project('p', [])]
+  const base = (id: string, extra: Partial<SessionRow>) => row(id, { cwd: '/repos/p', git_repo_root: '/repos/p', ...extra })
+  // Now: Thu 2026-11-05 12:00 EST. A session started Sat Oct 31 00:30 EDT (04:30 UTC).
+  const nowMs = Date.UTC(2026, 10, 5, 17, 0, 0)
+  const start = Date.UTC(2026, 9, 31, 4, 30, 0) / 1000
+  const rows = [base('dst', { started_at: start, last_active: start + 60 }), base('dst-kid', { _branched_from: 'dst', parent_session_id: 'dst', started_at: start + DAY, last_active: start + DAY + 60 })]
+  const model = buildGraph(rows, projects, options())
+  const column = (out: SwimLayout, id: string) => out.ticks.find(tick => out.boxes.get(id)!.x >= tick.x && out.boxes.get(id)!.x < tick.x + DAY_WIDTH)?.label
+
+  it('the reviewer\'s repro: with each timestamp\'s own offset the session is in the Sat 31 column (one fixed offset put it in Fri 30)', () => {
+    const fixed = layout(model, { nowMs, tzOffsetMinutes: -300 })
+    const perInstant = layout(model, { nowMs, offsetAt: newYork })
+
+    assert.equal(column(fixed, 'dst'), 'Fri 30', 'the old fixed-offset behaviour (control)')
+    assert.equal(column(perInstant, 'dst'), 'Sat 31')
+    // 00:30 into a 24 h day.
+    const tick = perInstant.ticks.find(each => each.label === 'Sat 31')!
+
+    assert.equal(perInstant.boxes.get('dst')!.x, Math.floor(tick.x + (0.5 / 24) * DAY_WIDTH))
+    assertInvariants(model, perInstant)
+  })
+
+  it('the same with the real zone: TZ=America/New_York and the page\'s browserOffsetAt', () => {
+    const before = process.env.TZ
+
+    process.env.TZ = 'America/New_York'
+
+    try {
+      assert.equal(browserOffsetAt(Date.UTC(2026, 9, 31, 4, 30, 0)), -240)
+      assert.equal(browserOffsetAt(nowMs), -300)
+      assert.equal(column(layout(model, { nowMs, offsetAt: browserOffsetAt }), 'dst'), 'Sat 31')
+    } finally {
+      if (before === undefined) {
+        delete process.env.TZ
+      } else {
+        process.env.TZ = before
+      }
+    }
+  })
+
+  it('the 25-hour day (Sun Nov 1): x stays in its column and monotonic in time through the repeated hour', () => {
+    // 01:30 EDT (05:30 UTC), then 01:10 EST (06:10 UTC, 40 min later), then 23:30 EST.
+    const times = [Date.UTC(2026, 10, 1, 5, 30, 0), Date.UTC(2026, 10, 1, 6, 10, 0), Date.UTC(2026, 10, 2, 4, 30, 0)].map(ms => ms / 1000)
+    const chain = times.map((t, i) => base(`d${i}`, { started_at: t, last_active: t + 60 }))
+    // One family each (two blocks so it is on the axis): a late child.
+    const kids = times.map((t, i) => base(`d${i}-kid`, { _branched_from: `d${i}`, parent_session_id: `d${i}`, started_at: t + 2 * DAY, last_active: t + 2 * DAY + 60 }))
+    const out = layout(buildGraph([...chain, ...kids], projects, options()), { nowMs, offsetAt: newYork })
+    const xs = times.map((_, i) => out.boxes.get(`d${i}`)!.x)
+
+    assert.deepEqual(times.map((_, i) => column(out, `d${i}`)), ['Nov 1', 'Nov 1', 'Nov 1'])
+    assert.ok(xs[0] < xs[1] && xs[1] < xs[2], `not monotonic: ${xs}`)
+  })
+
+  it('the now marker in a non-UTC zone: the live mapping equals a fresh layout\'s', () => {
+    const out = layout(model, { nowMs, offsetAt: newYork })
+
+    assert.ok(Math.abs(out.nowX - (8 * DAY_WIDTH + (12 / 24) * DAY_WIDTH)) < 1e-9)
+    assert.ok(Math.abs(swimNowX(out, nowMs + 3 * HOUR * 1000) - layout(model, { nowMs: nowMs + 3 * HOUR * 1000, offsetAt: newYork }).nowX) < 1e-9)
+  })
+})
+
+describe('Swimlanes singles popover placement (NB5, card-5 review)', () => {
+  it('opens below a chip high in the canvas, above a chip low in it, never taller than the room on that side', () => {
+    const high = popoverPlacement({ y: 80, height: 24 }, 800, 12)
+
+    assert.equal(high.above, false)
+    assert.equal(high.edge, 80 + 24 + 6)
+    assert.ok(high.edge + high.maxHeight <= 800)
+
+    const low = popoverPlacement({ y: 700, height: 24 }, 800, 12)
+
+    assert.equal(low.above, true)
+    assert.equal(low.edge, 700 - 6)
+    assert.ok(low.edge - low.maxHeight >= 26, 'the popover runs under the time axis')
+
+    // A short list that fits below stays below, even low in the canvas.
+    assert.equal(popoverPlacement({ y: 600, height: 24 }, 800, 1).above, false)
   })
 })

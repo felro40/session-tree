@@ -26,6 +26,7 @@ import { visibleRows } from '../model/sessions.ts'
 import { liveStatus } from '../model/status.ts'
 import type { HostStatusSnapshot } from '../model/status.ts'
 import { getStyle, registeredStyles, resolveStyleId } from '../styles/registry.ts'
+import { createFrameCache } from './frame-cache.ts'
 import { GraphCanvas, MAX_ZOOM, MIN_ZOOM } from './graph-canvas.tsx'
 import { PluginCtx } from './plugin-context.ts'
 import { useRowOverrides, useSessionActionsController } from './session-actions.tsx'
@@ -161,14 +162,14 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const ready = Boolean(sessions.data) && !projects.isPending && sync.settled(profile)
   const collapsedLanes = device.collapsedLanes
   const collapsed = useMemo(() => new Set(collapsedLanes), [collapsedLanes])
-  // Card 5: a framed style (Swimlanes) is laid out from the data alone on every render; it never
-  // reads the layout store and never queues anything to it (no `place()`, R12).
+  // Card 5: a framed style (Swimlanes) is laid out from the data alone; it never reads the layout
+  // store and never queues anything to it (no `place()`, R12). B1 (card-5 review): the cache
+  // recomputes it only when an input changes (data, filters, collapse, the local day, the
+  // offset), not on the minute tick, so the canvas does not re-route every link once a minute.
+  const [frameCache] = useState(createFrameCache)
   const frameLayout = useMemo(
-    () =>
-      ready && style.frame
-        ? style.frame.compute({ model, showAll, collapsed, nowMs, tzOffsetMinutes: -new Date(nowMs).getTimezoneOffset() })
-        : undefined,
-    [ready, style, model, showAll, collapsed, nowMs]
+    () => (ready && style.frame ? frameCache.get({ frame: style.frame, model, showAll, collapsed, nowMs }) : undefined),
+    [ready, style, model, showAll, collapsed, nowMs, frameCache]
   )
   const layout = useMemo(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.

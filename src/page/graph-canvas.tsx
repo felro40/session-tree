@@ -95,9 +95,12 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const [activeExtra, setActiveExtra] = useState<null | { id: string; box: Rect }>(null)
   const active = frame ? activeExtra : null
 
+  // A framed style's shown set is stable across the minute tick (frame-cache.ts): key on it, not
+  // on the layout object, so the rectangles and routes below are rebuilt only when it changes.
+  const frameShown = frameLayout && style.frame ? frameLayout.shown : undefined
   const shown = useMemo(
-    () => (frameLayout && style.frame ? new Set(frameLayout.shown) : new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds))),
-    [model, spec, frameLayout, style]
+    () => (frameShown ? new Set(frameShown) : new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds))),
+    [model, spec, frameShown]
   )
   const lineage = useMemo(() => lineageOf(model, selectedId), [model, selectedId])
 
@@ -536,7 +539,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
         data-draggable={style.draggable ? 'true' : 'false'}
       >
         <FrameUiCtx.Provider value={frameUi}>
-          {Under && frameLayout && <Under layout={frameLayout} />}
+          {Under && frameLayout && <Under layout={frameLayout} nowMs={nowMs} />}
           <ReactFlow<FlowNode, FlowEdge>
             nodes={nodes}
             edges={edges}

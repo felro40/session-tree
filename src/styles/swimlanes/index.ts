@@ -7,6 +7,7 @@
 import type { Node } from '@xyflow/react'
 
 import { orthogonalRouter } from '../../model/route.ts'
+import { browserOffsetAt } from '../../page/frame-cache.ts'
 import { GroupLabel, projectColor } from '../shared.tsx'
 import type { FrameLayout, StyleDefinition, StyleFrame } from '../types.ts'
 import { SwimOver, SwimUnder } from './layers.tsx'
@@ -60,8 +61,7 @@ export const swimlanesStyle: StyleDefinition = {
   layoutSpec: swimLayoutSpec,
   // The page lays a framed style out through `frame.compute` (with "now", the time zone and the
   // collapsed lanes); this keeps the contract for any other caller: no previous positions used.
-  layout: (model, _previous, spec) =>
-    layoutSwimlanes({ model, showAll: spec.includeSingles, collapsed: new Set(), nowMs: Date.now(), tzOffsetMinutes: -new Date().getTimezoneOffset() }),
+  layout: (model, _previous, spec) => layoutSwimlanes({ model, showAll: spec.includeSingles, collapsed: new Set(), nowMs: Date.now(), offsetAt: browserOffsetAt }),
   draggable: false,
   savesLayout: false,
   singles: 'lane-chip',

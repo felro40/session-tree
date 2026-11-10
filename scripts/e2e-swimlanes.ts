@@ -346,6 +346,91 @@ async function headers(page: Page) {
   )
 }
 
+/**
+ * Watches the page idle for `windowMs` (B1): every long task (`PerformanceObserver('longtask')`,
+ * tasks over 50 ms) and every move of the now marker (the minute tick re-renders it). Nothing
+ * is input meanwhile.
+ */
+async function idleLongTasks(page: Page, windowMs: number) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __stLong: { start: number; duration: number }[]; __stNow: string[]; __stObs: PerformanceObserver; __stMut: MutationObserver }
+    const pill = document.querySelector('[data-testid="session-tree-now"]')!
+
+    w.__stLong = []
+    w.__stNow = [pill.getAttribute('data-now-x') ?? '']
+    w.__stObs = new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        w.__stLong.push({ start: Math.round(entry.startTime), duration: Math.round(entry.duration) })
+      }
+    })
+    w.__stObs.observe({ type: 'longtask' })
+    w.__stMut = new MutationObserver(() => w.__stNow.push(pill.getAttribute('data-now-x') ?? ''))
+    w.__stMut.observe(pill, { attributes: true, attributeFilter: ['data-now-x'] })
+  })
+  const t0 = Date.now()
+
+  await sleep(windowMs)
+  const out = await page.evaluate(() => {
+    const w = window as unknown as { __stLong: { start: number; duration: number }[]; __stNow: string[]; __stObs: PerformanceObserver; __stMut: MutationObserver }
+
+    w.__stObs.disconnect()
+    w.__stMut.disconnect()
+
+    return { longTasks: w.__stLong, nowX: w.__stNow }
+  })
+
+  return { windowMs: Date.now() - t0, ticks: out.nowX.length - 1, nowX: out.nowX, longTasks: out.longTasks, maxMs: Math.max(0, ...out.longTasks.map(task => task.duration)) }
+}
+
+/** A scripted 2 s middle-drag pan, counting animation frames (the 500-session fixture). */
+async function panFps(page: Page) {
+  const spot = await emptySpot(page).catch(async () => {
+    const pane = await box(page, '.react-flow__pane')
+
+    return { x: pane.x + pane.width / 2, y: pane.y + pane.height / 2 }
+  })
+
+  await page.evaluate(() => {
+    const w = window as unknown as { __stFrames: number; __stCounting: boolean }
+
+    w.__stFrames = 0
+    w.__stCounting = true
+    const tick = () => {
+      if (w.__stCounting) {
+        w.__stFrames += 1
+        requestAnimationFrame(tick)
+      }
+    }
+
+    requestAnimationFrame(tick)
+  })
+  const before = await viewport(page)
+
+  await page.mouse.move(spot.x, spot.y)
+  await page.mouse.down({ button: 'middle' })
+  const t0 = Date.now()
+  let moves = 0
+
+  while (Date.now() - t0 < 2000) {
+    moves += 1
+    await page.mouse.move(spot.x + Math.sin(moves / 8) * 220, spot.y + Math.cos(moves / 11) * 140)
+  }
+
+  const elapsed = Date.now() - t0
+
+  await page.mouse.up({ button: 'middle' })
+  const frames = await page.evaluate(() => {
+    const w = window as unknown as { __stFrames: number; __stCounting: boolean }
+
+    w.__stCounting = false
+
+    return w.__stFrames
+  })
+  const after = await viewport(page)
+
+  return { fps: Math.round((frames / elapsed) * 1000 * 10) / 10, frames, elapsed, moves, moved: after.x !== before.x || after.y !== before.y }
+}
+
 /** Block background vs the theme variable it must come from, resolved in place. */
 async function themeProbe(page: Page) {
   return page.evaluate(() => {
@@ -612,8 +697,13 @@ async function main(): Promise<void> {
       })
 
       assert(earlier.blockRight <= earlier.first, `the 12-day-old block reaches the first day tick: ${JSON.stringify(earlier)}`)
-      const nowBox = await box(page, '[data-testid="session-tree-now"]')
-      // The pill is centred on the marker line.
+      // The marker line (the pill moves aside when it would cover today's label, NB2). A
+      // vertical line has no width: read its client rect directly.
+      const nowBox = await page.$eval('[data-testid="session-tree-now-line"]', el => {
+        const r = el.getBoundingClientRect()
+
+        return { x: r.left, width: r.width }
+      })
       const now = nowBox.x + nowBox.width / 2
       // A root's start is its time; a child pushed right of its parent (the documented clamp)
       // reads "after", not a time, and may sit right of the marker.
@@ -633,6 +723,65 @@ async function main(): Promise<void> {
       facts.axis = { placed, earlier }
 
       return { placed: placed.map(each => `${each.id}→${each.tick}+${Math.round(each.offset ?? -1)}`), earlier }
+    })
+
+    await check('NB2 + NB3: the now pill never covers today\'s tick label, and every expanded lane header shows its count and tokens (fit zoom and the minimum zoom; bounding boxes)', async () => {
+      await fit(page)
+      const probe = () =>
+        page.evaluate(() => {
+          const ticks = [...document.querySelectorAll('[data-testid="session-tree-axis-tick"]')]
+          const label = ticks.at(-1)!.querySelector('.st-swim-tick-label')!.getBoundingClientRect()
+          const pillEl = document.querySelector('[data-testid="session-tree-now"]')!
+          const pill = pillEl.getBoundingClientRect()
+          const line = document.querySelector('[data-testid="session-tree-now-line"]')!.getBoundingClientRect().left
+          const hit = pill.left < label.right && label.left < pill.right && pill.top < label.bottom && label.top < pill.bottom
+          const heads = [...document.querySelectorAll('[data-testid="session-tree-lane-header"][data-collapsed="false"]')].map(el => {
+            const head = el.getBoundingClientRect()
+            const totals = el.querySelector('[data-field="totals"]')
+            const r = totals?.getBoundingClientRect()
+
+            return {
+              label: el.getAttribute('data-label'),
+              sessions: el.getAttribute('data-sessions'),
+              height: Math.round(head.height),
+              text: (totals as HTMLElement | null)?.innerText.trim() ?? null,
+              compact: totals?.getAttribute('data-compact') === 'true',
+              inside: Boolean(r && r.height > 0 && r.top >= head.top - 0.5 && r.bottom <= head.bottom + 0.5)
+            }
+          })
+
+          return { hit, shifted: pillEl.getAttribute('data-shifted'), pill: [Math.round(pill.left), Math.round(pill.right)], label: [Math.round(label.left), Math.round(label.right)], line: Math.round(line), heads }
+        })
+      const atFit = { zoom: (await viewport(page)).zoom, ...(await probe()) }
+      const spot = await emptySpot(page)
+
+      await page.mouse.move(spot.x, spot.y)
+
+      for (let i = 0; i < 12; i += 1) {
+        await page.mouse.wheel(0, 400)
+        await sleep(60)
+      }
+
+      await sleep(400)
+      const atMin = { zoom: (await viewport(page)).zoom, ...(await probe()) }
+
+      await fit(page)
+      assert(Math.abs(atMin.zoom - 0.3) < 0.01 && atFit.zoom > atMin.zoom + 0.01, `zooms ${atFit.zoom} / ${atMin.zoom}`)
+
+      for (const at of [atFit, atMin]) {
+        assert(!at.hit, `the now pill covers today's label at zoom ${at.zoom}: pill ${at.pill}, label ${at.label}`)
+        // It stays next to the line: at most just right of today's label.
+        assert(at.pill[0] <= Math.max(at.line, at.label[1]) + 8, `the pill strayed from the line at zoom ${at.zoom}: ${JSON.stringify(at)}`)
+        assert(at.heads.length >= 3 && at.heads.every(head => head.inside && head.text?.startsWith(`${head.sessions} session`) && / tok$/.test(head.text)), `headers at zoom ${at.zoom}: ${JSON.stringify(at.heads)}`)
+      }
+
+      // At the minimum zoom a day column (42 px) is narrower than the label and the pill: the
+      // pill was moved aside (the path that fixes the overlap ran), and short lanes are compact.
+      assert(atMin.shifted === 'true', `the pill was not moved aside at the minimum zoom: ${JSON.stringify(atMin)}`)
+      assert(atMin.heads.some(head => head.compact), 'no compact header at the minimum zoom')
+      facts.nb2nb3 = { atFit, atMin }
+
+      return { fit: { zoom: atFit.zoom, shifted: atFit.shifted, compact: atFit.heads.filter(head => head.compact).length }, min: { zoom: atMin.zoom, shifted: atMin.shifted, compact: atMin.heads.filter(head => head.compact).length }, lanes: atMin.heads.length }
     })
 
     await check('no dragging: a real mouse drag does not move a block, and nothing is written to the position store (network log)', async () => {
@@ -763,6 +912,16 @@ async function main(): Promise<void> {
       const ghostLeft = lefts.find(each => each.id === 'st-split-root')!.x
 
       assert(lefts.every(each => each.id === 'st-split-root' || each.x > ghostLeft), 'the ghost is not at the left edge')
+      // NB1: just left of the lane's leftmost block (or of the day window), not a fixed far-left
+      // column: the gap is GHOST_GAP (40) world px, and the ghost never reaches the first day.
+      const firstTick = (await box(page, '[data-testid="session-tree-axis-tick"]')).x
+      const ghostBox = await box(page, BLOCK('st-split-root'))
+      const leftmost = Math.min(...lefts.filter(each => each.id !== 'st-split-root').map(each => each.x))
+      const expectedRight = Math.min(leftmost, firstTick) - 40 * v1.zoom
+
+      assert(Math.abs(ghostBox.x + ghostBox.width - expectedRight) < 2, `ghost right ${ghostBox.x + ghostBox.width}, expected ${expectedRight} (leftmost ${leftmost}, first tick ${firstTick}, zoom ${v1.zoom})`)
+      assert(ghostBox.x + ghostBox.width <= firstTick + 0.5, 'the ghost reaches into the day window')
+      facts.scopeFit = { zoom: v1.zoom, ghostRight: ghostBox.x + ghostBox.width, leftmost, firstTick }
       assert((await page.locator('[data-testid="session-tree-link"][data-source="st-split-root"][data-target="st-split-child"]').count()) === 1, 'no link from the ghost')
       // Read-only: tooltip, no menu, no selection, no drag, no open.
       const gbox = await box(page, BLOCK('st-split-root'))
@@ -856,6 +1015,42 @@ async function main(): Promise<void> {
       await settled(page)
 
       return { lane: lane.label, count, opened: target, menu: menuItems.length }
+    })
+
+    await check('NB5: the singles popover opens below a chip high in the canvas and above a chip low in it, never clipped by the canvas (geometry)', async () => {
+      await fit(page)
+      const over = await box(page, '[data-testid="session-tree-swim-over"]')
+      const lanes = (await headers(page)).filter(lane => !lane.collapsed && lane.singles > 0)
+      const open = async (laneKey: string) => {
+        const chipSel = `[data-testid="session-tree-lane-chip"][data-lane="${laneKey}"]`
+        const chip = await box(page, chipSel)
+
+        await page.locator(chipSel).click()
+        const pop = page.locator(`[data-testid="session-tree-lane-popover"][data-lane="${laneKey}"]`)
+
+        await pop.waitFor({ timeout: 5000 })
+        const p = (await pop.boundingBox())!
+        const placement = await pop.getAttribute('data-placement')
+        const clipped = await pop.evaluate(el => el.scrollHeight > el.clientHeight + 1)
+
+        await page.keyboard.press('Escape')
+        await pop.waitFor({ state: 'detached', timeout: 5000 })
+
+        return { placement, chip: [Math.round(chip.y), Math.round(chip.y + chip.height)], pop: [Math.round(p.y), Math.round(p.y + p.height)], clipped, inside: p.y >= over.y - 0.5 && p.y + p.height <= over.y + over.height + 0.5 }
+      }
+      const high = await open(lanes[0].lane)
+      // Pan the last lane's chip to ~40 px above the canvas bottom.
+      const last = lanes.at(-1)!
+      const chipBefore = await box(page, `[data-testid="session-tree-lane-chip"][data-lane="${last.lane}"]`)
+
+      await drag(page, await emptySpot(page), { x: 0, y: Math.round(over.y + over.height - 40 - (chipBefore.y + chipBefore.height)) }, 'middle')
+      const low = await open(last.lane)
+
+      await fit(page)
+      assert(high.placement === 'below' && high.pop[0] >= high.chip[1] && high.inside && !high.clipped, `high chip ${JSON.stringify(high)}`)
+      assert(low.placement === 'above' && low.pop[1] <= low.chip[0] && low.inside && !low.clipped, `low chip ${JSON.stringify(low)}`)
+
+      return { high, low }
     })
 
     await check('Dense → Swimlanes → Dense (toolbar switcher): every stored Dense position is unchanged, Dense draws them; Swimlanes wrote no position, layout or forget (network log, state.json)', async () => {
@@ -1031,6 +1226,34 @@ async function main(): Promise<void> {
       return facts.scale
     })
 
+    await check('B1: idle across a real minute tick on the 500-session fixture (Show all off, then on): no long task ≥ 200 ms, and the clock did tick (the now marker moved)', async () => {
+      await setProfile(page, 'scale')
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
+      const runs: Record<string, Awaited<ReturnType<typeof idleLongTasks>>> = {}
+
+      for (const showAll of [false, true]) {
+        if (showAll) {
+          await clickToolbar(page, 'session-tree-show-all')
+          await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"]')?.getAttribute('data-canvas-count') === '500', undefined, { timeout: 60_000 })
+        }
+
+        // Let the first render (and its routing) settle before watching.
+        await sleep(3000)
+        runs[showAll ? 'showAll' : 'default'] = await idleLongTasks(page, 66_000)
+      }
+
+      await setProfile(page, 'default')
+      await clickToolbar(page, 'session-tree-show-all')
+      facts.idle = runs
+
+      for (const [name, run] of Object.entries(runs)) {
+        assert(run.ticks >= 1, `${name}: no minute tick in ${run.windowMs} ms (now marker ${JSON.stringify(run.nowX)})`)
+        assert(run.longTasks.every(task => task.duration < 200), `${name}: long tasks ${JSON.stringify(run.longTasks)}`)
+      }
+
+      return runs
+    })
+
     await check('no page errors from the plugin; no position write from Swimlanes over the whole run except the Move\'s forget', () => {
       const fromPlugin = stacks.filter(stack => /blob:|session-tree|desktop-plugins/.test(stack))
       const swimWrites = positionWrites(log, swimFrom).filter(entry => !entry.path.startsWith('/state/forget'))
@@ -1041,6 +1264,30 @@ async function main(): Promise<void> {
       facts.writes = writes(log).map(entry => `${entry.method} ${entry.path}`)
 
       return { requests: log.length, writes: facts.writes }
+    })
+
+    // Last: Dense saves its auto-layout for the scale profile, which the no-write check above
+    // must not see.
+    await check('500-session fixture in Dense (re-measured, Show all): time to first render, and a scripted 2 s middle-drag pan at ≥ 45 fps', async () => {
+      await switchStyle(page, 'dense')
+      await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"]')?.getAttribute('data-style') === 'dense', undefined, { timeout: 20_000 })
+      await settled(page)
+      await clickToolbar(page, 'session-tree-show-all')
+      const started = Date.now()
+
+      await setProfile(page, 'scale')
+      await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"]')?.getAttribute('data-canvas-count') === '500', undefined, { timeout: 60_000 })
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
+      const firstRenderMs = Date.now() - started
+      const pan = await panFps(page)
+
+      await setProfile(page, 'default')
+      await clickToolbar(page, 'session-tree-show-all')
+      assert(pan.moved, 'the pan did not move the view')
+      assert(pan.fps >= 45, `${pan.fps} fps`)
+      facts.denseScale = { firstRenderMs, ...pan }
+
+      return facts.denseScale
     })
   } finally {
     await close(s)

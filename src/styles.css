@@ -1091,6 +1091,17 @@ g.is-dimmed {
   opacity: 0.85;
 }
 
+/* NB3: a short lane (the default fit) keeps its totals on one compact line. */
+.st-swim-lh.is-compact {
+  padding-top: 3px;
+}
+
+.st-swim-lh-meta.is-compact {
+  margin-top: 1px;
+  font-size: 10.5px;
+  line-height: 13px;
+}
+
 .st-swim-corner {
   position: absolute;
   top: 0;

@@ -71,6 +71,29 @@ export function swimPorts(kind: EdgeKind, source: Rect, target: Rect): { from: P
   return { from: { x: source.x + source.width, y: source.y + source.height / 2, dir: 'right' }, to }
 }
 
+/** Rough singles-popover height: padding + heading + one row per session (the list scrolls). */
+const POP_CHROME = 40
+const POP_ROW = 26
+/** Free space kept between the popover and its chip, and the canvas edge. */
+const POP_GAP = 6
+const POP_MARGIN = 8
+
+/**
+ * Where a lane chip's singles popover opens (NB5, card-5 review): below the chip when it fits
+ * there (or there is more room below), else above it. Its height is capped to the room on that
+ * side, so the canvas (`overflow: hidden`) never clips it. `edge` is the popover's top (below)
+ * or bottom (above), in canvas pixels; `chip` is the chip's box in canvas pixels.
+ */
+export function popoverPlacement(chip: { y: number; height: number }, paneHeight: number, rows: number): { above: boolean; edge: number; maxHeight: number } {
+  const below = paneHeight - (chip.y + chip.height + POP_GAP) - POP_MARGIN
+  const above = chip.y - POP_GAP - AXIS_HEIGHT - POP_MARGIN
+  const wanted = Math.min(paneHeight * 0.6, POP_CHROME + rows * POP_ROW)
+  const flip = below < wanted && above > below
+  const cap = (room: number) => Math.max(60, Math.min(paneHeight * 0.6, room))
+
+  return flip ? { above: true, edge: chip.y - POP_GAP, maxHeight: cap(above) } : { above: false, edge: chip.y + chip.height + POP_GAP, maxHeight: cap(below) }
+}
+
 /** `1.4M`, `402k`, `950` — the mockup's token figures. */
 export function tokenLabel(value: number): string {
   if (!Number.isFinite(value) || value <= 0) {

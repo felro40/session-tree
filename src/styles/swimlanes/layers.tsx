@@ -9,8 +9,8 @@
  *   horizontally; and the "no branches N" popover of a lane chip.
  */
 import { Codicon } from '@hermes/plugin-sdk'
-import { useViewport } from '@xyflow/react'
-import { memo, useEffect, useRef } from 'react'
+import { useStore, useViewport } from '@xyflow/react'
+import { memo, useEffect, useLayoutEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 
 import { shortAge } from '../../model/format.ts'
@@ -18,8 +18,9 @@ import type { GraphModel } from '../../model/graph.ts'
 import { usePluginCtx } from '../../page/plugin-context.ts'
 import { ProjectGlyph, projectColor } from '../shared.tsx'
 import type { FrameLayerProps, FrameLayout } from '../types.ts'
+import { swimNowX } from './layout.ts'
 import type { SwimFrameLayout, SwimLayout } from './layout.ts'
-import { AXIS_HEIGHT, HEADER_WIDTH, SWIM_HEIGHT, tokenLabel } from './spec.ts'
+import { AXIS_HEIGHT, HEADER_WIDTH, popoverPlacement, SWIM_HEIGHT, tokenLabel } from './spec.ts'
 import { CHIP_PREFIX } from './swim-flow.tsx'
 
 /** The layout this style's frame computed (`frame.compute` returns a `SwimLayout`). */
@@ -72,17 +73,28 @@ const SwimUnderSvg = memo(function SwimUnderSvg({ layout }: { layout: SwimLayout
           />
         ))
       )}
-      <line className="st-swim-nowline" data-testid="session-tree-now-line" x1={layout.nowX} y1={0} x2={layout.nowX} y2={height} />
     </svg>
   )
 })
 
-export function SwimUnder({ layout }: { layout: FrameLayout }) {
+/** The now line: the only part of the layers that follows the live clock (B1, card-5 review). */
+function SwimNowLine({ layout, nowMs }: { layout: SwimLayout; nowMs: number }) {
+  const x = swimNowX(layout, nowMs)
+
+  return (
+    <svg className="st-swim-under-svg" width={1} height={1} aria-hidden="true">
+      <line className="st-swim-nowline" data-testid="session-tree-now-line" x1={x} y1={0} x2={x} y2={layout.bounds.height} />
+    </svg>
+  )
+}
+
+export function SwimUnder({ layout, nowMs }: { layout: FrameLayout; nowMs: number }) {
   const { x, y, zoom } = useViewport()
 
   return (
     <div className="st-swim-under" data-testid="session-tree-swim-under" style={{ transform: `translate(${x}px, ${y}px) scale(${zoom})` }}>
       <SwimUnderSvg layout={swim(layout)} />
+      <SwimNowLine layout={swim(layout)} nowMs={nowMs} />
     </div>
   )
 }
@@ -105,6 +117,8 @@ function SinglesPopover({
   const ctx = usePluginCtx()
   const ref = useRef<HTMLDivElement>(null)
   const lane = layout.lanes.find(each => `${CHIP_PREFIX}${each.key}` === active.id)
+  // The canvas height: the popover opens where it fits (NB5, card-5 review).
+  const paneHeight = useStore(state => state.height)
 
   useEffect(() => {
     const offs = [
@@ -139,14 +153,25 @@ function SinglesPopover({
   }
 
   const width = 260
+  const placement = popoverPlacement(active.box, paneHeight, lane.singleIds.length)
   const style: CSSProperties = {
     left: Math.max(HEADER_WIDTH + 6, active.box.x + active.box.width - width),
-    top: active.box.y + active.box.height + 6,
+    ...(placement.above ? { bottom: paneHeight - placement.edge } : { top: placement.edge }),
+    maxHeight: placement.maxHeight,
     width
   }
 
   return (
-    <div ref={ref} className="st-swim-pop" role="dialog" aria-label={`${lane.label} · no branches`} data-testid="session-tree-lane-popover" data-lane={lane.key} style={style}>
+    <div
+      ref={ref}
+      className="st-swim-pop"
+      role="dialog"
+      aria-label={`${lane.label} · no branches`}
+      data-testid="session-tree-lane-popover"
+      data-lane={lane.key}
+      data-placement={placement.above ? 'above' : 'below'}
+      style={style}
+    >
       <h4>
         {lane.label} · no branches <span>{lane.singleIds.length}</span>
       </h4>
@@ -185,19 +210,42 @@ export function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLa
   const { x, y, zoom } = useViewport()
   const scoped = model.options.scope !== 'all'
   const sx = (worldX: number) => x + worldX * zoom
+  const nowLeft = sx(swimNowX(layout, nowMs))
+  const axisRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLDivElement>(null)
+
+  // NB2 (card-5 review): the now pill sits centred on the now line unless that would cover
+  // today's tick label; then it moves just right of the label (nothing is drawn right of today's
+  // label on the axis). Measured after every render (pan, zoom, tick), written to the pill only.
+  useLayoutEffect(() => {
+    const axis = axisRef.current
+    const pill = pillRef.current
+
+    if (!axis || !pill) {
+      return
+    }
+
+    const label = axis.querySelector<HTMLElement>(`[data-testid="session-tree-axis-tick"][data-day="${layout.window.today}"] .st-swim-tick-label`)
+    const half = pill.offsetWidth / 2
+    const labelRight = label ? label.getBoundingClientRect().right - axis.getBoundingClientRect().left : -Infinity
+    const left = Math.max(nowLeft, labelRight + 4 + half)
+
+    pill.style.left = `${left}px`
+    pill.dataset.shifted = left > nowLeft ? 'true' : 'false'
+  })
 
   return (
     <div className="st-swim-over" data-testid="session-tree-swim-over">
-      <div className="st-swim-axis" data-testid="session-tree-axis" style={{ height: AXIS_HEIGHT }}>
+      <div ref={axisRef} className="st-swim-axis" data-testid="session-tree-axis" style={{ height: AXIS_HEIGHT }}>
         <div className="st-swim-tick is-earlier" data-testid="session-tree-axis-earlier" style={{ left: sx(layout.earlier.x + 10) }}>
           ‹ earlier
         </div>
         {layout.ticks.map(tick => (
           <div key={tick.day} className={`st-swim-tick${tick.bold ? ' is-bold' : ''}`} data-testid="session-tree-axis-tick" data-day={tick.day} data-x={tick.x} style={{ left: sx(tick.x) }}>
-            {tick.label}
+            <span className="st-swim-tick-label">{tick.label}</span>
           </div>
         ))}
-        <div className="st-swim-now" data-testid="session-tree-now" style={{ left: sx(layout.nowX) }}>
+        <div ref={pillRef} className="st-swim-now" data-testid="session-tree-now" data-now-x={nowLeft}>
           now
         </div>
       </div>
@@ -213,7 +261,7 @@ export function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLa
               tabIndex={-1}
               aria-expanded={!lane.collapsed}
               aria-disabled={disabled || undefined}
-              className={`st-swim-lh${index % 2 ? ' is-alt' : ''}${lane.collapsed ? ' is-collapsed' : ''}${lane.scopeCollapsed ? ' is-scope-collapsed' : ''}`}
+              className={`st-swim-lh${index % 2 ? ' is-alt' : ''}${lane.collapsed ? ' is-collapsed' : ''}${lane.scopeCollapsed ? ' is-scope-collapsed' : ''}${!lane.collapsed && height < SWIM_HEIGHT ? ' is-compact' : ''}`}
               data-testid="session-tree-lane-header"
               data-lane={lane.key}
               data-label={lane.label}
@@ -246,6 +294,12 @@ export function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLa
                     {lane.inTrees} in trees · {lane.singles} single{lane.singles === 1 ? '' : 's'}
                   </div>
                 </>
+              )}
+              {/* NB3 (card-5 review): a short lane (the default fit) keeps a one-line count + tokens. */}
+              {!lane.collapsed && height < SWIM_HEIGHT && (
+                <div className="st-swim-lh-meta is-compact" data-field="totals" data-compact="true">
+                  {lane.sessions} session{lane.sessions === 1 ? '' : 's'} · {tokenLabel(lane.tokens)} tok
+                </div>
               )}
             </div>
           )

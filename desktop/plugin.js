@@ -66,10 +66,10 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState7 = React2.useState, useEffect8 = React2.useEffect, useLayoutEffect2 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState7 = React2.useState, useEffect8 = React2.useEffect, useLayoutEffect3 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
       var value2 = getSnapshot(), _useState = useState7({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
-      return useLayoutEffect2(
+      return useLayoutEffect3(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
@@ -9022,10 +9022,47 @@ init_define_import_meta_env();
 // src/styles/swimlanes/index.ts
 init_define_import_meta_env();
 
+// src/page/frame-cache.ts
+init_define_import_meta_env();
+var browserOffsetAt = (ms) => -new Date(ms).getTimezoneOffset();
+function clockKey(nowMs, offsetAt) {
+  let offset = offsetAt(nowMs);
+  return { day: Math.floor((nowMs + offset * 6e4) / 864e5), offset };
+}
+var sameSet = (a, b) => a === b || a.size === b.size && [...a].every((each) => b.has(each));
+function samePositions(a, b) {
+  if (a === b)
+    return !0;
+  if (a.size !== b.size)
+    return !1;
+  for (let [id2, point] of a) {
+    let other = b.get(id2);
+    if (!other || other.x !== point.x || other.y !== point.y)
+      return !1;
+  }
+  return !0;
+}
+function createFrameCache() {
+  let last, computed = 0;
+  return {
+    get computed() {
+      return computed;
+    },
+    get(request) {
+      let offsetAt = request.offsetAt ?? browserOffsetAt, { day, offset } = clockKey(request.nowMs, offsetAt);
+      if (last && last.frame === request.frame && last.model === request.model && last.showAll === request.showAll && last.offsetAt === offsetAt && last.day === day && last.offset === offset && sameSet(last.collapsed, request.collapsed))
+        return last.layout;
+      computed += 1;
+      let layout = request.frame.compute({ model: request.model, showAll: request.showAll, collapsed: request.collapsed, nowMs: request.nowMs, offsetAt });
+      return last && (samePositions(last.layout.positions, layout.positions) && (layout.positions = last.layout.positions), sameSet(last.layout.shown, layout.shown) && (layout.shown = last.layout.shown)), last = { frame: request.frame, model: request.model, showAll: request.showAll, collapsed: request.collapsed, offsetAt, day, offset, layout }, layout;
+    }
+  };
+}
+
 // src/styles/swimlanes/layers.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon5 } from "@hermes/plugin-sdk";
-import { memo as memo5, useEffect as useEffect2, useRef as useRef2 } from "react";
+import { memo as memo5, useEffect as useEffect2, useLayoutEffect as useLayoutEffect2, useRef as useRef2 } from "react";
 
 // src/page/plugin-context.ts
 init_define_import_meta_env();
@@ -9038,6 +9075,9 @@ function usePluginCtx() {
   return ctx;
 }
 
+// src/styles/swimlanes/layout.ts
+init_define_import_meta_env();
+
 // src/styles/swimlanes/spec.ts
 init_define_import_meta_env();
 var NO_DRAG_TIP = "Swimlanes has no dragging";
@@ -9049,6 +9089,11 @@ function swimPorts(kind, source, target) {
       return { from: { x: dropX, y: source.y + source.height, dir: "down" }, to };
   }
   return { from: { x: source.x + source.width, y: source.y + source.height / 2, dir: "right" }, to };
+}
+var POP_CHROME = 40, POP_ROW = 26, POP_GAP = 6, POP_MARGIN = 8;
+function popoverPlacement(chip, paneHeight, rows) {
+  let below = paneHeight - (chip.y + chip.height + POP_GAP) - POP_MARGIN, above = chip.y - POP_GAP - 26 - POP_MARGIN, wanted = Math.min(paneHeight * 0.6, POP_CHROME + rows * POP_ROW), flip = below < wanted && above > below, cap = (room) => Math.max(60, Math.min(paneHeight * 0.6, room));
+  return flip ? { above: !0, edge: chip.y - POP_GAP, maxHeight: cap(above) } : { above: !1, edge: chip.y + chip.height + POP_GAP, maxHeight: cap(below) };
 }
 function tokenLabel(value2) {
   return !Number.isFinite(value2) || value2 <= 0 ? "0" : value2 >= 1e6 ? `${(value2 / 1e6).toFixed(1)}M` : value2 >= 1e3 ? `${Math.round(value2 / 1e3)}k` : String(Math.round(value2));
@@ -9068,21 +9113,7 @@ function swimLayoutSpec({ showAll }) {
   };
 }
 
-// src/styles/swimlanes/swim-flow.tsx
-init_define_import_meta_env();
-import { Codicon as Codicon4 } from "@hermes/plugin-sdk";
-import { memo as memo4 } from "react";
-
-// src/page/frame-context.ts
-init_define_import_meta_env();
-import { createContext as createContext4, useContext as useContext4 } from "react";
-var FrameUiCtx = createContext4(null);
-function useFrameUi() {
-  return useContext4(FrameUiCtx);
-}
-
 // src/styles/swimlanes/layout.ts
-init_define_import_meta_env();
 var DAY_S = 86400, MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], validTime = (value2) => typeof value2 == "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null, localDay = (seconds, offsetSeconds) => Math.floor((seconds + offsetSeconds) / DAY_S);
 function effectiveStart(node, nowSeconds) {
   let raw = validTime(node.row?.started_at) ?? validTime(node.row?.last_active);
@@ -9096,8 +9127,18 @@ function dayLabel(day, bold) {
   let date2 = new Date(day * DAY_S * 1e3);
   return bold ? `${MONTHS2[date2.getUTCMonth()]} ${date2.getUTCDate()}` : `${WEEKDAYS[date2.getUTCDay()]} ${date2.getUTCDate()}`;
 }
+function localCalendar(offsetAt) {
+  let offsetS = (seconds) => offsetAt(seconds * 1e3) * 60, starts = /* @__PURE__ */ new Map(), dayOf = (seconds) => localDay(seconds, offsetS(seconds)), midnight = (day) => {
+    let start2 = starts.get(day);
+    return start2 === void 0 && (start2 = day * DAY_S - offsetS(day * DAY_S - offsetS(day * DAY_S)), starts.set(day, start2)), start2;
+  };
+  return { dayOf, midnight, fraction: (seconds, day) => {
+    let from = midnight(day);
+    return Math.min(Math.max((seconds - from) / Math.max(1, midnight(day + 1) - from), 0), 1 - 1e-9);
+  } };
+}
 function layoutSwimlanes(input) {
-  let { model, showAll, collapsed } = input, nowS = input.nowMs / 1e3, offset = input.tzOffsetMinutes * 60, today = localDay(nowS, offset), firstDay = today - 8, scope = model.options.scope, scoped = scope !== ALL_PROJECTS, projectById = new Map(model.projects.map((project) => [project.id, project])), laneOf = (node2) => laneKeyOf(node2, projectById), node = (id2) => model.nodeById.get(id2), onAxis = new Set(model.families.filter((family) => showAll || family.nodeIds.length > 1).flatMap((family) => family.nodeIds)), time = /* @__PURE__ */ new Map(), future = /* @__PURE__ */ new Set();
+  let { model, showAll, collapsed } = input, nowS = input.nowMs / 1e3, fixed = input.tzOffsetMinutes ?? 0, calendar = localCalendar(input.offsetAt ?? (() => fixed)), today = calendar.dayOf(nowS), firstDay = today - 8, scope = model.options.scope, scoped = scope !== ALL_PROJECTS, projectById = new Map(model.projects.map((project) => [project.id, project])), laneOf = (node2) => laneKeyOf(node2, projectById), node = (id2) => model.nodeById.get(id2), onAxis = new Set(model.families.filter((family) => showAll || family.nodeIds.length > 1).flatMap((family) => family.nodeIds)), time = /* @__PURE__ */ new Map(), future = /* @__PURE__ */ new Set();
   for (let each of model.nodes)
     if (each.kind === "session") {
       let start2 = effectiveStart(each, nowS);
@@ -9108,11 +9149,11 @@ function layoutSwimlanes(input) {
     if (node(id2).kind !== "session")
       continue;
     let t = time.get(id2) ?? null;
-    if (t === null || localDay(t, offset) < firstDay) {
+    if (t === null || calendar.dayOf(t) < firstDay) {
       earlierIds.push(id2);
       continue;
     }
-    let day = localDay(t, offset), fraction = (t + offset - day * DAY_S) / DAY_S;
+    let day = calendar.dayOf(t), fraction = calendar.fraction(t, day);
     timeX.set(id2, Math.floor((day - firstDay) * 140 + fraction * 140)), zone.set(id2, "window");
   }
   earlierIds.sort(byTime);
@@ -9160,11 +9201,11 @@ function layoutSwimlanes(input) {
       seen.has(id2) || !members.has(id2) || (seen.add(id2), out.push(id2), kidsOf(id2).forEach(walk));
     };
     return roots.forEach(walk), family.nodeIds.forEach(walk), out;
-  }, boxes = /* @__PURE__ */ new Map(), ghosts = /* @__PURE__ */ new Set(), ghostBoxes = /* @__PURE__ */ new Map(), lanes = [], top = 0, ghostX = -630;
+  }, boxes = /* @__PURE__ */ new Map(), ghosts = /* @__PURE__ */ new Set(), ghostBoxes = /* @__PURE__ */ new Map(), lanes = [], top = 0;
   for (let key of laneKeys) {
     let project = key === NO_PROJECT_ID ? noProject : projectById.get(key), scopeCollapsed = scoped && key !== scope, isCollapsed = scopeCollapsed || !scoped && collapsed.has(key), members = [...onAxis].filter((id2) => laneOf(node(id2)) === key), families = [...new Set(members.map((id2) => node(id2).familyId))].sort(
       (a, b) => (familyStart.get(a) ?? 0) - (familyStart.get(b) ?? 0) || (a < b ? -1 : a > b ? 1 : 0)
-    ), memberSet = new Set(members), order = families.flatMap((familyId) => familyOrder(familyId).filter((id2) => memberSet.has(id2))), sessions = sessionsByLane.get(key) ?? [], singleNodes = sessions.filter((each) => each.single), singleIds = showAll ? [] : model.singles.filter((each) => laneOf(each) === key).map((each) => each.id), laneGhosts = !scoped || key !== scope ? [] : [...new Set(order.map((id2) => parentOf(id2)).filter((id2) => !!(id2 && onAxis.has(id2) && node(id2).kind === "session" && laneOf(node(id2)) !== key)))].sort(byTime), rows = [], rowOf = /* @__PURE__ */ new Map(), pack = (id2, at, preferred, from = 0, clearFrom = at) => {
+    ), memberSet = new Set(members), order = families.flatMap((familyId) => familyOrder(familyId).filter((id2) => memberSet.has(id2))), sessions = sessionsByLane.get(key) ?? [], singleNodes = sessions.filter((each) => each.single), singleIds = showAll ? [] : model.singles.filter((each) => laneOf(each) === key).map((each) => each.id), laneGhosts = !scoped || key !== scope ? [] : [...new Set(order.map((id2) => parentOf(id2)).filter((id2) => !!(id2 && onAxis.has(id2) && node(id2).kind === "session" && laneOf(node(id2)) !== key)))].sort(byTime), ghostX = Math.min(0, ...order.map((id2) => x.get(id2))) - 40 - 170, rows = [], rowOf = /* @__PURE__ */ new Map(), pack = (id2, at, preferred, from = 0, clearFrom = at) => {
       let lo = at - 16 / 2, hi = at + 170 + 16 / 2, fits = (row2, left = lo) => (rows[row2] ?? []).every(([a, b]) => hi <= a || left >= b), row = preferred !== void 0 && fits(preferred) ? preferred : -1, wide = Math.min(lo, clearFrom - 16 / 2);
       for (let candidate = from; row < 0; candidate += 1)
         fits(candidate, wide) && (row = candidate);
@@ -9220,7 +9261,7 @@ function layoutSwimlanes(input) {
         box.lane === lane.key && box.row >= 0 && box.zone !== "ghost" && shown.add(id2);
   for (let id2 of ghosts)
     shown.add(id2);
-  let windowRight = 1260, chipX = Math.max(windowRight, ...[...boxes.values()].filter((box) => box.zone !== "ghost").map((box) => box.x + box.width)) + 24;
+  let windowRight = 1260, chipX = Math.max(windowRight, ...[...shown].map((id2) => boxes.get(id2)).filter((box) => box.zone !== "ghost").map((box) => box.x + box.width)) + 24;
   for (let lane of lanes)
     !lane.collapsed && lane.singleIds.length > 0 && (lane.chip = { x: chipX, y: lane.top + 16, width: 118, height: 24 });
   let ticks = [];
@@ -9228,7 +9269,7 @@ function layoutSwimlanes(input) {
     let day = firstDay + d, bold = d === 0 || new Date(day * DAY_S * 1e3).getUTCDate() === 1;
     ticks.push({ x: d * 140, day, label: dayLabel(day, bold), bold });
   }
-  let nowFraction = (nowS + offset - today * DAY_S) / DAY_S, nowX = (today - firstDay) * 140 + nowFraction * 140, todayDate = new Date(today * DAY_S * 1e3), positions = /* @__PURE__ */ new Map();
+  let todayStart = calendar.midnight(today), todayEnd = calendar.midnight(today + 1), nowX = swimNowX({ window: { firstDay, today, todayStart, todayEnd } }, input.nowMs), todayDate = new Date(today * DAY_S * 1e3), positions = /* @__PURE__ */ new Map();
   for (let id2 of shown) {
     let box = boxes.get(id2);
     positions.set(id2, { x: box.x, y: box.y });
@@ -9248,16 +9289,33 @@ function layoutSwimlanes(input) {
     lanes,
     ticks,
     earlier: { x: -420, width: 420 },
-    window: { left: 0, right: windowRight, firstDay, today },
+    window: { left: 0, right: windowRight, firstDay, today, todayStart, todayEnd },
     nowX,
     monthLabel: `${MONTHS2[todayDate.getUTCMonth()]} ${todayDate.getUTCFullYear()}`,
     links,
     bounds: { minX: minX - 12, maxX: maxX + 12, height: top }
   };
 }
+function swimNowX(layout, nowMs) {
+  let { firstDay, today, todayStart, todayEnd } = layout.window, fraction = Math.min(Math.max((nowMs / 1e3 - todayStart) / Math.max(1, todayEnd - todayStart), 0), 1);
+  return (today - firstDay) * 140 + fraction * 140;
+}
 function fitSwimlanes(layout, width, height, minZoom) {
   let { minX, maxX, height: contentHeight } = layout.bounds, availableWidth = Math.max(60, width - 168 - 16), availableHeight = Math.max(60, height - 26 - 12), zoom3 = Math.min(1.15, Math.max(minZoom, Math.min(availableWidth / Math.max(1, maxX - minX), availableHeight / Math.max(1, contentHeight))));
   return { x: 176 - minX * zoom3, y: 32, zoom: zoom3 };
+}
+
+// src/styles/swimlanes/swim-flow.tsx
+init_define_import_meta_env();
+import { Codicon as Codicon4 } from "@hermes/plugin-sdk";
+import { memo as memo4 } from "react";
+
+// src/page/frame-context.ts
+init_define_import_meta_env();
+import { createContext as createContext4, useContext as useContext4 } from "react";
+var FrameUiCtx = createContext4(null);
+function useFrameUi() {
+  return useContext4(FrameUiCtx);
 }
 
 // src/styles/swimlanes/swim-flow.tsx
@@ -9495,13 +9553,19 @@ var swim = (layout) => layout, BAND_OVERHANG = 4e3, SwimUnderSvg = memo5(functio
         },
         `${lane.key}:${mark.id}`
       ))
-    ),
-    /* @__PURE__ */ jsx6("line", { className: "st-swim-nowline", "data-testid": "session-tree-now-line", x1: layout.nowX, y1: 0, x2: layout.nowX, y2: height })
+    )
   ] });
 });
-function SwimUnder({ layout }) {
+function SwimNowLine({ layout, nowMs }) {
+  let x = swimNowX(layout, nowMs);
+  return /* @__PURE__ */ jsx6("svg", { className: "st-swim-under-svg", width: 1, height: 1, "aria-hidden": "true", children: /* @__PURE__ */ jsx6("line", { className: "st-swim-nowline", "data-testid": "session-tree-now-line", x1: x, y1: 0, x2: x, y2: layout.bounds.height }) });
+}
+function SwimUnder({ layout, nowMs }) {
   let { x, y, zoom: zoom3 } = useViewport();
-  return /* @__PURE__ */ jsx6("div", { className: "st-swim-under", "data-testid": "session-tree-swim-under", style: { transform: `translate(${x}px, ${y}px) scale(${zoom3})` }, children: /* @__PURE__ */ jsx6(SwimUnderSvg, { layout: swim(layout) }) });
+  return /* @__PURE__ */ jsxs6("div", { className: "st-swim-under", "data-testid": "session-tree-swim-under", style: { transform: `translate(${x}px, ${y}px) scale(${zoom3})` }, children: [
+    /* @__PURE__ */ jsx6(SwimUnderSvg, { layout: swim(layout) }),
+    /* @__PURE__ */ jsx6(SwimNowLine, { layout: swim(layout), nowMs })
+  ] });
 }
 function SinglesPopover({
   layout,
@@ -9511,7 +9575,7 @@ function SinglesPopover({
   onOpen,
   onClose
 }) {
-  let ctx = usePluginCtx(), ref = useRef2(null), lane = layout.lanes.find((each) => `${CHIP_PREFIX}${each.key}` === active.id);
+  let ctx = usePluginCtx(), ref = useRef2(null), lane = layout.lanes.find((each) => `${CHIP_PREFIX}${each.key}` === active.id), paneHeight = useStore((state) => state.height);
   if (useEffect2(() => {
     let offs = [
       ctx.addEventListener(window, "keydown", (event) => {
@@ -9530,47 +9594,67 @@ function SinglesPopover({
     return () => offs.forEach((off) => off());
   }, [ctx, onClose]), !lane || lane.collapsed || !lane.chip)
     return null;
-  let width = 260, style2 = {
+  let width = 260, placement = popoverPlacement(active.box, paneHeight, lane.singleIds.length), style2 = {
     left: Math.max(174, active.box.x + active.box.width - width),
-    top: active.box.y + active.box.height + 6,
+    ...placement.above ? { bottom: paneHeight - placement.edge } : { top: placement.edge },
+    maxHeight: placement.maxHeight,
     width
   };
-  return /* @__PURE__ */ jsxs6("div", { ref, className: "st-swim-pop", role: "dialog", "aria-label": `${lane.label} · no branches`, "data-testid": "session-tree-lane-popover", "data-lane": lane.key, style: style2, children: [
-    /* @__PURE__ */ jsxs6("h4", { children: [
-      lane.label,
-      " · no branches ",
-      /* @__PURE__ */ jsx6("span", { children: lane.singleIds.length })
-    ] }),
-    /* @__PURE__ */ jsx6("div", { className: "st-swim-pop-list", children: lane.singleIds.map((id2) => {
-      let node = model.nodeById.get(id2);
-      return node?.row ? /* @__PURE__ */ jsxs6(
-        "div",
-        {
-          className: `st-swim-pop-item${node.archived ? " is-archived" : ""}`,
-          "data-st-node": id2,
-          "data-testid": "session-tree-lane-single",
-          "data-session-id": node.row.id,
-          title: `${node.title} — double-click opens it in a tab · right-click for actions`,
-          style: { "--st-pc": projectColor(lane.project) },
-          onDoubleClick: () => onOpen(node),
-          children: [
-            /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-dot" }),
-            /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-title", children: node.title }),
-            /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-age", children: shortAge(node.row.last_active || node.row.started_at, nowMs) })
-          ]
-        },
-        id2
-      ) : null;
-    }) })
-  ] });
+  return /* @__PURE__ */ jsxs6(
+    "div",
+    {
+      ref,
+      className: "st-swim-pop",
+      role: "dialog",
+      "aria-label": `${lane.label} · no branches`,
+      "data-testid": "session-tree-lane-popover",
+      "data-lane": lane.key,
+      "data-placement": placement.above ? "above" : "below",
+      style: style2,
+      children: [
+        /* @__PURE__ */ jsxs6("h4", { children: [
+          lane.label,
+          " · no branches ",
+          /* @__PURE__ */ jsx6("span", { children: lane.singleIds.length })
+        ] }),
+        /* @__PURE__ */ jsx6("div", { className: "st-swim-pop-list", children: lane.singleIds.map((id2) => {
+          let node = model.nodeById.get(id2);
+          return node?.row ? /* @__PURE__ */ jsxs6(
+            "div",
+            {
+              className: `st-swim-pop-item${node.archived ? " is-archived" : ""}`,
+              "data-st-node": id2,
+              "data-testid": "session-tree-lane-single",
+              "data-session-id": node.row.id,
+              title: `${node.title} — double-click opens it in a tab · right-click for actions`,
+              style: { "--st-pc": projectColor(lane.project) },
+              onDoubleClick: () => onOpen(node),
+              children: [
+                /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-dot" }),
+                /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-title", children: node.title }),
+                /* @__PURE__ */ jsx6("span", { className: "st-swim-pop-age", children: shortAge(node.row.last_active || node.row.started_at, nowMs) })
+              ]
+            },
+            id2
+          ) : null;
+        }) })
+      ]
+    }
+  );
 }
 function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, active, onCloseActive }) {
-  let layout = swim(frameLayout), { x, y, zoom: zoom3 } = useViewport(), scoped = model.options.scope !== "all", sx = (worldX) => x + worldX * zoom3;
-  return /* @__PURE__ */ jsxs6("div", { className: "st-swim-over", "data-testid": "session-tree-swim-over", children: [
-    /* @__PURE__ */ jsxs6("div", { className: "st-swim-axis", "data-testid": "session-tree-axis", style: { height: 26 }, children: [
+  let layout = swim(frameLayout), { x, y, zoom: zoom3 } = useViewport(), scoped = model.options.scope !== "all", sx = (worldX) => x + worldX * zoom3, nowLeft = sx(swimNowX(layout, nowMs)), axisRef = useRef2(null), pillRef = useRef2(null);
+  return useLayoutEffect2(() => {
+    let axis = axisRef.current, pill = pillRef.current;
+    if (!axis || !pill)
+      return;
+    let label = axis.querySelector(`[data-testid="session-tree-axis-tick"][data-day="${layout.window.today}"] .st-swim-tick-label`), half = pill.offsetWidth / 2, labelRight = label ? label.getBoundingClientRect().right - axis.getBoundingClientRect().left : -1 / 0, left = Math.max(nowLeft, labelRight + 4 + half);
+    pill.style.left = `${left}px`, pill.dataset.shifted = left > nowLeft ? "true" : "false";
+  }), /* @__PURE__ */ jsxs6("div", { className: "st-swim-over", "data-testid": "session-tree-swim-over", children: [
+    /* @__PURE__ */ jsxs6("div", { ref: axisRef, className: "st-swim-axis", "data-testid": "session-tree-axis", style: { height: 26 }, children: [
       /* @__PURE__ */ jsx6("div", { className: "st-swim-tick is-earlier", "data-testid": "session-tree-axis-earlier", style: { left: sx(layout.earlier.x + 10) }, children: "‹ earlier" }),
-      layout.ticks.map((tick) => /* @__PURE__ */ jsx6("div", { className: `st-swim-tick${tick.bold ? " is-bold" : ""}`, "data-testid": "session-tree-axis-tick", "data-day": tick.day, "data-x": tick.x, style: { left: sx(tick.x) }, children: tick.label }, tick.day)),
-      /* @__PURE__ */ jsx6("div", { className: "st-swim-now", "data-testid": "session-tree-now", style: { left: sx(layout.nowX) }, children: "now" })
+      layout.ticks.map((tick) => /* @__PURE__ */ jsx6("div", { className: `st-swim-tick${tick.bold ? " is-bold" : ""}`, "data-testid": "session-tree-axis-tick", "data-day": tick.day, "data-x": tick.x, style: { left: sx(tick.x) }, children: /* @__PURE__ */ jsx6("span", { className: "st-swim-tick-label", children: tick.label }) }, tick.day)),
+      /* @__PURE__ */ jsx6("div", { ref: pillRef, className: "st-swim-now", "data-testid": "session-tree-now", "data-now-x": nowLeft, children: "now" })
     ] }),
     /* @__PURE__ */ jsx6("div", { className: "st-swim-gutter", "data-testid": "session-tree-lane-headers", style: { width: 168 }, children: layout.lanes.map((lane, index2) => {
       let height = lane.height * zoom3, disabled = scoped;
@@ -9581,7 +9665,7 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
           tabIndex: -1,
           "aria-expanded": !lane.collapsed,
           "aria-disabled": disabled || void 0,
-          className: `st-swim-lh${index2 % 2 ? " is-alt" : ""}${lane.collapsed ? " is-collapsed" : ""}${lane.scopeCollapsed ? " is-scope-collapsed" : ""}`,
+          className: `st-swim-lh${index2 % 2 ? " is-alt" : ""}${lane.collapsed ? " is-collapsed" : ""}${lane.scopeCollapsed ? " is-scope-collapsed" : ""}${!lane.collapsed && height < 54 ? " is-compact" : ""}`,
           "data-testid": "session-tree-lane-header",
           "data-lane": lane.key,
           "data-label": lane.label,
@@ -9619,6 +9703,14 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
                 " single",
                 lane.singles === 1 ? "" : "s"
               ] })
+            ] }),
+            !lane.collapsed && height < 54 && /* @__PURE__ */ jsxs6("div", { className: "st-swim-lh-meta is-compact", "data-field": "totals", "data-compact": "true", children: [
+              lane.sessions,
+              " session",
+              lane.sessions === 1 ? "" : "s",
+              " · ",
+              tokenLabel(lane.tokens),
+              " tok"
             ] })
           ]
         },
@@ -9669,7 +9761,7 @@ var swimFrame = {
   layoutSpec: swimLayoutSpec,
   // The page lays a framed style out through `frame.compute` (with "now", the time zone and the
   // collapsed lanes); this keeps the contract for any other caller: no previous positions used.
-  layout: (model, _previous, spec) => layoutSwimlanes({ model, showAll: spec.includeSingles, collapsed: /* @__PURE__ */ new Set(), nowMs: Date.now(), tzOffsetMinutes: -(/* @__PURE__ */ new Date()).getTimezoneOffset() }),
+  layout: (model, _previous, spec) => layoutSwimlanes({ model, showAll: spec.includeSingles, collapsed: /* @__PURE__ */ new Set(), nowMs: Date.now(), offsetAt: browserOffsetAt }),
   draggable: !1,
   savesLayout: !1,
   singles: "lane-chip",
@@ -9868,9 +9960,9 @@ function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props, [mountViewport] = useState4(initialViewport), ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef3(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef3(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState4(null), active = frame2 ? activeExtra : null, shown = useMemo3(
-    () => frameLayout && style2.frame ? new Set(frameLayout.shown) : new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)),
-    [model, spec, frameLayout, style2]
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props, [mountViewport] = useState4(initialViewport), ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef3(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef3(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState4(null), active = frame2 ? activeExtra : null, frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, shown = useMemo3(
+    () => frameShown ? new Set(frameShown) : new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)),
+    [model, spec, frameShown]
   ), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo3(() => {
     let out = /* @__PURE__ */ new Map();
     for (let id2 of shown) {
@@ -10099,7 +10191,7 @@ function GraphCanvas(props) {
       "data-draggable": style2.draggable ? "true" : "false",
       children: [
         /* @__PURE__ */ jsxs8(FrameUiCtx.Provider, { value: frameUi, children: [
-          Under && frameLayout && /* @__PURE__ */ jsx8(Under, { layout: frameLayout }),
+          Under && frameLayout && /* @__PURE__ */ jsx8(Under, { layout: frameLayout, nowMs }),
           /* @__PURE__ */ jsx8(
             index,
             {
@@ -11225,9 +11317,9 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   let projectList = useMemo5(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo5(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo5(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo5(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo5(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo5(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo5(() => new Set(collapsedLanes), [collapsedLanes]), frameLayout = useMemo5(
-    () => ready && style2.frame ? style2.frame.compute({ model, showAll, collapsed, nowMs, tzOffsetMinutes: -new Date(nowMs).getTimezoneOffset() }) : void 0,
-    [ready, style2, model, showAll, collapsed, nowMs]
+  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo5(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo5(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo5(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState6(createFrameCache), frameLayout = useMemo5(
+    () => ready && style2.frame ? frameCache.get({ frame: style2.frame, model, showAll, collapsed, nowMs }) : void 0,
+    [ready, style2, model, showAll, collapsed, nowMs, frameCache]
   ), layout = useMemo5(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
     () => style2.frame ? frameLayout ?? EMPTY_LAYOUT : ready ? sync.place(ref, (previous) => style2.layout(model, previous, spec), { save: style2.savesLayout && !projects.isError, keys }) : EMPTY_LAYOUT,
@@ -12594,6 +12686,17 @@ g.is-dimmed {
 .st-swim-lh-meta.is-sub {
   margin-top: 1px;
   opacity: 0.85;
+}
+
+/* NB3: a short lane (the default fit) keeps its totals on one compact line. */
+.st-swim-lh.is-compact {
+  padding-top: 3px;
+}
+
+.st-swim-lh-meta.is-compact {
+  margin-top: 1px;
+  font-size: 10.5px;
+  line-height: 13px;
 }
 
 .st-swim-corner {

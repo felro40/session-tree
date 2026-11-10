@@ -67,8 +67,8 @@ export interface FrameInput {
   /** Lane keys this device collapsed. */
   collapsed: ReadonlySet<string>
   nowMs: number
-  /** Minutes to add to UTC for local time. */
-  tzOffsetMinutes: number
+  /** Minutes to add to UTC for local time at an instant (ms): each timestamp gets its own (DST). */
+  offsetAt(ms: number): number
 }
 
 /** A framed style's layout: positions plus what its own layers draw. */
@@ -92,15 +92,17 @@ export interface FrameLayerProps {
 }
 
 /**
- * A style that computes its layout from the data on every render and draws its own layers
- * around the flow (Swimlanes: lane bands and the day grid under it; the lane header column, the
- * time axis and the singles popover over it). It never reads or writes the layout store.
+ * A style that computes its layout from the data alone and draws its own layers around the flow
+ * (Swimlanes: lane bands and the day grid under it; the lane header column, the time axis and
+ * the singles popover over it). It never reads or writes the layout store. The page recomputes
+ * it only when its inputs change (`frame-cache.ts`: data, filters, collapse, the local day and
+ * the offset), not on the minute tick; the layers follow the live `nowMs` themselves.
  */
 export interface StyleFrame {
   compute(input: FrameInput): FrameLayout
   /** Flow nodes that are not blocks (lane chips); their types are in the style's `nodeTypes`. */
   extraNodes(layout: FrameLayout): Node[]
-  Under: ComponentType<{ layout: FrameLayout }>
+  Under: ComponentType<{ layout: FrameLayout; nowMs: number }>
   Over: ComponentType<FrameLayerProps>
 }
 

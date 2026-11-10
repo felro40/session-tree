@@ -6,13 +6,16 @@
  * - **Lanes.** One horizontal lane per project, in `projects.tree` order; sessions with no
  *   project go in a last lane named like the core's bucket (`Home`). A project with no session
  *   under the current filters gets no lane (unless it is the scope).
- * - **Time axis.** Local days (the browser's zone, passed as a fixed offset). A piecewise linear
- *   scale: day column `d` of the window spans `[d·DAY_WIDTH, (d+1)·DAY_WIDTH)` and a block's x is
- *   its column's left plus the fraction of that day elapsed at its start. The window is today and
- *   the 8 days before it (`WINDOW_DAYS`).
+ * - **Time axis.** Local days (the browser's zone, injected as an offset function `offsetAt(ms)`,
+ *   so each timestamp's day uses the offset in force at that instant: DST-safe). A piecewise
+ *   linear scale: day column `d` of the window spans `[d·DAY_WIDTH, (d+1)·DAY_WIDTH)` and a
+ *   block's x is its column's left plus the fraction of that local day (midnight to midnight, 23
+ *   or 25 h on a DST change) elapsed at its start. The window is today and the 8 days before it
+ *   (`WINDOW_DAYS`).
  *   - A start before the window goes into the "earlier" zone left of the first column, ordered by
  *     start (x by rank inside the zone, never on a day tick).
- *   - A start in the future (clock skew) is clamped to now: never right of the now marker.
+ *   - A start in the future (clock skew) is clamped to now (the `nowMs` this layout was computed
+ *     with): never right of the now marker, which only moves right until the next recompute.
  *   - A missing or invalid `started_at` falls back to `last_active`, else the earlier zone (before
  *     every dated session there).
  * - **Trees** grow left to right: a child starts at least `CHILD_GAP` right of its parent's right
@@ -26,7 +29,8 @@
  *   x is in whole pixels (floored: monotonic in time, never right of the exact time).
  * - **Stand-ins** (R7) sit in their child's lane just left of the child.
  * - **Scope** (R5): the other lanes collapse to thin headers with an activity bar; a scoped
- *   block's parent from another project is shown as a ghost at the scoped lane's left edge.
+ *   block's parent from another project is shown as a ghost just left of the scoped lane's
+ *   leftmost block (never inside the day window).
  * - **Singles** (R8) stay in each lane's "no branches N" chip unless Show all puts them on the axis.
  */
 import type { Viewport } from '../../model/device-prefs.ts'
@@ -69,8 +73,13 @@ export interface SwimInput {
   /** Lanes this device collapsed (lane keys); a project scope collapses the others on top. */
   collapsed: ReadonlySet<string>
   nowMs: number
-  /** Minutes to add to UTC for local time (`-Date#getTimezoneOffset()`), fixed for the window. */
-  tzOffsetMinutes: number
+  /**
+   * Minutes to add to UTC for local time at an instant (ms); the page passes `browserOffsetAt`
+   * (`page/frame-cache.ts`). Injected, so the layout stays pure.
+   */
+  offsetAt?: (ms: number) => number
+  /** A fixed offset, used when `offsetAt` is absent (tests). */
+  tzOffsetMinutes?: number
 }
 
 export type SwimZone = 'earlier' | 'ghost' | 'standin' | 'window'
@@ -147,7 +156,9 @@ export interface SwimLayout extends LayoutResult {
   lanes: SwimLane[]
   ticks: SwimTick[]
   earlier: { x: number; width: number }
-  window: { left: number; right: number; firstDay: number; today: number }
+  /** `todayStart` / `todayEnd`: today's local midnights (seconds), for the live now marker. */
+  window: { left: number; right: number; firstDay: number; today: number; todayStart: number; todayEnd: number }
+  /** The now marker at the `nowMs` this layout was computed with (`swimNowX` follows the clock). */
   nowX: number
   /** `Nov 2026`, for the corner. */
   monthLabel: string
@@ -198,11 +209,42 @@ function dayLabel(day: number, bold: boolean): string {
   return bold ? `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}` : `${WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()}`
 }
 
+/**
+ * The local calendar of an offset function (NB4, card-5 review): the local day of an instant and
+ * the instant a local day starts (seconds), each with the offset in force at that instant. A DST
+ * change makes that day 23 or 25 hours long; the day columns stay one width.
+ */
+export function localCalendar(offsetAt: (ms: number) => number) {
+  const offsetS = (seconds: number) => offsetAt(seconds * 1000) * 60
+  const starts = new Map<number, number>()
+  const dayOf = (seconds: number) => localDay(seconds, offsetS(seconds))
+  const midnight = (day: number): number => {
+    let start = starts.get(day)
+
+    if (start === undefined) {
+      // The offset at local midnight: guess with the offset at UTC midnight, then refine once.
+      start = day * DAY_S - offsetS(day * DAY_S - offsetS(day * DAY_S))
+      starts.set(day, start)
+    }
+
+    return start
+  }
+  /** How far into its local day `seconds` is, in [0, 1). */
+  const fraction = (seconds: number, day: number) => {
+    const from = midnight(day)
+
+    return Math.min(Math.max((seconds - from) / Math.max(1, midnight(day + 1) - from), 0), 1 - 1e-9)
+  }
+
+  return { dayOf, midnight, fraction }
+}
+
 export function layoutSwimlanes(input: SwimInput): SwimLayout {
   const { model, showAll, collapsed } = input
   const nowS = input.nowMs / 1000
-  const offset = input.tzOffsetMinutes * 60
-  const today = localDay(nowS, offset)
+  const fixed = input.tzOffsetMinutes ?? 0
+  const calendar = localCalendar(input.offsetAt ?? (() => fixed))
+  const today = calendar.dayOf(nowS)
   const firstDay = today - (WINDOW_DAYS - 1)
   const scope = model.options.scope
   const scoped = scope !== ALL_PROJECTS
@@ -242,13 +284,13 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
 
     const t = time.get(id) ?? null
 
-    if (t === null || localDay(t, offset) < firstDay) {
+    if (t === null || calendar.dayOf(t) < firstDay) {
       earlierIds.push(id)
       continue
     }
 
-    const day = localDay(t, offset)
-    const fraction = (t + offset - day * DAY_S) / DAY_S
+    const day = calendar.dayOf(t)
+    const fraction = calendar.fraction(t, day)
 
     // Whole pixels (floor: monotonic, never right of the exact time): the router works on
     // integer coordinates, and a block never sits right of the now marker.
@@ -381,8 +423,6 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
   const lanes: SwimLane[] = []
   let top = 0
 
-  const ghostX = -EARLIER_WIDTH - GHOST_GAP - SWIM_WIDTH
-
   for (const key of laneKeys) {
     const project = key === NO_PROJECT_ID ? noProject : projectById.get(key)
     const scopeCollapsed = scoped && key !== scope
@@ -402,6 +442,10 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
       ? []
       : [...new Set(order.map(id => parentOf(id)).filter((id): id is string => Boolean(id && onAxis.has(id) && node(id).kind === 'session' && laneOf(node(id)) !== key)))].sort(byTime)
 
+    // NB1 (card-5 review): the ghost column sits just left of the scoped lane's leftmost block,
+    // clear of every block of the lane (the other lanes are collapsed), and never inside the day
+    // window (a ghost has no time of its own here).
+    const ghostX = Math.min(0, ...order.map(id => x.get(id)!)) - GHOST_GAP - SWIM_WIDTH
     const rows: [number, number][][] = []
     const rowOf = new Map<string, number>()
 
@@ -526,7 +570,9 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
 
   // --- chips, axis, bounds ---------------------------------------------------------------------
   const windowRight = WINDOW_DAYS * DAY_WIDTH
-  const rightmost = Math.max(windowRight, ...[...boxes.values()].filter(box => box.zone !== 'ghost').map(box => box.x + box.width))
+  // NB1: right of the blocks drawn in expanded lanes; a collapsed lane's activity marks do not
+  // push the chips (and so the framing) out.
+  const rightmost = Math.max(windowRight, ...[...shown].map(id => boxes.get(id)!).filter(box => box.zone !== 'ghost').map(box => box.x + box.width))
   const chipX = rightmost + CHIP_GAP
 
   for (const lane of lanes) {
@@ -544,8 +590,9 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
     ticks.push({ x: d * DAY_WIDTH, day, label: dayLabel(day, bold), bold })
   }
 
-  const nowFraction = (nowS + offset - today * DAY_S) / DAY_S
-  const nowX = (today - firstDay) * DAY_WIDTH + nowFraction * DAY_WIDTH
+  const todayStart = calendar.midnight(today)
+  const todayEnd = calendar.midnight(today + 1)
+  const nowX = swimNowX({ window: { firstDay, today, todayStart, todayEnd } }, input.nowMs)
   const todayDate = new Date(today * DAY_S * 1000)
 
   const positions = new Map<string, Point>()
@@ -581,12 +628,25 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
     lanes,
     ticks,
     earlier: { x: -EARLIER_WIDTH, width: EARLIER_WIDTH },
-    window: { left: 0, right: windowRight, firstDay, today },
+    window: { left: 0, right: windowRight, firstDay, today, todayStart, todayEnd },
     nowX,
     monthLabel: `${MONTHS[todayDate.getUTCMonth()]} ${todayDate.getUTCFullYear()}`,
     links,
     bounds: { minX: minX - 12, maxX: maxX + 12, height: top }
   }
+}
+
+/**
+ * The now marker's x at `nowMs` on a computed layout (B1, card-5 review): the same piecewise
+ * mapping, from today's local midnights alone, so the marker follows the minute tick without a
+ * new layout (and without re-routing a link). Clamped to today's column: a new local day
+ * recomputes the layout.
+ */
+export function swimNowX(layout: { window: Pick<SwimLayout['window'], 'firstDay' | 'today' | 'todayStart' | 'todayEnd'> }, nowMs: number): number {
+  const { firstDay, today, todayStart, todayEnd } = layout.window
+  const fraction = Math.min(Math.max((nowMs / 1000 - todayStart) / Math.max(1, todayEnd - todayStart), 0), 1)
+
+  return (today - firstDay) * DAY_WIDTH + fraction * DAY_WIDTH
 }
 
 /**
