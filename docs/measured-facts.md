@@ -288,8 +288,10 @@ ring (R11). Out-of-scope blocks and stand-ins never open.
   is rendered `draggable: false`, so it has no `nopan` class and d3-zoom takes the drag. Measured:
   Space + drag (100, 60) from `st-sys-tip` panned (100, 60), the block stayed put. A Space typed in
   a form field does not count (same rule as React Flow's key handling).
-- The profile `<select>` blurs after a change (and on Escape): a focused form control swallows the
-  Space key, so Space + drag did not pan after choosing a profile. The other toolbar controls never
+- The profile `<select>` blurs after a change: a focused form control swallows the Space key, so
+  Space + drag did not pan after choosing a profile. (Its Escape handler never ran while the native
+  list was open, so a select closed without a change kept the focus; card 3 fixed that, see the
+  card-3 section.) The other toolbar controls never
   take focus from the mouse (`mousedown` default prevented). Measured: after work → default the
   active element is `BODY` and Space + drag (80, −50) panned (80, −50).
 - Show archived keeps the canvas mounted (fix r1): the sessions query keeps the previous rows as
@@ -352,3 +354,127 @@ Profile `scale` with **Show all** (500 blocks laid out: 10 families of 10 + 400 
   contrast an in-scope block (menu opens) with a dimmed one (no menu).
 - Selecting is limited to in-scope session blocks: stand-ins and dimmed blocks are not selectable
   from the canvas or the inspector links (R5 "no selection").
+
+---
+
+# Measured facts — Session Tree 3/7 (session actions)
+
+Measured 2026-11-09 by the card-3 coder in the isolated test Hermes `~/.cache/session-tree-e2e/c3-coder/home`
+(ports 19330–19334; the harness default card is now 3) and, for the mutating e2e, its own fresh home
+`c3-coder-actions/home` on the same ports.
+
+## Step 0
+
+HEAD `a671660936eb46c79174e06efcb7b902fca3e333`, `git status --short` empty. Baseline (card-2
+reviewer, re-checked here for lint and unit tests): lint 0, build 0 (471 726 B), `npm test` 111/111,
+`test:py` 30, `test:e2e` 47/47 (foundation 19 + core-dense 28).
+
+## Pre-check — the route of every action
+
+Each route was read in the cited contracts and in the app's own code
+(`app/chat/sidebar/session-actions-menu.tsx`, `app/session/hooks/use-session-actions/index.ts`,
+`store/projects.ts`, `store/session-unread-remote.ts`, `api/sessions.ts`, `lib/session-export.ts`,
+`api/canonical-protocol.ts`), then exercised from a Webapp window of the isolated Hermes
+(`host.request` / `window.hermesDesktop.api` probes, then the e2e).
+
+| Item | The app's own route | Route here | Measured |
+|---|---|---|---|
+| Appearance ▸ | `ColorSwatches` + `PROFILE_SWATCHES` → `setSessionColorOverride` | the SDK's `ColorSwatches` + `PROFILE_SWATCHES` (exported) → `host.sessions.setColor` (clear: `null`) | `localStorage['hermes.desktop.sessionColors']` gets `{ "<id>": "hsl(…)" }`; No color removes it. The SDK has no colour read verb, so the swatch shows the colour this page set, not one set elsewhere. |
+| Pin / Unpin | `pinSession` / `unpinSession` (the row's `onTogglePin`) | `host.sessions.pin(id, !pinned)` | the connection-scoped pin store `hermes.desktop.pinnedSessions.remote.<origin>` gains the id; the app's pin sync then PATCHes the backend `pinned` flag (the row reads `pinned: true`, then `false`). |
+| Rename… | `renameSessionPreferringRpc`: `session.title` RPC when the window knows a live runtime for the session and the title is not empty, else fenced `PATCH /api/sessions/{id} {title}` | the same choice: `session.title` for the session focused in the app (`focusedStoredSessionId` ↔ `focusedSessionId`, the only runtime mapping the SDK exposes), else the backend's fenced `POST /sessions/{id}/rename` → `_mutate_session_request` | backend path read back through `SessionDB` and the core detail; a stale fence → 409 `revision_conflict`. In the Webapp a session opened in a tab covers the page; back on the page no session is focused, so the e2e rename of an open session took the backend path (the RPC choice is unit-tested). |
+| Move to project ▸ | `MoveToProjectItems`: tree minus the current project and folderless projects → `session.workspace.move {session_key, cwd: projectRootCwd, profile}` | the same | works on a session the window never opened; the row's `cwd` and `git_repo_root` change and `projects.tree` regroups it. |
+| Copy ID | `CopyButton` (context-menu item, keeps the menu open showing "Copied") | the SDK `CopyButton`, plus a toast | clipboard reads the stored id. |
+| Branch | `session.branch_stored {parent_session_id, idempotency_key, cwd, profile, source}` | the same; the page stays (no tab) | the child is persisted at once (`_seed_branch_row`), `_branched_from` = the parent; the result's `session_id` equals the stored id (no separate runtime to release). |
+| Export | `exportSession`: client-side pages of `/api/sessions/{id}/messages` wrapped in its own JSON, `<title>-<id8>.json` | the card's choice: the backend's `GET /sessions/{id}/export` = the core `GET /api/sessions/{id}/export` handler, same file name rule | bytes equal to the core endpoint's (pytest, in-process); the downloaded file parses equal to the core export. |
+| Mark as read / unread | `markSessionUnread` → fenced `PATCH {unread}` | the backend's fenced `POST /sessions/{id}/read {unread}` → `_mutate_session_request` | the row's `unread` and `SessionDB.session_unread` follow. |
+| Archive / Unarchive | `setSessionArchived` → fenced `PATCH {archived, pinned:false}` (REST, not the RPC) | **the backend's fenced `POST /sessions/{id}/archive`** → `_mutate_session_request` with the same payload | **`session.archive` from a Webapp window fails client-side** (`api/canonical-protocol.ts` `retainedMutation`: "Session revision unavailable; reopen the session before editing metadata") for any session the window never opened; the app itself archives over REST. |
+| Delete | `deleteSession` → fenced `DELETE /api/sessions/{id}` after `ConfirmDialog` | **the backend's fenced `POST /sessions/{id}/delete`** → the core `delete_session_endpoint` itself | **`session.delete` is not served to a Webapp window** (`-32601 unknown method`, `data.reason: unknown_method`). The core delete takes the block's compression chain and leaves branch children (orphaned, `_branched_from` kept). |
+
+No action needed a direct `state.db` write, so nothing was blocked.
+
+### The core mutation path from a plugin route
+
+- The plugin router is mounted in-process in the gateway's web app, so a plugin endpoint gets the
+  same `Request` (identity in `request.state.session`, `app.state.session_authority`) the core
+  endpoint gets; `_mutate_session_request(request, profile, id, …)` runs unchanged.
+- **Ownership:** for a Webapp login the actor is the host owner (`principal_subject` →
+  `uid:<n>`), and `gateway/session_local_migration.py require_history_claim` refuses a history row
+  with no owner stamp (`user_id` NULL) unless the transport is a native one: the core's own PATCH
+  answered **403 `permission_denied`** for the card-1/2 fixtures. Rows a signed-in Webapp tab
+  creates are stamped with the host owner (`tui_gateway/session_transports.py`
+  `_transport_auth_user_id`), so the seeder now stamps every fixture the same way
+  (`create_session(user_id=host_owner_subject())`). The e2e keeps one unowned row
+  (`--unowned-branch`) to show a real refusal.
+- In pytest (no gateway) the same call goes the offline way: `_mutate_via_gateway_owner` finds no
+  endpoint and `_mutate_offline_store` runs `mutate_runtime_session` under the exclusive
+  maintenance lock of the tmp home, with the loopback session-token identity.
+- Running-session refusals: the owner refuses with 409 `session_busy` while a turn runs
+  (`MUTATION_GUARD_REFUSALS`); no turn can run in the test Hermes, so the page also disables Delete
+  while the block reads running (R14) — see "simulated" below. An idle session open in a tab is
+  deleted by the core (measured), it is not refused.
+
+## Menu, entry points, focus
+
+- The menu is the SDK's `ContextMenu` (`ContextMenuContent` renders `data-slot="context-menu-content"`)
+  around the canvas. Right-click on an in-scope session block opens it at the pointer. The block's ⋯
+  (on hover or while selected) and the inspector's ⋯ open the same menu: a `ContextMenu` opens only
+  on `contextmenu`, so the button dispatches one on the canvas at its own position, naming the node.
+- Items, order and labels are the app's row menu without its Open group (R14 has none):
+  Rename…, Pin/Unpin, Mark as unread/read, Appearance ▸, Copy ID, —, Branch, Export, Move to
+  project ▸, —, Archive/Unarchive, Delete. Labels come from the app's own strings (`useI18n`:
+  `t.sidebar.row.*`, `t.sidebar.projects.*`, `t.common.*`), with English fallbacks.
+- Dimmed out-of-scope blocks, stand-ins and empty canvas: the `contextmenu` event is
+  default-prevented before the menu sees it, so neither our menu nor the browser's opens (both real
+  right-clicks recorded `defaultPrevented: true`); those blocks have no ⋯.
+- Esc or a click outside closes it. Focus goes back to the canvas element (`tabIndex=-1`), not to a
+  button Space would click; a Rename… or Delete opened from the menu keeps the focus in its dialog
+  (the app's `suppressCloseFocusRef`). The menu's modal layer is torn down after it unmounts, so a
+  single focus call sometimes landed on `BODY`; the canvas re-focuses itself a few times (0–400 ms)
+  while nothing else has the focus.
+- Delete while running: the item is disabled and shows "Running — wait for it to finish".
+
+## Carry-forward from card 2 (r2)
+
+1. **Overlap with a hidden single (NB1).** `mergeLayout` now treats every remembered block position
+   (not only the shown ones) as an obstacle. Regression test: Show all on → off → a new child of
+   `st-sys-tip` → on (`tests/js/layout.test.ts`): it reproduced `st-single-16` under the child
+   before the fix. The e2e Branch checks assert the new child overlaps nothing.
+2. **Profile select keeps the focus (NB5).** A select closed without a change (Escape, a second
+   click, the same profile) kept the focus, because its Escape handler never runs while the native
+   list is open. Now: a pointer-down on the canvas blurs it, and a Space keydown aimed at it is
+   taken as the pan key (default prevented, the select blurred, the key handed to React Flow from
+   the body, which ignores keys aimed at form controls). e2e with a real click + Escape and a
+   keyboard change (see the card-2 suite).
+3. **Weak card-2 checks.** The NB4 check now runs before any other Show archived toggle, and the
+   NB5 check is driven by a real click on the select and the keyboard (no `selectOption`).
+
+## Simulated or not exercised end to end
+
+- **Running / needs input** stay simulated (no provider): running comes from the backend's
+  `is_active` (`seed-fixtures.py --activate`, the real heuristic) and from injected `host.state` in
+  unit tests; the owner's `session_busy` refusal (a running turn) cannot be produced here. Its shape
+  (`409 {"detail":"session_busy"}`) is handled by `restErrorText` (unit test); the e2e shows a real
+  owner refusal instead (`permission_denied`, 403, unowned row).
+- **Rename through `session.title`** is chosen only for the session focused in the app; in the
+  Webapp that session's tab covers the page, so the e2e could not trigger it — the route choice is
+  unit-tested (`renameRoute`).
+- **Appearance read-back** is the store `host.sessions.setColor` writes (localStorage); blocks keep
+  the project colour (R11 asks for the project colour on blocks).
+
+## Gates, bundle and numbers (HEAD of this card)
+
+- **`desktop/plugin.js`: 503 398 bytes** (52 esbuild inputs; was 471 726), byte-identical over
+  rebuilds (sha256 `c30c0d15…f139950`). Loader cap 16 MiB; test budget 2 MiB. No new dependency.
+- lint 0; build 0; `npm test` 128/128 (was 111); `test:py` 77 (was 30); `test:e2e` 71/71 —
+  foundation 19 + core-dense 28 + actions 24 (was 47).
+- NB5 proof: with the select fix switched off in the page (a test-only flag, not committed), a real
+  click + Escape on the profile select left the focus on `SELECT` and Space + drag did not pan;
+  with it on, the same input panned (80, 50).
+- 500-session fixture after this card: first render 315 ms, pan 122 frames in 2002 ms = 60.9 fps.
+- Live refresh after the NB1 fix: the remembered spots of the singles Show all placed earlier are
+  obstacles now, so the live children land further right in their bands (st-sys-tip's at
+  (666, 128), st-hp-root's at (888, 276); card 2 measured 444) — still in band, overlapping nothing.
+- Light and dark: the menu is the UI kit's (dark: background `rgb(22 24 29 / .96)`, text
+  `rgb(230 237 243 / .94)` from the theme); our additions (⋯, the disabled-item note, the dialog
+  error) use `var(--ui-*)` only.
+

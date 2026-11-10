@@ -8,14 +8,15 @@ one conversation fold into one block, and `/new` resets show as a dashed "contin
 page is reached from the sidebar ("Session Tree"), from ⌘K ("Open Session Tree") and at the route
 `/session-tree`; double-clicking a block opens that session in a new tab.
 
-**Status: 2/7 graph core + Dense + inspector.** The page draws the session families as a real
-graph in the *Dense + inspector* style: tidy-tree auto-layout grouped by project, `/branch` links,
+**Status: 3/7 session actions.** The page draws the session families as a real graph in the
+*Dense + inspector* style: tidy-tree auto-layout grouped by project, `/branch` links,
 "compacted ×N" blocks, dashed "continued as" links, "Parent not loaded" stand-ins, singles in the
 inspector's list (or on the canvas with **Show all**), archived on request, a project scope with
 read-only dimmed blocks outside it, a profile filter, wheel zoom / middle-drag pan / snap grid, the
-on-drop link router, live refresh, and the inspector. Positions live in memory (card 4 persists
-them); the session actions are shown but disabled (card 3); the other three styles come in cards
-5–7.
+on-drop link router, live refresh, and the inspector. Every block in scope has the PROJECTS
+pane's session menu (right-click, the block's ⋯, the inspector's ⋯ and buttons): Rename…, Pin,
+Mark as read/unread, Appearance ▸, Copy ID, Branch, Export, Move to project ▸, Archive/Unarchive,
+Delete. Positions live in memory (card 4 persists them); the other three styles come in cards 5–7.
 
 ### Source map
 
@@ -26,15 +27,16 @@ them); the session actions are shown but disabled (card 3); the other three styl
 | `src/model/layout.ts`, `layout-memory.ts` | Deterministic tidy-tree layout and the merge that places new sessions inside their own project group's band without moving placed blocks; in-memory positions per style + profile + scope. |
 | `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense: `curveRouter`); on-drop detours on a sparse orthogonal grid (A*). |
 | `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
+| `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
 | `src/styles/` | The style registry (`registry.ts`), the style contract (`types.ts`) and the Dense style (`dense/`). |
-| `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`), toolbar and block menu. |
+| `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`), toolbar, the block menu (`session-menu.tsx`, SDK ContextMenu) and the actions controller with its dialogs (`session-actions.tsx`). |
 
 ## Package layout (one unified Hermes package)
 
 | Path | What |
 |---|---|
 | `plugin.yaml`, `__init__.py` | Agent half. No tools; it exists so `plugins.enabled` can mount the backend. |
-| `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`. Read-only today: `GET /health`, `GET /sessions`. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
+| `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`: the session rows, and the session actions the SDK has no verb for (rename, read state, archive, delete, export), each through the core endpoint's own code path. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
 | `desktop/plugin.js` | Desktop half. **Built output** of `src/` (`npm run build`), committed so the package installs without a build. |
 | `src/` | TypeScript + JSX source: `plugin.tsx` (registration), `page/`, `settings/`, `model/` (pure graph rules), `shims/react-dom.ts`. |
 | `tests/js/` | node:test unit tests and the static bundle guards. |
@@ -52,6 +54,26 @@ them); the session actions are shown but disabled (card 3); the other three styl
   compression segments folded into the row). `limit` defaults to 500 and is capped at 2000.
 - Every endpoint requires `session_profile`; a malformed name is a 400, an unknown profile a 404. The key is not `profile`: on plugin routes `?profile=` is the gateway's own profile selector (the Webapp sets it to the active profile on every `ctx.rest` call), so it cannot carry the data selection (see `docs/measured-facts.md`, pre-check 5).
 
+Session actions (card 3; `session_profile` names one profile, `*` is a 400; an unknown session is a
+404; ids and bodies are validated, bodies reject unknown fields):
+
+- `GET /sessions/{id}/mutation-snapshot` → the core `GET /api/sessions/{id}/mutation-snapshot`
+  (`runtime_revision`, `runtime_generation`): the fence the next edit sends back.
+- `POST /sessions/{id}/rename` `{title, request_id, expected_revision, expected_generation}`,
+  `POST /sessions/{id}/read` `{unread, …fence}`, `POST /sessions/{id}/archive` `{archived, …fence}`
+  → `hermes_cli.web_server_sessions._mutate_session_request` (what `PATCH /api/sessions/{id}`
+  runs): the live gateway owner, or the offline store under its maintenance lock; a stale fence is
+  a 409 `revision_conflict`, a missing one a 409, a running turn a 409 `session_busy`. Archiving
+  also unpins, like the app.
+- `POST /sessions/{id}/delete` `{…fence}` → the core `DELETE /api/sessions/{id}` handler itself
+  (fenced `delete` mutation and on-disk scrub). Branch children stay, orphaned.
+- `GET /sessions/{id}/export` → the core `GET /api/sessions/{id}/export` stream, byte for byte.
+- Nothing in the backend writes `state.db` itself.
+
+Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (Pin, Appearance),
+`session.branch_stored` (Branch), `session.workspace.move` (Move to project), `session.title`
+(Rename of the session focused in the app), clipboard through the SDK `CopyButton`.
+
 ## Development
 
 Toolchain: node ≥ 26 (type-stripping runs the `.ts` scripts directly) and npm 12. On this host:
@@ -67,7 +89,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1) and `scripts/e2e-core-dense.ts` (card 2). Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2) and `scripts/e2e-actions.ts` (card 3; it mutates its fixtures, so it runs in its own fresh home `c<card>-<role>-actions` on the same ports, the previous one moved to the e2e trash). Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
 ### The isolated test Hermes
@@ -85,9 +107,10 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
 ```
 
 - Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
-  current card, 2): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
-  (+0..+4 coder, +5..+9 reviewer). Card 2: coder home `c2-coder/home`, ports 19320–19324 (the
-  Webapp on 19320); reviewer `c2-reviewer`, ports 19325–19329.
+  current card, 3): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
+  (+0..+4 coder, +5..+9 reviewer). Card 3: coder home `c3-coder/home`, ports 19330–19334 (the
+  Webapp on 19330); reviewer `c3-reviewer`, ports 19335–19339. The actions suite's own home is
+  `c3-<role>-actions` (same ports, never running at the same time as the other suites).
 - Setup writes the test config with `hermes config set` (`webapp.enabled true`, `webapp.host
   127.0.0.1`, `webapp.port`, `plugins.enabled: [session-tree]`), symlinks this checkout into the
   **test home's** `plugins/session-tree`, creates the `work` and `scale` profiles and seeds fixtures.
@@ -97,8 +120,10 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
   `/new` reset chain, an orphaned branch, a cross-project family, 24 singles, 2 archived, one
   recently active session, hidden delegate/cron/kanban/tool sessions, a second profile with 3
   sessions and a 500-session `scale` profile). Direct SQL touches only timestamps of the isolated
-  fixture DB. `--branch NEW PARENT [TITLE]` and `--activate ID` (used by the card-2 e2e) add a live
-  branch and stamp a session active now.
+  fixture DB. Every row carries the owner stamp a signed-in Webapp tab gives its own rows
+  (`user_id` = the host owner), so the core accepts that login's edits. `--branch NEW PARENT [TITLE]`
+  and `--activate ID` (used by the card-2 e2e) add a live branch and stamp a session active now;
+  `--unowned-branch NEW PARENT [TITLE]` adds one without the owner stamp (card 3's real refusal).
 - The desktop half ships disabled; the e2e enables it in Capabilities → Plugins like a user.
 
 ## Dependencies and licenses
