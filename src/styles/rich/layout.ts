@@ -238,10 +238,42 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
     return { x: 0, y: label.y + LABEL_BAND }
   }
 
+  const inOwnSegment = (point: Point, key: string) => {
+    const cx = point.x + spec.nodeWidth / 2
+    const cy = point.y + spec.nodeHeight / 2
+
+    return segments.some(segment => segment.key === key && cx >= segment.x && cx < segment.right && cy >= segment.y && cy < segment.bottom)
+  }
+
+  /**
+   * Card 7 fix r1 (review r1 finding 4): the whole of the group's own segments, on the grid
+   * around `base`, nearest to `anchor` (the parent) first; ties: the nearer row, then right of
+   * left. Only reached when the base row and the rows below have no room in the group — a parent
+   * on its group's last shelf row has its base row in the next segment already, and its child
+   * used to go under a continuation label far away despite free room on the parent's own row.
+   */
+  const nearestInSegment = (base: Point, anchor: Point, key: string): Point | null => {
+    const candidates: { point: Point; dist: number; dy: number; dx: number }[] = []
+
+    for (let dy = -40; dy < 40; dy += 1) {
+      for (let k = -16; k <= 16; k += 1) {
+        const point = { x: base.x + k * stepX, y: base.y + dy * stepY }
+
+        if (point.y >= 0 && inOwnSegment(point, key)) {
+          candidates.push({ point, dist: Math.hypot(point.x - anchor.x, point.y - anchor.y), dy: Math.abs(point.y - anchor.y), dx: point.x - anchor.x })
+        }
+      }
+    }
+
+    candidates.sort((a, b) => a.dist - b.dist || a.dy - b.dy || (a.dx >= 0 ? 0 : 1) - (b.dx >= 0 ? 0 : 1) || a.dx - b.dx)
+
+    return candidates.find(candidate => fits(candidate.point) && !inOtherGroup(candidate.point, key))?.point ?? null
+  }
+
   /** The nearest free spot on `base`'s row (right first, then left), then the rows below, inside
-   *  its group (never in another group's segment); else under everything, below a continuation
-   *  label of its group. */
-  const nearest = (base: Point, key: string): Point => {
+   *  its group (never in another group's segment); then anywhere in its group's own segments,
+   *  nearest to `anchor`; else under everything, below a continuation label of its group. */
+  const nearest = (base: Point, key: string, anchor: Point = base): Point => {
     for (let dy = 0; dy < 40; dy += 1) {
       for (let k = 0; k <= 16; k += 1) {
         for (const sign of [1, -1]) {
@@ -258,7 +290,7 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
       }
     }
 
-    return continueGroup(key)
+    return nearestInSegment(base, anchor, key) ?? continueGroup(key)
   }
 
   const newFamilies: Family[] = []
@@ -279,26 +311,31 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
       const predecessor = model.continuedFrom.get(id)
       const child = (model.childrenOf.get(id) ?? []).find(kid => positions.has(kid))
       let base: Point
+      // The block the new card hangs off (its parent, predecessor or child): pass 2 of nearest().
+      let anchor: Point | undefined
 
       if (parent && positions.has(parent)) {
         const p = positions.get(parent)!
         const siblings = (model.childrenOf.get(parent) ?? []).filter(kid => kid !== id && positions.has(kid)).map(kid => positions.get(kid)!)
         const row = siblings.filter(sibling => Math.abs(sibling.y - (p.y + stepY)) < stepY / 2)
 
+        anchor = p
         base = row.length > 0 ? { x: Math.max(...row.map(sibling => sibling.x)) + stepX, y: p.y + stepY } : { x: p.x, y: p.y + stepY }
       } else if (predecessor && positions.has(predecessor)) {
         const p = positions.get(predecessor)!
 
+        anchor = p
         base = { x: p.x + stepX + spec.treeGap, y: p.y }
       } else if (child) {
         const c = positions.get(child)!
 
+        anchor = c
         base = { x: c.x, y: c.y - stepY }
       } else {
         base = family.nodeIds.map(other => positions.get(other)).find((point): point is Point => Boolean(point)) ?? { x: 0, y: LABEL_BAND }
       }
 
-      const spot = nearest(base, groupKey(family.projectId))
+      const spot = nearest(base, groupKey(family.projectId), anchor ?? base)
 
       place(id, spot)
       bottom = Math.max(bottom, spot.y + spec.nodeHeight)

@@ -20,6 +20,8 @@ import type { Page } from 'playwright-core'
 
 import { ALL_PROJECTS, buildGraph } from '../src/model/graph.ts'
 import type { SessionRow } from '../src/model/sessions.ts'
+import { labelRect } from '../src/styles/subway/labels.ts'
+import type { LabelSpot } from '../src/styles/subway/spec.ts'
 import { addContext, close, enableDesktopHalf, launch, signIn } from './e2e/browser.ts'
 import {
   assert,
@@ -587,6 +589,62 @@ async function main(): Promise<void> {
       facts.detour = { blocker, inside, detour: detour.length, writes, subwayStored: Object.keys(layoutOf(state, 'subway')).length }
 
       return facts.detour
+    })
+
+    await check('card 7 fix r1 (review r1 finding 3): st-sys-pairing dragged above-left of st-sys-tip — its split leaves the tip downwards and runs into the pairing from the left: no point inside either station or the tip\'s label; octilinear; dragged back, octilinear again', async () => {
+      await fit(page)
+      const id = 'st-sys-pairing'
+      const link = LINK('st-sys-tip', id)
+      const home = (await flowPos(page, id))!
+      const originalD = await linkD(page, link)
+      const tip = (await flowPos(page, 'st-sys-tip'))!
+      // The reviewer's drop: the track was `M28 120 L28 -12.11 L3 -37.11 L-123.65 -37.11` (tip at 0,100).
+      const target = { x: tip.x - 123.65, y: tip.y - 147.11 }
+
+      await dragStationTo(page, id, target)
+      await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('data-routed') === 'true', link, { timeout: 5000 })
+      const at = (await flowPos(page, id))!
+      const d = await linkD(page, link)
+      const points = pathPoints(d)
+      const tipSpot = (await page.getAttribute(BLOCK('st-sys-tip'), 'data-label-spot')) as LabelSpot
+      const boxes = {
+        tip: { x: tip.x, y: tip.y, w: STATION_W, h: STATION_H },
+        pairing: { x: at.x, y: at.y, w: STATION_W, h: STATION_H },
+        tipLabel: (({ x, y, width, height }) => ({ x, y, w: width, h: height }))(labelRect(tip, tipSpot))
+      }
+      const hits = await page.locator(`${link} path.react-flow__edge-path`).evaluate((path, rects) => {
+        const p = path as SVGPathElement
+        const length = p.getTotalLength()
+        const out: Record<string, number> = {}
+
+        for (const [name, rect] of Object.entries(rects)) {
+          out[name] = 0
+
+          for (let i = 0; i <= 400; i += 1) {
+            const point = p.getPointAtLength((length * i) / 400)
+
+            if (point.x > rect.x + 0.5 && point.x < rect.x + rect.w - 0.5 && point.y > rect.y + 0.5 && point.y < rect.y + rect.h - 0.5) {
+              out[name] += 1
+            }
+          }
+        }
+
+        return out
+      }, boxes)
+
+      await page.screenshot({ path: join(shots, 'subway-reversed-drag-light.png') })
+      assert(Math.abs(at.x - target.x) < 6 && Math.abs(at.y - target.y) < 6, `the drop landed at ${JSON.stringify(at)}, not ${JSON.stringify(target)}`)
+      assert(Object.values(hits).every(count => count === 0), `path points inside: ${JSON.stringify(hits)} (${d})`)
+      assert(points[1].y > points[0].y && Math.abs(points[1].x - points[0].x) < 0.01, `the split does not leave downwards: ${d}`)
+      assert(Math.max(...octilinearOff(points)) <= 0.5, `off octilinear: ${d}`)
+      await dragStationTo(page, id, home)
+      const back = (await flowPos(page, id))!
+      const backD = pathPoints(await linkD(page, link))
+
+      assert(Math.abs(back.x - home.x) < 6 && Math.abs(back.y - home.y) < 6 && Math.max(...octilinearOff(backD)) <= 0.5, `back at ${JSON.stringify(back)}: ${JSON.stringify(backD)}`)
+      facts.reversedDrag = { tip, at, d, tipLabelSpot: tipSpot, hits, original: originalD, back: await linkD(page, link) }
+
+      return facts.reversedDrag
     })
 
     await check('Snap on: a dot grid at the 25 px pitch; a dragged station lands on the grid and its tracks re-route octilinear; Snap off again', async () => {

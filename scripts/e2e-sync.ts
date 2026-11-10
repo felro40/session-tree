@@ -656,6 +656,28 @@ async function main(): Promise<void> {
 
       assert(canvasKept, 'a failed background refresh replaced the canvas')
       assert(near(await flowPos(a.page, 'st-hp-root'), before), 'the cached layout moved when the refresh failed')
+      // Card 7 fix r1 (review r1 finding 6): the failed refresh is visible — a small note, in the
+      // theme's colours, light and dark.
+      const note = a.page.locator('[data-testid="session-tree-refresh-failed"]')
+
+      await note.waitFor({ timeout: 5000 })
+      const noteText = (await note.innerText()).trim()
+      const noteColors: Record<string, { color: string; background: string; border: string }> = {}
+
+      assert(noteText === 'Couldn\u2019t refresh \u2014 showing the last data', `note "${noteText}"`)
+      for (const scheme of ['light', 'dark'] as const) {
+        await a.page.emulateMedia({ colorScheme: scheme })
+        await sleep(300)
+        noteColors[scheme] = await note.evaluate(el => {
+          const style = getComputedStyle(el)
+
+          return { color: style.color, background: style.backgroundColor, border: style.borderTopColor }
+        })
+        await a.page.screenshot({ path: join(shots, `sync-refresh-failed-${scheme}.png`) })
+      }
+
+      await a.page.emulateMedia({ colorScheme: 'light' })
+      assert(noteColors.light.color !== noteColors.dark.color && noteColors.light.background !== noteColors.dark.background, `the note does not follow the theme: ${JSON.stringify(noteColors)}`)
       await dragBlock(a.page, 'st-hp-root', { x: -70, y: 50 })
       const dropped = await flowPos(a.page, 'st-hp-root')
       const banner = await a.page.locator('[data-testid="session-tree-offline"]').waitFor({ timeout: 20_000 }).then(() => true, () => false)
@@ -679,7 +701,10 @@ async function main(): Promise<void> {
       }
 
       const state = await waitFor('the offline drop stored', () => stored(a), value => near(layoutOf(value)['st-hp-root'], dropped), 30_000)
+      // The next successful refresh clears the note (the 10 s poll, or the reload when signed in again).
+      const noteCleared = await note.waitFor({ state: 'detached', timeout: 30_000 }).then(() => true, () => false)
 
+      assert(noteCleared, 'the refresh-failed note is still shown after the gateway came back')
       assert(banner, 'no offline banner while the gateway was down')
       assert(near(stillThere, dropped), 'the block moved while offline')
       assert(pending >= 1, `nothing queued in localStorage (${pending})`)
@@ -687,9 +712,9 @@ async function main(): Promise<void> {
         await signIn(t, b.page)
         await openTree(b)
       })
-      facts.gatewayRestart = { route, refreshFailed, canvasKept }
+      facts.gatewayRestart = { route, refreshFailed, canvasKept, noteText, noteColors, noteCleared }
 
-      return { dropped, banner, queued: pending, recovery: route, stored: layoutOf(state)['st-hp-root'], refreshFailed, canvasKept }
+      return { dropped, banner, queued: pending, recovery: route, stored: layoutOf(state)['st-hp-root'], refreshFailed, canvasKept, note: noteText, noteCleared }
     }
 
     await check('B2 migration: a conversation stored under its old tip key (as a card-4 page saved it) comes back at that spot, re-keyed to its lineage root on disk', async () => {
@@ -750,7 +775,11 @@ async function main(): Promise<void> {
 
         return [...(body.positions ?? []).map(each => each.id), ...(body.ids ?? []), ...Object.keys(body.layout ?? {})]
       }
-      const savedTip = saves(logA, from).filter(entry => savedIds(entry).some(id => id === 'st-sys-tip' || id === 'st-sys-seg5'))
+      // Card 7 fix r1 B2 audit: B is open on the same layout and refetches after the compaction
+      // too, so a tip-id save could come from either context; check both.
+      const savedTip = saves(logA, from)
+        .concat(saves(logB, from))
+        .filter(entry => savedIds(entry).some(id => id === 'st-sys-tip' || id === 'st-sys-seg5'))
 
       assert(gone === 0, 'the old tip is still drawn as a block')
       assert(near(after, dragged), `after compaction + reload ${JSON.stringify(after)} vs dragged ${JSON.stringify(dragged)}`)
@@ -831,8 +860,15 @@ async function main(): Promise<void> {
       const resumed = await waitFor('saves resumed', () => stored(a), value => Object.keys(layoutOf(value)).length > 10, 20_000)
       const bannerGone = (await banner.count()) === 0
 
+      // Card 7 fix r1 B2: both contexts are open and B polls too. When the valid file comes back,
+      // whichever page fetches it first places the auto-layout and saves it (if_absent); the other
+      // then finds the layout present and has nothing to save. Asserting on A alone raced B
+      // (21/22 in 1 of 3 review runs). The real condition is that saving resumed at all, so count
+      // the position saves of both contexts since the file came back.
+      const resumedSaves = saves(logA, resumeFrom).concat(saves(logB, resumeFrom)).filter(entry => entry.path.startsWith('/state/positions'))
+
       assert(bannerGone, 'the read-only banner is still shown')
-      assert(saves(logA, resumeFrom).some(entry => entry.path.startsWith('/state/positions')), 'no save after the reload')
+      assert(resumedSaves.length > 0, 'no save after the reload (A or B)')
 
       return {
         writesIn10s: writes.length,

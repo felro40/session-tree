@@ -841,6 +841,21 @@ g.is-dimmed {
   font-size: 11.5px;
 }
 
+/* Card 7 fix r1 (review r1 finding 6): a background refresh failed; small, top right of the stage. */
+.session-tree__note {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 6;
+  padding: 3px 9px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 999px;
+  background: var(--ui-bg-tertiary);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  pointer-events: none;
+}
+
 .session-tree__toast {
   position: absolute;
   bottom: 18px;

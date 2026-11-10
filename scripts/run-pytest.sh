@@ -10,14 +10,14 @@
 set -e
 repo=$(cd "$(dirname "$0")/.." && pwd)
 e2e=${SESSION_TREE_E2E_ROOT:-$HOME/.cache/session-tree-e2e}
-role=${SESSION_TREE_ROLE:-coder}
-card=${SESSION_TREE_CARD:-6}
-root="$e2e/c$card-$role"
 NODE=${NODE:-node}
 command -v "$NODE" >/dev/null 2>&1 || NODE=/home/david/.hermes/tools/node-26.12.1-linux-x64/bin/node
 NODE=$(command -v "$NODE")
 
-"$NODE" "$repo/scripts/e2e/test-hermes-cli.ts" launcher >/dev/null
+# The root (card and role) comes from scripts/e2e/harness.ts only: it reads SESSION_TREE_CARD,
+# else scripts/e2e/CARD, and SESSION_TREE_ROLE. No card number of its own here (card 7 fix r1 B1).
+launcher=$("$NODE" "$repo/scripts/e2e/test-hermes-cli.ts" launcher)
+root=$(dirname "$launcher")
 python=$("$NODE" "$repo/scripts/e2e/test-hermes-cli.ts" python)
 
 venv="$e2e/pytest-venv"

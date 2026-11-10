@@ -6,7 +6,7 @@
  *   ports 19300 + 10·card: coder +0..+4, reviewer +5..+9 (the Webapp listens on the first);
  *         card 5 (the default): coder 19350-19354, reviewer 19355-19359
  *
- * The card number comes from SESSION_TREE_CARD (default: the current card, 7).
+ * The card number comes from SESSION_TREE_CARD (default: scripts/e2e/CARD, the current card).
  *
  * The user's real Hermes is never touched: no writes under ~/.hermes, no build in the
  * Hermes checkout (`hermes webapp --skip-build` always), and the package is linked
@@ -27,8 +27,15 @@ const NODE_BIN = dirname(process.execPath)
 
 export type Role = 'coder' | 'reviewer'
 
+/**
+ * The default card: the one source of truth is `scripts/e2e/CARD` (card 7 fix r1 B1: run-pytest.sh
+ * once defaulted to 6 while this file said 7). run-pytest.sh and scripts/test-hermes take the
+ * root from this module (`test-hermes-cli.ts launcher`), so neither has a card number of its own.
+ */
+export const DEFAULT_CARD = Number(readFileSync(join(REPO, 'scripts', 'e2e', 'CARD'), 'utf8').trim())
+
 /** The card whose test home and port block this run uses (each card of the set has its own). */
-export const CARD = Number(process.env.SESSION_TREE_CARD ?? 7)
+export const CARD = Number(process.env.SESSION_TREE_CARD ?? DEFAULT_CARD)
 
 if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
   throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)

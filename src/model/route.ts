@@ -638,10 +638,24 @@ function mergeCollinear(start: Point, segs: Seg[]): Seg[] {
  * of a bottom port drops straight down, then runs into the target from the side (the mockup's
  * down-split, which leaves the station at once); a side port runs out `stub` px, turns, and runs
  * in (`elbowPoints`, without its near-level shortcut, so a link is straight only when it is level).
+ *
+ * Card 7 fix r1 (review r1 finding 3): a bottom port whose target is not below and to the right
+ * (the target dragged above, level or behind; or a link re-slotted onto the bottom port by a later
+ * `/new`) used to go straight up through its own station and label, or run into the target from
+ * the right, through it. It now drops `stub` px, runs to `stub` px left of the target, climbs or
+ * drops to the target's height and runs in from the left. A target below and to the right (every
+ * split of the auto-layout) keeps the old shape exactly.
  */
 export function octilinearPoints(from: Port, to: Port, stub = 30): Point[] {
   const start = { x: from.x, y: from.y }
   const end = { x: to.x, y: to.y }
+
+  if (from.dir === 'down' && !(to.y > from.y && to.x >= from.x)) {
+    const below = from.y + stub
+    const side = to.x - stub
+
+    return simplify([start, { x: from.x, y: below }, { x: side, y: below }, { x: side, y: to.y }, end])
+  }
 
   if (from.dir === 'down' || from.dir === 'up') {
     return from.x === to.x ? [start, end] : simplify([start, { x: from.x, y: to.y }, end])
@@ -672,7 +686,7 @@ export function octilinearPoints(from: Port, to: Port, stub = 30): Point[] {
  * one that would cross another station detours around it (the orthogonal grid detour, chamfered
  * the same way, its cuts kept inside the clearance).
  */
-export function makeOctilinearRouter(cut = 25, stub = 30): LinkRouter {
+export function makeOctilinearRouter(cut = 25, stub = 30, keepOut: (end: Rect) => readonly Rect[] = () => []): LinkRouter {
   const plain = (from: Port, to: Port) => chamferPolyline(octilinearPoints(from, to, stub), cut)
 
   return {
@@ -680,19 +694,39 @@ export function makeOctilinearRouter(cut = 25, stub = 30): LinkRouter {
     live: (from, to) => routeOf({ start: { x: from.x, y: from.y }, segs: [{ kind: 'L', to: { x: to.x, y: to.y } }] }, false),
     route({ from, to, obstacles, ends }) {
       const path = plain(from, to)
+      // Card 7 fix r1 (review r1 finding 3): the plain shape must not run through the link's own
+      // two stations either (it touches them only at its ports, on their edges), nor through the
+      // room each keeps for its label (`keepOut`); when it does, the detour goes around them too
+      // (they are obstacles of the grid search, like `ends`).
+      const zones = (ends ?? []).flatMap(keepOut)
 
-      if (!pathHits(path, obstacles)) {
+      if (!pathHits(path, obstacles) && !pathHits(path, [...(ends ?? []), ...zones])) {
         return routeOf(path, false)
       }
 
-      const around = detour(from, to, obstacles, cut, ends, chamferPolyline)
+      // The detour's own-end obstacles, 0.02 px smaller: the grid search inflates each rectangle on
+      // the 0.01 px grid, and a stub that leaves a port exactly on its own box's inflated edge can
+      // land a float error inside it (then no detour is found and the plain shape stays).
+      const endBoxes = (ends ?? []).map(rect => ({ x: rect.x + 0.02, y: rect.y + 0.02, width: rect.width - 0.04, height: rect.height - 0.04 }))
+      // A station dropped into the other end's label room has its port inside that room: keep
+      // out of the rooms clear of both ports, else around the two stations alone.
+      const clearOfPorts = zones.filter(zone => ![from, to].some(port => insideRect(port, { x: zone.x - 12, y: zone.y - 12, width: zone.width + 24, height: zone.height + 24 })))
+      const around =
+        detour(from, to, obstacles, cut, [...endBoxes, ...zones], chamferPolyline) ??
+        (clearOfPorts.length > 0 && clearOfPorts.length < zones.length ? detour(from, to, obstacles, cut, [...endBoxes, ...clearOfPorts], chamferPolyline) : undefined) ??
+        (zones.length > 0 ? detour(from, to, obstacles, cut, endBoxes, chamferPolyline) : undefined)
 
       return around ? routeOf(around, true) : routeOf(path, false)
     }
   }
 }
 
-export const octilinearRouter: LinkRouter = makeOctilinearRouter()
+/**
+ * The Subway map's router. Each end station keeps the room of its label's first-choice spot
+ * (above the station: `LABEL_SPOTS[0]` of `styles/subway/spec.ts`, 168 × 46 at +2, −50; pinned by
+ * a unit test) clear of its own tracks.
+ */
+export const octilinearRouter: LinkRouter = makeOctilinearRouter(25, 30, end => [{ x: end.x + 2, y: end.y - 50, width: 168, height: 46 }])
 
 export interface LinkEnds {
   id: string

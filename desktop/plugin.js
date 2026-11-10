@@ -8501,6 +8501,10 @@ function mergeCollinear(start2, segs) {
 }
 function octilinearPoints(from, to, stub = 30) {
   let start2 = { x: from.x, y: from.y }, end = { x: to.x, y: to.y };
+  if (from.dir === "down" && !(to.y > from.y && to.x >= from.x)) {
+    let below = from.y + stub, side = to.x - stub;
+    return simplify([start2, { x: from.x, y: below }, { x: side, y: below }, { x: side, y: to.y }, end]);
+  }
   if (from.dir === "down" || from.dir === "up")
     return from.x === to.x ? [start2, end] : simplify([start2, { x: from.x, y: to.y }, end]);
   if (from.y === to.y && to.x >= from.x)
@@ -8514,21 +8518,21 @@ function octilinearPoints(from, to, stub = 30) {
   let middle = (from.y + to.y) / 2;
   return simplify([start2, { x: from.x + stub, y: from.y }, { x: from.x + stub, y: middle }, { x: to.x - stub, y: middle }, { x: to.x - stub, y: to.y }, end]);
 }
-function makeOctilinearRouter(cut = 25, stub = 30) {
+function makeOctilinearRouter(cut = 25, stub = 30, keepOut = () => []) {
   let plain = (from, to) => chamferPolyline(octilinearPoints(from, to, stub), cut);
   return {
     shape: "octilinear",
     live: (from, to) => routeOf({ start: { x: from.x, y: from.y }, segs: [{ kind: "L", to: { x: to.x, y: to.y } }] }, !1),
     route({ from, to, obstacles, ends }) {
-      let path = plain(from, to);
-      if (!pathHits(path, obstacles))
+      let path = plain(from, to), zones = (ends ?? []).flatMap(keepOut);
+      if (!pathHits(path, obstacles) && !pathHits(path, [...ends ?? [], ...zones]))
         return routeOf(path, !1);
-      let around = detour(from, to, obstacles, cut, ends, chamferPolyline);
+      let endBoxes = (ends ?? []).map((rect) => ({ x: rect.x + 0.02, y: rect.y + 0.02, width: rect.width - 0.04, height: rect.height - 0.04 })), clearOfPorts = zones.filter((zone) => ![from, to].some((port) => insideRect(port, { x: zone.x - 12, y: zone.y - 12, width: zone.width + 24, height: zone.height + 24 }))), around = detour(from, to, obstacles, cut, [...endBoxes, ...zones], chamferPolyline) ?? (clearOfPorts.length > 0 && clearOfPorts.length < zones.length ? detour(from, to, obstacles, cut, [...endBoxes, ...clearOfPorts], chamferPolyline) : void 0) ?? (zones.length > 0 ? detour(from, to, obstacles, cut, endBoxes, chamferPolyline) : void 0);
       return around ? routeOf(around, !0) : routeOf(path, !1);
     }
   };
 }
-var octilinearRouter = makeOctilinearRouter();
+var octilinearRouter = makeOctilinearRouter(25, 30, (end) => [{ x: end.x + 2, y: end.y - 50, width: 168, height: 46 }]);
 function routeLinks(links, rects, router) {
   let all = [...rects], out = /* @__PURE__ */ new Map();
   for (let link2 of links) {
@@ -9789,7 +9793,18 @@ function mergeRichLayout(previous, model, spec) {
     for (let segment of segments)
       segment.y < label.y && segment.bottom > label.y && (segment.bottom = label.y);
     return segments.push({ key, x: -1 / 0, y: label.y, right: 1 / 0, bottom: 1 / 0 }), bottom = label.y + spec.labelHeight, { x: 0, y: label.y + 44 };
-  }, nearest = (base, key) => {
+  }, inOwnSegment = (point, key) => {
+    let cx = point.x + spec.nodeWidth / 2, cy = point.y + spec.nodeHeight / 2;
+    return segments.some((segment) => segment.key === key && cx >= segment.x && cx < segment.right && cy >= segment.y && cy < segment.bottom);
+  }, nearestInSegment = (base, anchor, key) => {
+    let candidates = [];
+    for (let dy = -40; dy < 40; dy += 1)
+      for (let k = -16; k <= 16; k += 1) {
+        let point = { x: base.x + k * stepX, y: base.y + dy * stepY };
+        point.y >= 0 && inOwnSegment(point, key) && candidates.push({ point, dist: Math.hypot(point.x - anchor.x, point.y - anchor.y), dy: Math.abs(point.y - anchor.y), dx: point.x - anchor.x });
+      }
+    return candidates.sort((a, b) => a.dist - b.dist || a.dy - b.dy || (a.dx >= 0 ? 0 : 1) - (b.dx >= 0 ? 0 : 1) || a.dx - b.dx), candidates.find((candidate) => fits(candidate.point) && !inOtherGroup(candidate.point, key))?.point ?? null;
+  }, nearest = (base, key, anchor = base) => {
     for (let dy = 0; dy < 40; dy += 1)
       for (let k = 0; k <= 16; k += 1)
         for (let sign of [1, -1]) {
@@ -9799,7 +9814,7 @@ function mergeRichLayout(previous, model, spec) {
           if (fits(point) && !inOtherGroup(point, key))
             return point;
         }
-    return continueGroup(key);
+    return nearestInSegment(base, anchor, key) ?? continueGroup(key);
   }, newFamilies = [];
   for (let family of families) {
     if (!family.nodeIds.some((id2) => positions.has(id2))) {
@@ -9809,19 +9824,19 @@ function mergeRichLayout(previous, model, spec) {
     for (let id2 of family.nodeIds) {
       if (positions.has(id2))
         continue;
-      let parent = model.parentOf.get(id2), predecessor = model.continuedFrom.get(id2), child = (model.childrenOf.get(id2) ?? []).find((kid) => positions.has(kid)), base;
+      let parent = model.parentOf.get(id2), predecessor = model.continuedFrom.get(id2), child = (model.childrenOf.get(id2) ?? []).find((kid) => positions.has(kid)), base, anchor;
       if (parent && positions.has(parent)) {
         let p = positions.get(parent), row = (model.childrenOf.get(parent) ?? []).filter((kid) => kid !== id2 && positions.has(kid)).map((kid) => positions.get(kid)).filter((sibling) => Math.abs(sibling.y - (p.y + stepY)) < stepY / 2);
-        base = row.length > 0 ? { x: Math.max(...row.map((sibling) => sibling.x)) + stepX, y: p.y + stepY } : { x: p.x, y: p.y + stepY };
+        anchor = p, base = row.length > 0 ? { x: Math.max(...row.map((sibling) => sibling.x)) + stepX, y: p.y + stepY } : { x: p.x, y: p.y + stepY };
       } else if (predecessor && positions.has(predecessor)) {
         let p = positions.get(predecessor);
-        base = { x: p.x + stepX + spec.treeGap, y: p.y };
+        anchor = p, base = { x: p.x + stepX + spec.treeGap, y: p.y };
       } else if (child) {
         let c = positions.get(child);
-        base = { x: c.x, y: c.y - stepY };
+        anchor = c, base = { x: c.x, y: c.y - stepY };
       } else
         base = family.nodeIds.map((other) => positions.get(other)).find((point) => !!point) ?? { x: 0, y: 44 };
-      let spot = nearest(base, groupKey(family.projectId));
+      let spot = nearest(base, groupKey(family.projectId), anchor ?? base);
       place(id2, spot), bottom = Math.max(bottom, spot.y + spec.nodeHeight);
     }
   }
@@ -12792,7 +12807,7 @@ function useLiveRefresh(ctx, refresh) {
 
 // src/page/session-tree-page.tsx
 import { Fragment as Fragment12, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
-var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
+var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", REFRESH_FAILED_MESSAGE = "Couldn’t refresh — showing the last data", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx, services }) {
   return /* @__PURE__ */ jsx17(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx17(ReactFlowProvider, { children: /* @__PURE__ */ jsx17(PageBody, { ctx, services }) }) });
 }
@@ -12954,7 +12969,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   }), visibleCount = useMemo9(() => visibleRows(rows).length, [rows]), onCanvas = useMemo9(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
-  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), offline = sync.offline(profile), onStyle = useCallback6(
+  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
     (id2) => {
       prefs.get().styleOverride ? prefs.set({ styleOverride: id2 }) : sync.setSettings(profile, { style: id2 });
     },
@@ -13016,7 +13031,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       "data-node-count": sessions.data ? model.nodes.length : void 0,
       "data-canvas-count": sessions.data ? onCanvas : void 0,
       "data-projects": projects.isError ? "error" : projects.data ? String(projectList.length) : "loading",
-      "data-refresh-failed": sessions.isError && sessions.data || projects.isError && projects.data ? "true" : void 0,
+      "data-refresh-failed": refreshFailed ? "true" : void 0,
       title: projects.isError ? `projects.tree: ${errorText2(projects.error)}` : void 0,
       children: [
         /* @__PURE__ */ jsx17(
@@ -13057,7 +13072,10 @@ function PageBody({ ctx, services: { sync, prefs } }) {
         offline && /* @__PURE__ */ jsx17("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
         sync.storeReadOnly && /* @__PURE__ */ jsx17("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
         /* @__PURE__ */ jsxs15("div", { className: "session-tree__main", children: [
-          /* @__PURE__ */ jsx17("div", { className: "session-tree__stage", children: body }),
+          /* @__PURE__ */ jsxs15("div", { className: "session-tree__stage", children: [
+            body,
+            refreshFailed && /* @__PURE__ */ jsx17("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
+          ] }),
           Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx17(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
         ] }),
         toast && /* @__PURE__ */ jsxs15("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
@@ -13966,6 +13984,21 @@ g.is-dimmed {
   background: var(--ui-bg-tertiary);
   color: var(--ui-text-secondary);
   font-size: 11.5px;
+}
+
+/* Card 7 fix r1 (review r1 finding 6): a background refresh failed; small, top right of the stage. */
+.session-tree__note {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 6;
+  padding: 3px 9px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 999px;
+  background: var(--ui-bg-tertiary);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  pointer-events: none;
 }
 
 .session-tree__toast {

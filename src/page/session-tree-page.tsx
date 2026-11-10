@@ -39,6 +39,8 @@ import { useLiveRefresh } from './use-live-refresh.ts'
 export const BACKEND_OFF_MESSAGE =
   "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway."
 export const OFFLINE_MESSAGE = 'offline: showing last saved layout'
+/** Card 7 fix r1 (review r1 finding 6): a background refresh failed; the canvas shows the last data. */
+export const REFRESH_FAILED_MESSAGE = 'Couldn\u2019t refresh \u2014 showing the last data'
 /** How long the Re-arrange toast (with Undo) stays. */
 export const UNDO_TOAST_MS = 10_000
 
@@ -409,7 +411,9 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const panelOpen = prefs.panelOpen(style.id, style.panelDefaultOpen ?? true)
   const onPanel = useCallback((open: boolean) => prefs.setPanelOpen(style.id, open), [prefs, style])
   const offline = sync.offline(profile)
-
+  // A background refresh (poll, push or Retry) failed while earlier data is on screen: the canvas
+  // keeps that data (c5 r4 N2) and a small note says so; the next successful refresh clears it.
+  const refreshFailed = Boolean((sessions.isError && sessions.data) || (projects.isError && projects.data))
   const onStyle = useCallback(
     (id: string) => {
       // R18: the switcher changes this device's override when one is set, else the synced style.
@@ -519,7 +523,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         data-node-count={sessions.data ? model.nodes.length : undefined}
         data-canvas-count={sessions.data ? onCanvas : undefined}
         data-projects={projects.isError ? 'error' : projects.data ? String(projectList.length) : 'loading'}
-        data-refresh-failed={(sessions.isError && sessions.data) || (projects.isError && projects.data) ? 'true' : undefined}
+        data-refresh-failed={refreshFailed ? 'true' : undefined}
         title={projects.isError ? `projects.tree: ${errorText(projects.error)}` : undefined}
       >
         <Toolbar
@@ -568,7 +572,14 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           </div>
         )}
         <div className="session-tree__main">
-          <div className="session-tree__stage">{body}</div>
+          <div className="session-tree__stage">
+            {body}
+            {refreshFailed && (
+              <div className="session-tree__note" role="status" data-testid="session-tree-refresh-failed">
+                {REFRESH_FAILED_MESSAGE}
+              </div>
+            )}
+          </div>
           {Panel && panelOpen && sessions.data && (
             <Panel model={model} selectedId={selectedId} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
           )}

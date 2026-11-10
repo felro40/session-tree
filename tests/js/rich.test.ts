@@ -403,6 +403,48 @@ describe('Rich layout (the tidy layout, top-down)', () => {
     assert.ok(cases['st-hp-root'].x + RICH_WIDTH / 2 < base.positions.get('group:/e2e/projects/mdesign')!.x, `hp child at ${JSON.stringify(cases['st-hp-root'])}`)
   })
 
+  it('card-7 review r1 finding 4: a branch of a parent on its group\'s last shelf row stays in its group, next to the parent — not under a continuation label', () => {
+    const base = layoutRich(graph(fixture.rows), undefined, spec)
+    const labels = [...base.positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).map(([id, p]) => ({ id, ...p }))
+    const ownerOf = (at: { x: number; y: number }) => {
+      const cx = at.x + RICH_WIDTH / 2
+      const cy = at.y + RICH_HEIGHT / 2
+      const rowY = Math.max(...labels.filter(label => label.y <= cy).map(label => label.y))
+      const shelf = labels.filter(label => label.y === rowY).sort((a, b) => a.x - b.x)
+
+      return ([...shelf].reverse().find(label => label.x <= cx) ?? shelf[0]).id.split('\u001f')[0]
+    }
+    // 4892ca9 (before the N1 fix) put these children 430 px and 264 px from the parent, ff5475c
+    // 1,392 and 1,381 px (under a continuation label). The bound is the 4892ca9 distance, except
+    // where that spot was in another group's segment: st-md-redline's 264 px spot is directly
+    // below it, in the no-project group's segment (asserted below); the nearest spot in mdesign's
+    // own segment is one column right on the parent's own row, 340 px (a card is 280 wide + 60 gap).
+    const bounds: Record<string, number> = { 'st-sys-reply': 430, 'st-md-redline': 340 }
+
+    for (const [parentId, bound] of Object.entries(bounds)) {
+      const parent = fixture.rows.find(r => r.id === parentId)!
+      const child = row('st-new', { ...parent, id: 'st-new', _branched_from: parent.id, parent_session_id: parent.id, _reset_from: undefined, _lineage_root_id: undefined, started_at: (parent.started_at ?? 0) + 9000, last_active: (parent.started_at ?? 0) + 9500 })
+      const next = graph([...fixture.rows, child])
+      const merged = layoutRich(next, base.positions, spec)
+      const at = merged.positions.get('st-new')!
+      const p = merged.positions.get(parentId)!
+      const family = next.families.find(each => each.nodeIds.includes('st-new'))!
+      const distance = Math.hypot(at.x - p.x, at.y - p.y)
+
+      for (const [id, point] of base.positions) {
+        assert.equal(merged.positions.get(id), point, `${id} moved`)
+      }
+
+      assert.ok(![...merged.positions.keys()].some(id => id.includes('\u001f')), `a continuation label for ${parentId}'s child`)
+      assert.equal(ownerOf(at), `${GROUP_PREFIX}${family.projectId ?? '__no_project__'}`, `${parentId}'s child at ${JSON.stringify(at)} is in another group's segment`)
+      assert.ok(distance <= bound, `${parentId}'s child at ${JSON.stringify(at)}, ${Math.round(distance)} px from the parent (bound ${bound})`)
+    }
+
+    const redline = base.positions.get('st-md-redline')!
+
+    assert.equal(ownerOf({ x: redline.x, y: redline.y + RICH_HEIGHT + spec.rowGap }), `${GROUP_PREFIX}__no_project__`, 'the spot below st-md-redline is not in another group')
+  })
+
   it('the transposed spec swaps sizes and gaps', () => {
     const t = transposedSpec(spec)
 
