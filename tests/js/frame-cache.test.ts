@@ -3,10 +3,9 @@ import { describe, it } from 'node:test'
 
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import type { GraphModel } from '../../src/model/graph.ts'
-import { rectOf } from '../../src/model/layout.ts'
-import type { Rect } from '../../src/model/layout.ts'
-import { orthogonalRouter, routeLinks } from '../../src/model/route.ts'
+import { orthogonalRouter } from '../../src/model/route.ts'
 import type { LinkRouter } from '../../src/model/route.ts'
+import { createCanvasRouting } from '../../src/page/canvas-routing.ts'
 import { clockKey, createFrameCache } from '../../src/page/frame-cache.ts'
 import type { OffsetAt } from '../../src/page/frame-cache.ts'
 import { fitSwimlanes, layoutSwimlanes, swimNowX } from '../../src/styles/swimlanes/layout.ts'
@@ -38,13 +37,13 @@ function countingFrame(): StyleFrame & { calls: number } {
 }
 
 /**
- * The canvas shell's memo chain (graph-canvas.tsx): rectangles from the shown blocks' positions,
- * then every link through the router, rebuilt only when the model, the shown set or the
- * positions map is a new object. The router counts its calls.
+ * The canvas shell's routing chain: the same `createCanvasRouting` object graph-canvas.tsx asks
+ * on every render (shown set → rectangles → link ends → routes, canvas-routing.ts), with a
+ * router that counts its calls.
  */
 function canvas() {
-  let deps: unknown[] | undefined
   let routed = 0
+  const routing = createCanvasRouting()
   const spec = swimLayoutSpec({ showAll: false })
   const router: LinkRouter = {
     shape: 'orthogonal',
@@ -61,28 +60,7 @@ function canvas() {
       return routed
     },
     render(model: GraphModel, layout: FrameLayout) {
-      const next = [model, layout.shown, layout.positions]
-
-      if (deps && next.every((value, i) => value === deps![i])) {
-        return
-      }
-
-      deps = next
-      const rects = new Map<string, Rect>()
-
-      for (const id of layout.shown) {
-        const point = layout.positions.get(id)
-
-        if (point) {
-          rects.set(id, rectOf(id, point, spec))
-        }
-      }
-
-      const ends = model.edges
-        .filter(edge => rects.has(edge.source) && rects.has(edge.target))
-        .map(edge => ({ id: edge.id, source: edge.source, target: edge.target, ...swimPorts(edge.kind, rects.get(edge.source)!, rects.get(edge.target)!) }))
-
-      routeLinks(ends, rects, router)
+      return routing.get({ model, spec, frameShown: layout.shown, positions: layout.positions, ports: swimPorts, router })
     }
   }
 }
@@ -170,10 +148,13 @@ describe('Swimlanes frame cache (B1, card-5 review: no re-layout or re-route on 
     assert.equal(frame.calls, 6)
   })
 
-  it('a recompute with identical results reuses the previous positions map and shown set, so the canvas does not re-route for them', () => {
+  it('a new model with the same rows recomputes the layout but reuses the positions map and shown set, and the real canvas routing chain (keyed on link ends, not the model) routes nothing', () => {
     const frame = countingFrame()
     const cache = createFrameCache()
+    const view = canvas()
     const first = cache.get({ frame, model, showAll: false, collapsed, nowMs: morning, offsetAt: UTC })
+    const routesBefore = view.render(model, first).routes
+    const routedOnce = view.routed
     // The same rows again: a new model object (as after a refetch without structural sharing).
     const again = buildGraph(fixture.rows, fixture.projects, { profile: 'default', showArchived: false, scope: ALL_PROJECTS })
     const second = cache.get({ frame, model: again, showAll: false, collapsed, nowMs: morning + MINUTE, offsetAt: UTC })
@@ -182,6 +163,8 @@ describe('Swimlanes frame cache (B1, card-5 review: no re-layout or re-route on 
     assert.notEqual(second, first)
     assert.equal(second.positions, first.positions, 'equal positions, new map')
     assert.equal(second.shown, first.shown, 'equal shown set, new set')
+    assert.equal(view.render(again, second).routes, routesBefore, 'new routes for a new model with the same rows')
+    assert.equal(view.routed, routedOnce, 'the router ran for a new model with the same rows')
 
     // A change that moves a block gives a new map.
     const moved = buildGraph(
@@ -194,17 +177,24 @@ describe('Swimlanes frame cache (B1, card-5 review: no re-layout or re-route on 
     assert.notEqual(third.positions, first.positions)
   })
 
-  it('control (the ddb396b behaviour): computing on every tick gives a new positions map and re-routes every link', () => {
+  it('without the cache (the ddb396b behaviour) every tick gives a new positions map; the routing chain still routes nothing while the rectangles are equal, and routes again once a block moves', () => {
     const frame = countingFrame()
     const view = canvas()
     const a = frame.compute({ model, showAll: false, collapsed, nowMs: morning, offsetAt: UTC })
 
-    view.render(model, a)
+    const first = view.render(model, a)
     const once = view.routed
     const b = frame.compute({ model, showAll: false, collapsed, nowMs: morning + MINUTE, offsetAt: UTC })
 
-    view.render(model, b)
     assert.notEqual(b.positions, a.positions)
+    assert.equal(view.render(model, b).routes, first.routes)
+    assert.equal(view.routed, once)
+
+    // A moved block (new rectangles) routes every link again.
+    const [id, point] = [...b.positions].find(([key]) => b.shown.has(key))!
+    const moved = new Map(b.positions).set(id, { x: point.x + 340, y: point.y })
+
+    assert.notEqual(view.render(model, { ...b, positions: moved }).routes, first.routes)
     assert.equal(view.routed, 2 * once)
   })
 })

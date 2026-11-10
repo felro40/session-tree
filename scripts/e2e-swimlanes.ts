@@ -21,7 +21,7 @@ import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { E2E_ROOT, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'swim' })
@@ -1248,6 +1248,72 @@ async function main(): Promise<void> {
 
       for (const [name, run] of Object.entries(runs)) {
         assert(run.ticks >= 1, `${name}: no minute tick in ${run.windowMs} ms (now marker ${JSON.stringify(run.nowX)})`)
+        assert(run.longTasks.every(task => task.duration < 200), `${name}: long tasks ${JSON.stringify(run.longTasks)}`)
+      }
+
+      return runs
+    })
+
+    await check('B1-r2: one chat turn in a scale session (a message pair through SessionDB.append_message) on the 500-session fixture, Show all off then on: the block\'s count updates after the refetch, and no long task ≥ 200 ms (no re-route)', async () => {
+      await setProfile(page, 'scale')
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
+      const runs: Record<string, unknown> = {}
+
+      for (const showAll of [false, true]) {
+        if (showAll) {
+          await clickToolbar(page, 'session-tree-show-all')
+          await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"]')?.getAttribute('data-canvas-count') === '500', undefined, { timeout: 60_000 })
+        }
+
+        // Let the first render (and its routing) settle before watching.
+        await sleep(3000)
+        const block = page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first()
+        const id = (await block.getAttribute('data-session-id'))!
+        const shownBefore = await page.locator(`${BLOCK(id)} [data-field="messages"]`).textContent()
+        const before = Number(/^(\d+)/.exec(shownBefore ?? '')?.[1])
+
+        assert(Number.isFinite(before), `no message count on ${id}: ${shownBefore}`)
+        await page.evaluate(() => {
+          const w = window as unknown as { __stTurn: { start: number; duration: number }[]; __stTurnObs: PerformanceObserver }
+
+          w.__stTurn = []
+          w.__stTurnObs = new PerformanceObserver(list => {
+            for (const entry of list.getEntries()) {
+              w.__stTurn.push({ start: Math.round(entry.startTime), duration: Math.round(entry.duration) })
+            }
+          })
+          w.__stTurnObs.observe({ type: 'longtask' })
+        })
+        const t0 = Date.now()
+        const appended = seedFixtures(t, ['--append', id, 'scale']) as { before?: number; after?: number }
+
+        assert(appended.after === (appended.before ?? 0) + 2, `append: ${JSON.stringify(appended)}`)
+        // The page refetches on sessions.changed (or the 10 s poll) and redraws that block.
+        await page.waitForFunction(
+          ([selector, want]) => document.querySelector(selector)?.textContent === want,
+          [`${BLOCK(id)} [data-field="messages"]`, `${before + 2} msgs`] as const,
+          { timeout: 25_000 }
+        )
+        const refetchMs = Date.now() - t0
+
+        // Anything the refetch set off (layout, routes, React commit) has finished by now.
+        await sleep(2000)
+        const longTasks = await page.evaluate(() => {
+          const w = window as unknown as { __stTurn: { start: number; duration: number }[]; __stTurnObs: PerformanceObserver }
+
+          w.__stTurnObs.disconnect()
+
+          return w.__stTurn
+        })
+
+        runs[showAll ? 'showAll' : 'default'] = { id, messages: [before, before + 2], refetchMs, longTasks, maxMs: Math.max(0, ...longTasks.map(task => task.duration)) }
+      }
+
+      await setProfile(page, 'default')
+      await clickToolbar(page, 'session-tree-show-all')
+      facts.dataChange = runs
+
+      for (const [name, run] of Object.entries(runs) as [string, { longTasks: { duration: number }[] }][]) {
         assert(run.longTasks.every(task => task.duration < 200), `${name}: long tasks ${JSON.stringify(run.longTasks)}`)
       }
 

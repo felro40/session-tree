@@ -29,7 +29,8 @@ adds an owned ``/branch`` child with ``estimated_cost_usd=2.0`` (a whole-number 
 ``--inf-cost-branch`` adds one with an infinite cost (card 4: the core JSON answer for such a row fails,
 the page must end in an error state with Retry); ``--delete ID`` removes a row through ``delete_session``.
 ``--compact ID [NEW_ID]`` compacts the conversation ID names once more (its tip ends ``compression``,
-a continuation row takes over; card-4 review B2).
+a continuation row takes over; card-4 review B2). ``--append ID [PROFILE]`` appends one user/assistant
+message pair to ID through ``append_message`` (a chat turn; card-5 review r2 B1-r2).
 ``--activate ID`` re-opens a
 session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
 so the core list's 300 s ``is_active`` heuristic reports it. Prints a JSON manifest of what it created.
@@ -319,9 +320,32 @@ def compact(sid: str, new_id: str | None = None, *, db: SessionDB | None = None)
             db.close()
 
 
+def append_turn(sid: str, profile: str | None = None) -> dict:
+    """One user/assistant message pair in *sid* (``append_message``, as a chat turn writes it):
+    a content-only change, the swimlanes e2e's no-re-route check (card-5 review r2, B1-r2)."""
+    home = HOME / "profiles" / profile if profile and profile != "default" else HOME
+    db = SessionDB(db_path=home / "state.db")
+    try:
+        before = db.get_session(sid)
+        if before is None:
+            sys.exit(f"no session {sid}")
+        db.append_message(sid, "user", "Session Tree e2e ping", timestamp=time.time())
+        db.append_message(sid, "assistant", "Session Tree e2e pong", timestamp=time.time())
+        after = db.get_session(sid) or {}
+        return {"appended": sid, "profile": profile or "default", "before": before.get("message_count"), "after": after.get("message_count")}
+    finally:
+        db.close()
+
+
 def main() -> None:
     if "--touch" in sys.argv:
         print(json.dumps(touch()))
+        return
+    if "--append" in sys.argv:
+        args = sys.argv[sys.argv.index("--append") + 1:]
+        if not args:
+            sys.exit("usage: --append ID [PROFILE]")
+        print(json.dumps(append_turn(args[0], args[1] if len(args) > 1 else None)))
         return
     if "--compact" in sys.argv:
         args = sys.argv[sys.argv.index("--compact") + 1:]

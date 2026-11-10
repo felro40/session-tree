@@ -15,12 +15,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import { lineageOf } from '../model/graph.ts'
-import { GROUP_PREFIX, laidOutFamilies, LABEL_WIDTH, rectOf } from '../model/layout.ts'
+import { GROUP_PREFIX, LABEL_WIDTH } from '../model/layout.ts'
 import type { GroupLabel, LayoutSpec, Point, Rect } from '../model/layout.ts'
-import { routeLinks } from '../model/route.ts'
 import type { LiveStatus } from '../model/status.ts'
 import { blockHandles } from '../styles/shared.tsx'
-import type { BlockData, FrameLayout, GroupLabelData, LinkData, RoutedLink, StyleDefinition } from '../styles/types.ts'
+import type { BlockData, FrameLayout, GroupLabelData, LinkData, StyleDefinition } from '../styles/types.ts'
+import { createCanvasRouting } from './canvas-routing.ts'
 import { FrameUiCtx } from './frame-context.ts'
 import type { FrameUi } from './frame-context.ts'
 import { usePluginCtx } from './plugin-context.ts'
@@ -95,45 +95,15 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const [activeExtra, setActiveExtra] = useState<null | { id: string; box: Rect }>(null)
   const active = frame ? activeExtra : null
 
-  // A framed style's shown set is stable across the minute tick (frame-cache.ts): key on it, not
-  // on the layout object, so the rectangles and routes below are rebuilt only when it changes.
+  // The shown set, the rectangles (the router's obstacles) and the routed links (R13 on drop),
+  // keyed on structure, never on the model object (B1-r2, canvas-routing.ts): a refetch that
+  // only changes block content re-routes nothing. A framed style's shown set is stable across
+  // the minute tick (frame-cache.ts). While a block is dragged its links no longer match these
+  // ends and draw live instead.
+  const [routing] = useState(createCanvasRouting)
   const frameShown = frameLayout && style.frame ? frameLayout.shown : undefined
-  const shown = useMemo(
-    () => (frameShown ? new Set(frameShown) : new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds))),
-    [model, spec, frameShown]
-  )
+  const { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router })
   const lineage = useMemo(() => lineageOf(model, selectedId), [model, selectedId])
-
-  // Committed rectangles of every block on the canvas (the router's obstacles).
-  const rects = useMemo(() => {
-    const out = new Map<string, Rect>()
-
-    for (const id of shown) {
-      const point = positions.get(id)
-
-      if (point) {
-        out.set(id, rectOf(id, point, spec))
-      }
-    }
-
-    return out
-  }, [shown, positions, spec])
-
-  // R13 on drop: every link against every other block, from the committed positions. While a
-  // block is dragged its links no longer match these ends and draw live instead.
-  const routes = useMemo(() => {
-    const ends = model.edges
-      .filter(edge => rects.has(edge.source) && rects.has(edge.target))
-      .map(edge => ({ id: edge.id, source: edge.source, target: edge.target, ...style.ports(edge.kind, rects.get(edge.source)!, rects.get(edge.target)!) }))
-    const routed = routeLinks(ends, rects, style.router)
-    const out = new Map<string, RoutedLink>()
-
-    for (const end of ends) {
-      out.set(end.id, { from: end.from, to: end.to, route: routed.get(end.id)! })
-    }
-
-    return out
-  }, [model, rects, style])
 
   const baseNodes = useMemo(() => {
     const { width, height } = style.nodeSize

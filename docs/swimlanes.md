@@ -24,9 +24,17 @@ The style contract (`src/styles/types.ts`) got one optional part, `frame`:
   the collapsed lanes, the **local day** of now, or the **offset at now** (a DST switch or a new
   zone). The page's minute tick inside the same local day and offset returns the previous layout
   object itself, so the canvas does not rebuild its rectangles or re-route a link (the obstacle
-  router takes 0.5–0.7 s on the 500-session fixture). A recompute whose positions (or shown set)
-  equal the previous ones reuses the previous map (set), so a spurious recompute does not re-route
-  either. A local midnight or an offset change recomputes and re-routes once.
+  router takes 0.5–0.7 s on the 500-session fixture). A new model (every refetch, such as one
+  chat turn elsewhere) does recompute the layout; a recompute whose positions (or shown set)
+  equal the previous ones reuses the previous map (set), so the canvas keeps its rectangles.
+- **When links are re-routed** (`src/page/canvas-routing.ts`, card-5 review r2 B1-r2). The
+  canvas's routing chain never keys on the model object: shown set → rectangles → link ends (per
+  link its edge id, source, target and kind) → routes. Each stage keeps its previous object when
+  its result is equal, and the router runs only when the link ends, the rectangles, the style's
+  ports or its router change. A refetch that changes only block content (message count, tokens,
+  last used, title, status) redraws those blocks and re-routes nothing; a structural change (a
+  session added, removed, archived or moved to another lane, a new link, a local midnight, an
+  offset change) re-routes once.
 - The `nowMs` passed to the pure layout (for the future-start clamp below) is the one captured at
   that recompute. Only the **now marker** (the line and the pill) follows the live clock: the
   layers map the live `nowMs` with the same piecewise mapping (`swimNowX`, from today's local
@@ -130,7 +138,7 @@ column and the axis).
   from its left edge and runs right into the successor (the branch shape when the successor is not
   below and right). A link that would cross another block detours around it (`makeOrthogonalRouter`
   in `src/model/route.ts`, the same A* detour as Dense; there is no drag here, so routes are made
-  once per layout).
+  once per change of the link ends or block rectangles, see "When links are re-routed").
 
 ## Simulated / not measured
 

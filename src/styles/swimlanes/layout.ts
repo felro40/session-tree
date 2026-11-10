@@ -224,6 +224,29 @@ export function localCalendar(offsetAt: (ms: number) => number) {
     if (start === undefined) {
       // The offset at local midnight: guess with the offset at UTC midnight, then refine once.
       start = day * DAY_S - offsetS(day * DAY_S - offsetS(day * DAY_S))
+
+      // NB1 (card-5 review r2): where local midnight does not exist (a spring-forward at
+      // 00:00, e.g. America/Havana, America/Santiago) that guess lands an hour early; the day
+      // starts at the first second whose local day is `day`. Binary-search it near the guess.
+      if (!(dayOf(start) === day && dayOf(start - 1) === day - 1)) {
+        let lo = start - 4 * 3600
+        let hi = start + 4 * 3600
+
+        if (dayOf(lo) < day && dayOf(hi) >= day) {
+          while (hi - lo > 1) {
+            const mid = Math.floor((lo + hi) / 2)
+
+            if (dayOf(mid) >= day) {
+              hi = mid
+            } else {
+              lo = mid
+            }
+          }
+
+          start = hi
+        }
+      }
+
       starts.set(day, start)
     }
 

@@ -10,7 +10,10 @@
  * - The `nowMs` given to the pure layout (the future-start clamp) is the one captured at that
  *   recompute; the now marker follows the live clock in the style's layers (`swimNowX`).
  * - Defence in depth: when a recompute yields the same positions (or the same shown set), the
- *   previous map (set) is reused, so the canvas's rectangles and routes stay put.
+ *   previous map (set) is reused, so the canvas's rectangles stay the same object. A new model
+ *   always recomputes here (a refetch gives one); the canvas's router does not key on the model
+ *   but on the structural link ends and these rectangles (`canvas-routing.ts`, B1-r2), so a
+ *   refetch that changes only block content re-routes nothing.
  *
  * Pure (no React): the page holds one cache per mounted page.
  */
@@ -113,7 +116,8 @@ export function createFrameCache(): FrameCache {
       const layout = request.frame.compute({ model: request.model, showAll: request.showAll, collapsed: request.collapsed, nowMs: request.nowMs, offsetAt })
 
       if (last) {
-        // Same values, same objects: the canvas does not rebuild its rectangles or re-route.
+        // Same values, same objects: the canvas keeps its rectangles (and, with unchanged link
+        // ends, its routes: canvas-routing.ts).
         if (samePositions(last.layout.positions, layout.positions)) {
           layout.positions = last.layout.positions
         }

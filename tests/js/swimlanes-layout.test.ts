@@ -6,7 +6,7 @@ import type { GraphModel } from '../../src/model/graph.ts'
 import { NO_PROJECT_ID } from '../../src/model/projects.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 import { browserOffsetAt } from '../../src/page/frame-cache.ts'
-import { fitSwimlanes, layoutSwimlanes, localDay, swimNowX } from '../../src/styles/swimlanes/layout.ts'
+import { fitSwimlanes, layoutSwimlanes, localCalendar, localDay, swimNowX } from '../../src/styles/swimlanes/layout.ts'
 import type { SwimInput, SwimLayout } from '../../src/styles/swimlanes/layout.ts'
 import {
   CHILD_GAP,
@@ -518,6 +518,58 @@ describe('Swimlanes time axis across a DST change (NB4, card-5 review)', () => {
     assert.ok(Math.abs(out.nowX - (8 * DAY_WIDTH + (12 / 24) * DAY_WIDTH)) < 1e-9)
     assert.ok(Math.abs(swimNowX(out, nowMs + 3 * HOUR * 1000) - layout(model, { nowMs: nowMs + 3 * HOUR * 1000, offsetAt: newYork }).nowX) < 1e-9)
   })
+})
+
+describe('Swimlanes local calendar where local midnight does not exist (NB1, card-5 review r2)', () => {
+  // America/Havana: CST (UTC-5) until Sun 2026-03-08 00:00 local (05:00 UTC), then CDT (UTC-4);
+  // the clock jumps from 00:00 to 01:00, so that day starts at 01:00 CDT = 05:00 UTC.
+  const SPRING = Date.UTC(2026, 2, 8, 5, 0, 0)
+  const havana = (ms: number) => (ms < SPRING ? -300 : -240)
+
+  it('the day starts at its first local second (01:00 CDT), not an hour early on the day before', () => {
+    const calendar = localCalendar(havana)
+    const day = calendar.dayOf(SPRING / 1000)
+    const start = calendar.midnight(day)
+
+    assert.equal(start, SPRING / 1000, `day start ${new Date(start * 1000).toISOString()}`)
+    assert.equal(calendar.dayOf(start), day)
+    assert.equal(calendar.dayOf(start - 1), day - 1)
+    // The day before and after are ordinary: 24 h (CST) before, 24 h (CDT) after; this one is 23 h.
+    assert.equal(calendar.midnight(day - 1), Date.UTC(2026, 2, 7, 5, 0, 0) / 1000)
+    assert.equal(calendar.midnight(day + 1), Date.UTC(2026, 2, 9, 4, 0, 0) / 1000)
+    // 06:00 CDT is 5 of the day's 23 hours in.
+    assert.ok(Math.abs(calendar.fraction(Date.UTC(2026, 2, 8, 10, 0, 0) / 1000, day) - 5 / 23) < 1e-9)
+  })
+
+  for (const zone of ['America/Havana', 'America/Santiago', 'America/New_York', 'Australia/Lord_Howe']) {
+    it(`with the real zone (TZ=${zone}, browserOffsetAt), every day over 400 days starts at its first local second`, () => {
+      const before = process.env.TZ
+
+      process.env.TZ = zone
+
+      try {
+        const calendar = localCalendar(browserOffsetAt)
+        const first = calendar.dayOf(Date.UTC(2026, 0, 1) / 1000)
+        const wrong = []
+
+        for (let day = first; day < first + 400; day += 1) {
+          const start = calendar.midnight(day)
+
+          if (!(calendar.dayOf(start) === day && calendar.dayOf(start - 1) === day - 1)) {
+            wrong.push(new Date(start * 1000).toISOString())
+          }
+        }
+
+        assert.deepEqual(wrong, [])
+      } finally {
+        if (before === undefined) {
+          delete process.env.TZ
+        } else {
+          process.env.TZ = before
+        }
+      }
+    })
+  }
 })
 
 describe('Swimlanes singles popover placement (NB5, card-5 review)', () => {

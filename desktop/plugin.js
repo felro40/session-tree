@@ -9130,7 +9130,20 @@ function dayLabel(day, bold) {
 function localCalendar(offsetAt) {
   let offsetS = (seconds) => offsetAt(seconds * 1e3) * 60, starts = /* @__PURE__ */ new Map(), dayOf = (seconds) => localDay(seconds, offsetS(seconds)), midnight = (day) => {
     let start2 = starts.get(day);
-    return start2 === void 0 && (start2 = day * DAY_S - offsetS(day * DAY_S - offsetS(day * DAY_S)), starts.set(day, start2)), start2;
+    if (start2 === void 0) {
+      if (start2 = day * DAY_S - offsetS(day * DAY_S - offsetS(day * DAY_S)), !(dayOf(start2) === day && dayOf(start2 - 1) === day - 1)) {
+        let lo = start2 - 14400, hi = start2 + 4 * 3600;
+        if (dayOf(lo) < day && dayOf(hi) >= day) {
+          for (; hi - lo > 1; ) {
+            let mid = Math.floor((lo + hi) / 2);
+            dayOf(mid) >= day ? hi = mid : lo = mid;
+          }
+          start2 = hi;
+        }
+      }
+      starts.set(day, start2);
+    }
+    return start2;
   };
   return { dayOf, midnight, fraction: (seconds, day) => {
     let from = midnight(day);
@@ -9795,6 +9808,58 @@ function resolveStyleId(override, synced) {
 init_define_import_meta_env();
 import { useCallback as useCallback3, useEffect as useEffect3, useMemo as useMemo3, useRef as useRef3, useState as useState4 } from "react";
 
+// src/page/canvas-routing.ts
+init_define_import_meta_env();
+var sameSet2 = (a, b) => a === b || a.size === b.size && [...a].every((each) => b.has(each));
+function sameRects(a, b) {
+  if (a.size !== b.size)
+    return !1;
+  for (let [id2, rect] of a) {
+    let other = b.get(id2);
+    if (!other || other.x !== rect.x || other.y !== rect.y || other.width !== rect.width || other.height !== rect.height)
+      return !1;
+  }
+  return !0;
+}
+var sameLinks = (a, b) => a.length === b.length && a.every((end, i) => end.id === b[i].id && end.source === b[i].source && end.target === b[i].target && end.kind === b[i].kind);
+function stage(same) {
+  let deps, value2;
+  return (next, compute) => {
+    if (deps && deps.length === next.length && deps.every((each, i) => each === next[i]))
+      return value2;
+    let fresh = compute();
+    return value2 = deps && same(value2, fresh) ? value2 : fresh, deps = next, value2;
+  };
+}
+function createCanvasRouting() {
+  let routed = 0, shownStage = stage(sameSet2), rectsStage = stage(sameRects), linksStage = stage(sameLinks), routesStage = stage(() => !1);
+  return {
+    get routed() {
+      return routed;
+    },
+    get({ model, spec, frameShown, positions, ports, router }) {
+      let shown = frameShown ? shownStage([frameShown], () => frameShown) : shownStage([model, spec], () => new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds))), rects = rectsStage([shown, positions, spec], () => {
+        let out = /* @__PURE__ */ new Map();
+        for (let id2 of shown) {
+          let point = positions.get(id2);
+          point && out.set(id2, rectOf(id2, point, spec));
+        }
+        return out;
+      }), links = linksStage(
+        [model, rects],
+        () => model.edges.filter((edge) => rects.has(edge.source) && rects.has(edge.target)).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, kind: edge.kind }))
+      ), routes = routesStage([links, rects, ports, router], () => {
+        routed += 1;
+        let ends = links.map((link2) => ({ id: link2.id, source: link2.source, target: link2.target, ...ports(link2.kind, rects.get(link2.source), rects.get(link2.target)) })), out = /* @__PURE__ */ new Map(), done = routeLinks(ends, rects, router);
+        for (let end of ends)
+          out.set(end.id, { from: end.from, to: end.to, route: done.get(end.id) });
+        return out;
+      });
+      return { shown, rects, links, routes };
+    }
+  };
+}
+
 // src/page/session-menu.tsx
 init_define_import_meta_env();
 import {
@@ -9960,22 +10025,7 @@ function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props, [mountViewport] = useState4(initialViewport), ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef3(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef3(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState4(null), active = frame2 ? activeExtra : null, frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, shown = useMemo3(
-    () => frameShown ? new Set(frameShown) : new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)),
-    [model, spec, frameShown]
-  ), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), rects = useMemo3(() => {
-    let out = /* @__PURE__ */ new Map();
-    for (let id2 of shown) {
-      let point = positions.get(id2);
-      point && out.set(id2, rectOf(id2, point, spec));
-    }
-    return out;
-  }, [shown, positions, spec]), routes = useMemo3(() => {
-    let ends = model.edges.filter((edge) => rects.has(edge.source) && rects.has(edge.target)).map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, ...style2.ports(edge.kind, rects.get(edge.source), rects.get(edge.target)) })), routed = routeLinks(ends, rects, style2.router), out = /* @__PURE__ */ new Map();
-    for (let end of ends)
-      out.set(end.id, { from: end.from, to: end.to, route: routed.get(end.id) });
-    return out;
-  }, [model, rects, style2]), baseNodes = useMemo3(() => {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane } = props, [mountViewport] = useState4(initialViewport), ctx = usePluginCtx(), wrapper = useRef3(null), [drag2, setDrag] = useState4(), actions = useSessionActions(), [tooltip, setTooltip] = useState4(), spaceDown = useRef3(!1), [spaceHeld, setSpaceHeld] = useState4(!1), tooltipTimer = useRef3(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState4(null), active = frame2 ? activeExtra : null, [routing] = useState4(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router }), lineage = useMemo3(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo3(() => {
     let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
