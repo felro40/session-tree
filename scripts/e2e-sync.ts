@@ -739,7 +739,18 @@ async function main(): Promise<void> {
       await a.page.locator(BLOCK('st-sys-seg5')).scrollIntoViewIfNeeded().catch(() => undefined)
       await a.page.screenshot({ path: join(shots, 'b2-compacted-block-stays.png') })
       const disk = JSON.parse(readFileSync(stateFile, 'utf8')).layouts.default.dense.all as Record<string, { x: number; y: number }>
-      const savedTip = saves(logA, from).filter(entry => /st-sys-seg5|st-sys-tip/.test(entry.body ?? ''))
+      // A block saved under the tip's own id (or the continuation's) is the B2 regression. Card 7:
+      // matched on the saved ids, not the raw body — the seeder's compaction is four separate
+      // writes (re-open, end the tip, create the continuation, its message); a refetch between them
+      // sees the tip ended with no continuation yet, so its children show for a moment under a
+      // stand-in whose own key is `missing:default/st-sys-tip` (a different key, saved if_absent).
+      // The old regex also matched that key: the check failed in 1 of 3 runs (card 7, run 1).
+      const savedIds = (entry: { body?: string }) => {
+        const body = JSON.parse(entry.body ?? '{}') as { positions?: { id: string }[]; ids?: string[]; layout?: Record<string, unknown> }
+
+        return [...(body.positions ?? []).map(each => each.id), ...(body.ids ?? []), ...Object.keys(body.layout ?? {})]
+      }
+      const savedTip = saves(logA, from).filter(entry => savedIds(entry).some(id => id === 'st-sys-tip' || id === 'st-sys-seg5'))
 
       assert(gone === 0, 'the old tip is still drawn as a block')
       assert(near(after, dragged), `after compaction + reload ${JSON.stringify(after)} vs dragged ${JSON.stringify(dragged)}`)
