@@ -273,7 +273,7 @@ export function orthogonalRoute(
   const open = new Heap()
   const h = (i: number, j: number) => Math.abs(xs[i] - goal.x) + Math.abs(ys[j] - goal.y)
   const startKey = key(si, sj, 4)
-  // The first move must continue the port direction (no doubling back into the source block).
+  // From the stub the path may go on or turn (a stub squeezed into a tight gap must turn).
   const firstDir = { right: 0, left: 1, down: 2, up: 3 }[from.dir]
   const lastDir = { right: 1, left: 0, down: 3, up: 2 }[to.dir]
 
@@ -300,8 +300,8 @@ export function orthogonalRoute(
     const base = g.get(current)!
 
     for (let nd = 0; nd < 4; nd += 1) {
-      if (d === 4 && nd !== firstDir) {
-        continue
+      if (d === 4 && nd === (firstDir ^ 1)) {
+        continue // the stub already left the source block; never double back into it
       }
 
       if (d !== 4 && ((d ^ 1) === nd)) {
@@ -416,11 +416,15 @@ export function nearObstacles(from: Point, to: Point, obstacles: readonly Rect[]
   return obstacles.filter(r => r.x < x2 && r.x + r.width > x1 && r.y < y2 && r.y + r.height > y1)
 }
 
+/** Clearances tried in turn; the last (a 1 px stub) squeezes through a tight gap at a port. */
+export const DETOUR_MARGINS = [12, 6, 3, 1] as const
+
 /** A detour for `from → to` around `obstacles` (and the link's own `ends`), or undefined. The
- *  clearance shrinks when a block sits close to a port (12, then 6, then 3 px). */
+ *  clearance shrinks when a block sits close to a port (12, 6, 3 px, then a 1 px stub that
+ *  leaves through a gap of 2 px or more between the port's block and a neighbour). */
 export function detour(from: Port, to: Port, obstacles: readonly Rect[], radius: number, ends: readonly Rect[] = []): Path | undefined {
-  for (const margin of [12, 6, 3]) {
-    const path = detourWith(from, to, obstacles, Math.min(radius, margin - 2), ends, margin)
+  for (const margin of DETOUR_MARGINS) {
+    const path = detourWith(from, to, obstacles, Math.max(0, Math.min(radius, margin - 2)), ends, margin)
 
     if (path) {
       return path

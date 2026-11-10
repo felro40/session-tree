@@ -119,6 +119,8 @@ declare module '@hermes/plugin-sdk' {
     retryDelay?: number
     refetchOnWindowFocus?: boolean
     staleTime?: number
+    /** TanStack Query v5: data shown while the new key loads (e.g. keep the previous result). */
+    placeholderData?: (previousData: T | undefined, previousQuery: { queryKey: readonly unknown[] } | undefined) => T | undefined
   }): UseQueryResult<T>
 
   export const EmptyState: ComponentType<{ title: string; description?: string; className?: string }>

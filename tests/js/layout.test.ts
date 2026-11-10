@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import type { GraphModel } from '../../src/model/graph.ts'
 import { LayoutMemory } from '../../src/model/layout-memory.ts'
-import { GROUP_PREFIX, laidOutFamilies, layoutGraph, mergeLayout, overlaps, rectOf } from '../../src/model/layout.ts'
+import { GROUP_PREFIX, groupKey, labelGroup, laidOutFamilies, layoutGraph, mergeLayout, overlaps, rectOf } from '../../src/model/layout.ts'
 import type { LayoutSpec, Point } from '../../src/model/layout.ts'
 import { denseLayoutSpec } from '../../src/styles/dense/spec.ts'
 import { loadFixture, row } from './fixtures.ts'
@@ -146,17 +146,181 @@ describe('mergeLayout (new sessions never move placed blocks)', () => {
     assertNoOverlap(next, merged, spec())
   })
 
-  it('appends a whole new family below everything already placed', () => {
+  it('places a whole new family in its (here: the only, open) group band, clear of everything', () => {
     const next = buildGraph([...base, row('q', { started_at: 5 }), row('q1', { _branched_from: 'q', started_at: 6 })], [], options)
     const merged = mergeLayout(dragged, next, spec()).positions
-    const bottom = Math.max(...[...dragged.values()].map(point => point.y))
+    const label = merged.get(groupKey(undefined))!
 
-    assert.ok(merged.get('q')!.y > bottom)
+    for (const [id, point] of dragged) {
+      assert.deepEqual(merged.get(id), point, `${id} moved`)
+    }
+
+    assert.ok(merged.get('q')!.y >= label.y + spec().labelHeight)
+    assert.ok(merged.get('q1')!.y >= label.y + spec().labelHeight)
     assertNoOverlap(next, merged, spec())
   })
 
   it('a fresh layout when nothing is placed yet', () => {
     assert.deepEqual([...mergeLayout(undefined, first, spec()).positions], [...placed])
+  })
+})
+
+describe('mergeLayout on the default fixture (live refresh stays in its project band, B1)', () => {
+  const fixture = loadFixture('default')
+  const first = buildGraph(fixture.rows, fixture.projects, options)
+  const placed = layoutGraph(first, spec()).positions
+  const column = spec().nodeWidth + spec().columnGap
+  const projectOf = (label: string) => fixture.projects.find(project => project.label === label)!.id
+
+  /** The band of `projectId`'s group: under its label, above the next group's label. */
+  const bandOf = (positions: ReadonlyMap<string, Point>, projectId: string | undefined) => {
+    const labels = [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).sort(([, a], [, b]) => a.y - b.y)
+    const index = labels.findIndex(([id]) => id === groupKey(projectId))
+    const next = labels[index + 1]
+
+    return { top: labels[index][1].y + spec().labelHeight, bottom: next ? next[1].y : Infinity, nextLabel: next?.[0] }
+  }
+
+  const childOf = (parent: string, id = `new-${parent}`, started = 9e9) => {
+    const tip = fixture.rows.find(item => item.id === parent)!
+
+    return row(id, { started_at: started, last_active: started, _branched_from: parent, parent_session_id: parent, git_repo_root: tip.git_repo_root, cwd: tip.cwd })
+  }
+
+  const assertInBand = (positions: ReadonlyMap<string, Point>, id: string, projectId: string | undefined) => {
+    const band = bandOf(positions, projectId)
+    const point = positions.get(id)!
+
+    assert.ok(point.y >= band.top, `${id} at y ${point.y} is above its group's band (${band.top})`)
+    assert.ok(point.y + spec().nodeHeight <= band.bottom, `${id} at y ${point.y} reaches under the next label ${band.nextLabel} (y ${band.bottom})`)
+  }
+
+  const assertKept = (positions: ReadonlyMap<string, Point>) => {
+    for (const [id, point] of placed) {
+      assert.deepEqual(positions.get(id), point, `${id} moved`)
+    }
+  }
+
+  it('a new child of st-sys-tip and of st-hp-root each stay in their own band, overlap nothing, move nothing', () => {
+    for (const [parent, label] of [['st-sys-tip', 'syscanvas'], ['st-hp-root', 'hermes-plugins']] as const) {
+      const child = childOf(parent)
+      const next = buildGraph([...fixture.rows, child], fixture.projects, options)
+      const merged = mergeLayout(placed, next, spec()).positions
+
+      assert.equal(next.nodeById.get(child.id)!.projectId, projectOf(label))
+      assertInBand(merged, child.id, projectOf(label))
+      assert.ok(merged.get(child.id)!.x > placed.get(parent)!.x, 'right of its parent')
+      assertNoOverlap(next, merged, spec())
+      assertKept(merged)
+    }
+  })
+
+  it('uses the parent\'s column when it has a free row in the band', () => {
+    // The no-project group is the lowest: its band is open below.
+    const child = childOf('st-orphan-child')
+    const next = buildGraph([...fixture.rows, child], fixture.projects, options)
+    const merged = mergeLayout(placed, next, spec()).positions
+
+    assert.equal(merged.get(child.id)!.x, placed.get('st-orphan-child')!.x + column)
+    assertInBand(merged, child.id, undefined)
+    assertNoOverlap(next, merged, spec())
+    assertKept(merged)
+  })
+
+  it('falls back to the next free column to the right when the parent\'s column is full in the band', () => {
+    for (const [parent, label] of [['st-sys-tip', 'syscanvas'], ['st-hp-root', 'hermes-plugins']] as const) {
+      const projectId = projectOf(label)
+      const band = bandOf(placed, projectId)
+      const x = placed.get(parent)!.x + column
+      // The parent's column really is full inside the band (every row slot, keeping a row gap
+      // to the next label, hits a block).
+      const blocks = [...placed].filter(([id]) => !id.startsWith(GROUP_PREFIX)).map(([id, point]) => rectOf(id, point, spec()))
+
+      for (let y = band.top; y + spec().nodeHeight <= band.bottom - spec().rowGap; y += 1) {
+        assert.ok(
+          blocks.some(rect => overlaps(rect, { x, y: y - spec().rowGap / 2, width: spec().nodeWidth, height: spec().nodeHeight + spec().rowGap })),
+          `${label}: row ${y} of the parent's column is free`
+        )
+      }
+
+      // Two new children: both land further right, inside the band, clear of each other.
+      const kids = [childOf(parent, `${parent}-a`, 9e9), childOf(parent, `${parent}-b`, 9e9 + 1)]
+      const next = buildGraph([...fixture.rows, ...kids], fixture.projects, options)
+      const merged = mergeLayout(placed, next, spec()).positions
+
+      for (const kid of kids) {
+        assert.ok(merged.get(kid.id)!.x >= x + column, `${kid.id} is not in a column right of the full one`)
+        assertInBand(merged, kid.id, projectId)
+      }
+
+      assertNoOverlap(next, merged, spec())
+      assertKept(merged)
+    }
+  })
+
+  it('a brand-new family lands in its own project band; one taller than the band gets a continuation label under everything', () => {
+    const tip = fixture.rows.find(item => item.id === 'st-sys-tip')!
+    const at = { git_repo_root: tip.git_repo_root, cwd: tip.cwd }
+    const small = [row('fam-root', { ...at, started_at: 9e9 }), row('fam-kid', { ...at, started_at: 9e9 + 1, _branched_from: 'fam-root' })]
+    const next = buildGraph([...fixture.rows, ...small], fixture.projects, options)
+    const merged = mergeLayout(placed, next, spec()).positions
+
+    for (const id of ['fam-root', 'fam-kid']) {
+      assertInBand(merged, id, projectOf('syscanvas'))
+    }
+
+    assertNoOverlap(next, merged, spec())
+    assertKept(merged)
+
+    // Ten children: taller than the syscanvas band (168 px).
+    const tall = [row('tall-root', { ...at, started_at: 9e9 }), ...Array.from({ length: 10 }, (_, i) => row(`tall-${i}`, { ...at, started_at: 9e9 + 1 + i, _branched_from: 'tall-root' }))]
+    const nextTall = buildGraph([...fixture.rows, ...tall], fixture.projects, options)
+    const result = mergeLayout(placed, nextTall, spec())
+    const continuation = result.labels.find(item => item.id !== groupKey(projectOf('syscanvas')) && labelGroup(item.id) === groupKey(projectOf('syscanvas')))!
+    const bottom = Math.max(...[...placed.values()].map(point => point.y + spec().nodeHeight))
+
+    assert.ok(continuation, 'a continuation label for syscanvas')
+    assert.equal(continuation.projectId, projectOf('syscanvas'))
+    const labelY = result.positions.get(continuation.id)!.y
+
+    assert.ok(labelY >= bottom)
+
+    for (const item of tall) {
+      assert.ok(result.positions.get(item.id)!.y >= labelY + spec().labelHeight, `${item.id} is under its continuation label`)
+    }
+
+    assertNoOverlap(nextTall, result.positions, spec())
+    assertKept(result.positions)
+  })
+
+  it('Show all: new singles land in their own project bands, clear of everything, deterministically', () => {
+    const merged = mergeLayout(placed, first, spec(true))
+
+    assertNoOverlap(first, merged.positions, spec(true))
+    assertKept(merged.positions)
+
+    for (const single of first.singles) {
+      const family = first.families.find(item => item.nodeIds.includes(single.id))!
+
+      if (merged.positions.has(groupKey(family.projectId))) {
+        const label = [...merged.positions.keys()].filter(id => labelGroup(id) === groupKey(family.projectId))
+
+        // In its band, or under a continuation label of its own project.
+        const inSome = label.some(id => {
+          const labels = [...merged.positions].filter(([key]) => key.startsWith(GROUP_PREFIX)).sort(([, a], [, b]) => a.y - b.y)
+          const index = labels.findIndex(([key]) => key === id)
+          const top = labels[index][1].y + spec().labelHeight
+          const bottom = labels[index + 1]?.[1].y ?? Infinity
+          const y = merged.positions.get(single.id)!.y
+
+          return y >= top && y + spec().nodeHeight <= bottom
+        })
+
+        assert.ok(inSome, `${single.id} is outside its project's band`)
+      }
+    }
+
+    assert.deepEqual([...mergeLayout(placed, first, spec(true)).positions], [...merged.positions])
   })
 })
 

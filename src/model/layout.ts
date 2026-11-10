@@ -241,10 +241,38 @@ export function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /**
+ * A label that continues a project group further down the canvas: used only when a new family
+ * of a labelled group is too tall for that group's band (`mergeLayout`).
+ */
+const CONTINUATION = '\u001f'
+
+/** The group (`group:<project>`) a label id belongs to, continuation labels included. */
+export function labelGroup(id: string): string {
+  const cut = id.indexOf(CONTINUATION)
+
+  return cut === -1 ? id : id.slice(0, cut)
+}
+
+/** Vertical room of one group label on the canvas: under it, down to the next label. */
+interface Band {
+  top: number
+  /** Last y a block's bottom edge may reach; `Infinity` for the lowest group. */
+  bottom: number
+}
+
+/**
  * Positions for `model` that keep every position in `previous` (R12: new sessions never move
- * blocks already placed, by the user or an earlier layout). A new node of a known family goes
- * next to its parent, predecessor or child, then down to the first free row; whole new
- * families are laid out as a block under everything already placed.
+ * blocks already placed, by the user or an earlier layout). Everything new is placed inside
+ * its own project group's band (from under its label down to the next group's label), so it
+ * never lands under another project's heading:
+ * - a new node of a known family goes next to its parent (next column, under its last
+ *   sibling), predecessor or child, at the nearest free row of that column inside the band,
+ *   else in the next column to the right that has one;
+ * - a whole new family (or a single, with Show all) goes at the first free spot of its band,
+ *   scanning columns left to right and rows top to bottom; a family taller than the band is
+ *   laid out under everything with a continuation label for its project;
+ * - families of a project that has no group yet are laid out under everything, labelled.
+ * Deterministic: the same inputs give the same positions.
  */
 export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, model: GraphModel, spec: LayoutSpec): LayoutResult {
   if (!previous || previous.size === 0) {
@@ -256,22 +284,135 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
   const shown = new Set(families.flatMap(family => family.nodeIds))
   const step = spec.nodeHeight + spec.rowGap
   const column = spec.nodeWidth + spec.columnGap
+  // Blocks keep half a gap clear on each side, so a new block never touches a neighbour.
+  const clearX = spec.columnGap / 2
+  const clearY = spec.rowGap / 2
 
-  const occupied = (): Rect[] =>
+  const blockRects = (): Rect[] =>
     [...positions]
-      .filter(([id]) => shown.has(id) || id.startsWith(GROUP_PREFIX))
+      .filter(([id]) => shown.has(id))
       .map(([id, point]) => rectOf(id, point, spec))
+      .map(rect => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY }))
+
+  const labelEntries = (): [string, Point][] =>
+    [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b))
+
+  const occupied = (): Rect[] => [...blockRects(), ...labelEntries().map(([id, point]) => rectOf(id, point, spec))]
 
   const bottomOf = (rects: Rect[]) => Math.max(0, ...rects.map(rect => rect.y + rect.height))
 
-  const freeRow = (x: number, y: number, rects: Rect[]): Point => {
-    let candidate = { x, y }
+  const bandUnder = (labelY: number, labels: [string, Point][]): Band => {
+    const next = labels.find(([, point]) => point.y > labelY)
 
-    while (rects.some(rect => overlaps(rect, rectOf('', candidate, spec)))) {
-      candidate = { x, y: candidate.y + step }
+    return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : Infinity }
+  }
+
+  /** The band of `key`'s group holding `anchorY` (its lowest label at or above it), else its first. */
+  const bandOf = (key: string, anchorY?: number): Band | undefined => {
+    const labels = labelEntries()
+    const own = labels.filter(([id]) => labelGroup(id) === key)
+
+    if (own.length === 0) {
+      // No label for this group: the band the anchor sits in, between whatever labels surround it.
+      if (anchorY === undefined) {
+        return undefined
+      }
+
+      const above = labels.filter(([, point]) => point.y <= anchorY).pop()
+
+      return above ? bandUnder(above[1].y, labels) : { top: -Infinity, bottom: labels[0] ? labels[0][1].y - spec.rowGap : Infinity }
     }
 
-    return candidate
+    const pick = anchorY === undefined ? own[0] : (own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0])
+
+    return bandUnder(pick[1].y, labels)
+  }
+
+  /**
+   * The first origin (columns from `x0` rightwards, rows in `rowsFor(column)` order) where every
+   * block of `shape` (offsets from the origin; the shape's height is `height`) is inside `band`
+   * and clear of every other block and label.
+   */
+  const findSpot = (shape: readonly Point[], height: number, band: Band, x0: number, rowsFor: (top: number, bottom: number) => number[]): Point | undefined => {
+    const all = occupied()
+    const lowest = band.bottom === Infinity ? Math.max(band.top, bottomOf(all)) + step + height : band.bottom
+    const top = band.top === -Infinity ? Math.min(0, ...all.map(rect => rect.y)) : band.top
+    const maxTop = lowest - height
+
+    if (maxTop < top) {
+      return undefined
+    }
+
+    // Only what reaches into the band's height can collide.
+    const near = all.filter(rect => rect.y < lowest && rect.y + rect.height > top)
+    const right = Math.max(x0, ...near.map(rect => rect.x + rect.width))
+    const rows = rowsFor(top, maxTop)
+
+    // Once x passes `right`, nothing in the band is to the right of it: the loop always ends there.
+    for (let x = x0; x <= right + column; x += column) {
+      for (const y of rows) {
+        const free = shape.every(point => {
+          const rect = rectOf('', { x: x + point.x, y: y + point.y }, spec)
+
+          return !near.some(other => overlaps(other, rect))
+        })
+
+        if (free) {
+          return { x, y }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  /** Rows of one column, nearest to `start` first: down from it, then up. */
+  const rowsNear = (start: number) => (top: number, maxTop: number): number[] => {
+    const first = Math.min(maxTop, Math.max(top, start))
+    const rows: number[] = []
+
+    for (let y = first; y <= maxTop; y += step) {
+      rows.push(y)
+    }
+
+    for (let y = first - step; y >= top; y -= step) {
+      rows.push(y)
+    }
+
+    rows.push(top, maxTop)
+
+    return [...new Set(rows)]
+  }
+
+  /** Rows top to bottom, on the band's grid. */
+  const rowsDown = (top: number, maxTop: number): number[] => {
+    const rows: number[] = []
+
+    for (let y = top; y <= maxTop; y += step) {
+      rows.push(y)
+    }
+
+    rows.push(maxTop)
+
+    return [...new Set(rows)]
+  }
+
+  /** A family too tall for its band: under everything, under a continuation label. */
+  const continueGroup = (key: string, local: ReadonlyMap<string, Point>) => {
+    let n = 1
+
+    while (positions.has(`${key}${CONTINUATION}${n}`)) {
+      n += 1
+    }
+
+    const labelId = `${key}${CONTINUATION}${n}`
+    const top = bottomOf(occupied()) + spec.groupGap
+
+    positions.set(labelId, { x: 0, y: top })
+
+    for (const [id, point] of local) {
+      positions.set(id, { x: point.x, y: point.y + top + spec.labelHeight })
+    }
   }
 
   const newFamilies: Family[] = []
@@ -282,16 +423,18 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
       continue
     }
 
+    const key = groupKey(family.projectId)
+
     // Family members come in creation order: parents before children, predecessors first.
     for (const id of family.nodeIds) {
       if (positions.has(id)) {
         continue
       }
 
-      const rects = occupied()
       const parent = model.parentOf.get(id)
       const predecessor = model.continuedFrom.get(id)
       const child = (model.childrenOf.get(id) ?? []).find(kid => positions.has(kid))
+      let anchor: Point | undefined
       let start: Point
 
       if (parent && positions.has(parent)) {
@@ -299,27 +442,73 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
         const siblings = (model.childrenOf.get(parent) ?? []).filter(kid => kid !== id && positions.has(kid))
         const below = siblings.length > 0 ? Math.max(...siblings.map(kid => positions.get(kid)!.y)) + step : p.y
 
+        anchor = p
         start = { x: p.x + column, y: below }
       } else if (predecessor && positions.has(predecessor)) {
         const p = positions.get(predecessor)!
 
+        anchor = p
         start = { x: p.x, y: p.y + step + spec.treeGap }
       } else if (child) {
         const c = positions.get(child)!
 
+        anchor = c
         start = { x: c.x - column, y: c.y }
       } else {
-        start = { x: 0, y: bottomOf(rects) + spec.familyGap }
+        // Its relatives are not placed (or not shown): anywhere free in the family's band.
+        anchor = family.nodeIds.map(other => positions.get(other)).find((point): point is Point => Boolean(point))
+        start = { x: 0, y: anchor?.y ?? 0 }
       }
 
-      positions.set(id, freeRow(start.x, start.y, rects))
+      const band = bandOf(key, anchor?.y)
+      const spot = band ? findSpot([{ x: 0, y: 0 }], spec.nodeHeight, band, start.x, rowsNear(start.y)) : undefined
+
+      if (spot) {
+        positions.set(id, spot)
+      } else {
+        continueGroup(key, new Map([[id, { x: 0, y: 0 }]]))
+      }
     }
   }
 
-  if (newFamilies.length > 0) {
+  // New families of groups that already have a label: inside that group's band.
+  const unlabelled: Family[] = []
+
+  for (const family of newFamilies) {
+    const key = groupKey(family.projectId)
+    const band = bandOf(key)
+
+    if (!band) {
+      unlabelled.push(family)
+      continue
+    }
+
+    const local =
+      family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }
+    const ids = [...local.positions.keys()]
+    const spot = findSpot(
+      ids.map(id => local.positions.get(id)!),
+      local.height,
+      band,
+      0,
+      rowsDown
+    )
+
+    if (spot) {
+      for (const id of ids) {
+        const point = local.positions.get(id)!
+
+        positions.set(id, { x: point.x + spot.x, y: point.y + spot.y })
+      }
+    } else {
+      continueGroup(key, local.positions)
+    }
+  }
+
+  // Families of projects with no group on the canvas yet: a labelled block under everything.
+  if (unlabelled.length > 0) {
     const top = bottomOf(occupied()) + spec.groupGap
-    const labelled = new Set([...positions.keys()].filter(id => id.startsWith(GROUP_PREFIX)))
-    const block = layoutFamilies(model, newFamilies, spec, top, labelled)
+    const block = layoutFamilies(model, unlabelled, spec, top)
 
     for (const [id, point] of block.positions) {
       positions.set(id, point)
@@ -329,14 +518,14 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
   // A group whose families were all placed before it had a label (its project only became
   // known later): label it above its topmost block when that spot is free.
   for (const family of families) {
-    const key = groupKey(family.projectId === NO_PROJECT_ID ? undefined : family.projectId)
+    const key = groupKey(family.projectId)
 
     if (positions.has(key)) {
       continue
     }
 
     const members = families
-      .filter(other => (other.projectId ?? NO_PROJECT_ID) === (family.projectId ?? NO_PROJECT_ID))
+      .filter(other => groupKey(other.projectId) === key)
       .flatMap(other => other.nodeIds)
       .map(id => positions.get(id))
       .filter((point): point is Point => Boolean(point))
@@ -344,19 +533,20 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
 
     if (topmost) {
       const spot = { x: topmost.x, y: topmost.y - spec.labelHeight }
+      const label = rectOf(key, spot, spec)
 
-      if (!occupied().some(rect => overlaps(rect, rectOf(key, spot, spec)))) {
+      if (![...positions].filter(([id]) => shown.has(id) || id.startsWith(GROUP_PREFIX)).some(([id, point]) => overlaps(rectOf(id, point, spec), label))) {
         positions.set(key, spot)
       }
     }
   }
 
   // Labels of groups that still have blocks on the canvas.
-  const present = new Set(families.map(family => groupKey(family.projectId === NO_PROJECT_ID ? undefined : family.projectId)))
+  const present = new Set(families.map(family => groupKey(family.projectId)))
   const labels = [...positions.keys()]
-    .filter(id => id.startsWith(GROUP_PREFIX) && present.has(id))
+    .filter(id => id.startsWith(GROUP_PREFIX) && present.has(labelGroup(id)))
     .map(id => {
-      const projectId = id.slice(GROUP_PREFIX.length)
+      const projectId = labelGroup(id).slice(GROUP_PREFIX.length)
 
       return { id, projectId: projectId === NO_PROJECT_ID ? undefined : projectId }
     })

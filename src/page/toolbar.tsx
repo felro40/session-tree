@@ -115,7 +115,16 @@ export function Toolbar(props: ToolbarProps) {
           data-testid="session-tree-profile"
           aria-label="Profile"
           value={props.profile}
-          onChange={event => props.onProfile(event.target.value)}
+          onChange={event => {
+            // Hand the keyboard back: a focused <select> swallows Space, so it would not pan (R3).
+            event.currentTarget.blur()
+            props.onProfile(event.target.value)
+          }}
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.currentTarget.blur()
+            }
+          }}
         >
           {props.profiles.map(name => (
             <option key={name} value={name}>

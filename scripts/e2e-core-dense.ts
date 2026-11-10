@@ -228,6 +228,67 @@ async function waitCanvasCount(page: Page, count: number, timeout = 30_000): Pro
   )
 }
 
+interface BandPlacement {
+  block: { x: number; y: number; w: number; h: number }
+  project: string
+  label: null | string
+  top: null | number
+  nextLabel: null | string
+  bottom: null | number
+  overlaps: string[]
+}
+
+/**
+ * Where block `id` sits relative to its project group (B1), in flow coordinates from React
+ * Flow's own transforms: its group label (the lowest label of its project at or above it), the
+ * band under that label down to the next group's label, and every node rectangle it overlaps.
+ */
+async function bandPlacement(page: Page, id: string): Promise<BandPlacement> {
+  return page.evaluate(target => {
+    const nodes = [...document.querySelectorAll('.react-flow__node')].map(element => {
+      const match = /translate\(([-\d.e]+)px,\s*([-\d.e]+)px\)/.exec((element as HTMLElement).style.transform)
+
+      return {
+        id: element.getAttribute('data-id') ?? '',
+        x: Number(match?.[1]),
+        y: Number(match?.[2]),
+        w: (element as HTMLElement).offsetWidth,
+        h: (element as HTMLElement).offsetHeight
+      }
+    })
+    const labels = nodes.filter(node => node.id.startsWith('group:')).sort((a, b) => a.y - b.y)
+    const block = nodes.find(node => node.id === target)!
+    const project = document.querySelector(`[data-session-id="${target}"]`)?.getAttribute('data-project-id') || '__no_project__'
+    // A continuation label of a group is `group:<project>` + U+001F + n.
+    const own = labels.filter(label => label.id.split('\u001f')[0] === `group:${project}`)
+    const label = own.filter(item => item.y <= block.y).pop()
+    const next = label ? labels.find(item => item.y > label.y) : undefined
+    const overlaps = nodes
+      .filter(node => node.id !== target && node.x < block.x + block.w && block.x < node.x + node.w && node.y < block.y + block.h && block.y < node.y + node.h)
+      .map(node => node.id)
+
+    return {
+      block: { x: block.x, y: block.y, w: block.w, h: block.h },
+      project,
+      label: label?.id ?? null,
+      top: label ? label.y + label.h : null,
+      nextLabel: next?.id ?? null,
+      bottom: next ? next.y : null,
+      overlaps
+    }
+  }, id)
+}
+
+function assertInBand(placement: BandPlacement, id: string): void {
+  assert(placement.label && placement.top !== null, `${id}: no group label of its project (${placement.project}) above it`)
+  assert(placement.block.y >= placement.top, `${id} at y ${placement.block.y} is above its band (${placement.top})`)
+  assert(
+    placement.bottom === null || placement.block.y + placement.block.h <= placement.bottom,
+    `${id} (y ${placement.block.y}..${placement.block.y + placement.block.h}) reaches under the next label ${placement.nextLabel} (y ${placement.bottom})`
+  )
+  assert(placement.overlaps.length === 0, `${id} overlaps ${placement.overlaps.join(', ')}`)
+}
+
 /** Block background vs the theme variable it must come from, resolved in place. */
 async function themeProbe(page: Page) {
   return page.evaluate(() => {
@@ -466,6 +527,37 @@ async function main(): Promise<void> {
       return { pan: { x: after.x - before.x, y: after.y - before.y } }
     })
 
+    await check('R3: Space + left-drag that starts on a block pans; the block does not move (NB2)', async () => {
+      const block = await box(page, BLOCK('st-sys-tip'))
+      const start = { x: block.x + 40, y: block.y + block.height / 2 }
+      const before = await viewport(page)
+      const position = await flowPosition(page, 'st-sys-tip')
+
+      await page.mouse.move(start.x, start.y)
+      await page.keyboard.down('Space')
+      await page.waitForTimeout(100)
+      await drag(page, start, { x: 100, y: 60 })
+      await page.keyboard.up('Space')
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+      const moved = await flowPosition(page, 'st-sys-tip')
+
+      assert(near(after.x - before.x, 100, 3) && near(after.y - before.y, 60, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+      assert(moved.x === position.x && moved.y === position.y, `block moved ${moved.x - position.x},${moved.y - position.y}`)
+      // Space released: the block drags again.
+      const again = await box(page, BLOCK('st-sys-tip'))
+
+      await drag(page, { x: again.x + 40, y: again.y + again.height / 2 }, { x: 0, y: 64 })
+      await page.waitForTimeout(300)
+      const dragged = await flowPosition(page, 'st-sys-tip')
+
+      assert(dragged.y > position.y + 30, `no block drag after Space: ${dragged.y - position.y}`)
+      await clickToolbar(page, 'session-tree-rearrange')
+      await page.waitForTimeout(300)
+
+      return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
+    })
+
     await check('R4: snap on — a visible dot grid, the dropped position is a multiple of the grid; snap off — free', async () => {
       await clickToolbar(page, 'session-tree-snap')
       assert((await page.getAttribute('[data-testid="session-tree-snap"]', 'aria-pressed')) === 'true', 'snap not pressed')
@@ -636,6 +728,56 @@ async function main(): Promise<void> {
       return look
     })
 
+    await check('R9: toggling Show archived keeps the canvas mounted — viewport, selection and inspector persist, no "Loading sessions…" (NB4)', async () => {
+      await page.locator(BLOCK('st-sys-tip')).click()
+      await page.locator('[data-testid="session-tree-inspector"][data-selected-id="st-sys-tip"]').waitFor({ timeout: 5000 })
+      const spot = await emptySpot(page)
+
+      await drag(page, spot, { x: 90, y: 50 }, { button: 'middle' })
+      await page.waitForTimeout(300)
+      const before = await viewport(page)
+
+      // Record any appearance of the loading state, however brief.
+      await page.evaluate(() => {
+        const w = window as unknown as { __stLoadingSeen: number; __stObserver?: MutationObserver }
+
+        w.__stLoadingSeen = document.querySelector('[data-testid="session-tree-loading"]') ? 1 : 0
+        w.__stObserver = new MutationObserver(() => {
+          if (document.querySelector('[data-testid="session-tree-loading"]')) {
+            w.__stLoadingSeen += 1
+          }
+        })
+        w.__stObserver.observe(document.body, { childList: true, subtree: true })
+      })
+      await clickToolbar(page, 'session-tree-show-archived')
+      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-archived-0"]').waitFor({ timeout: 15_000 })
+      const during = await viewport(page)
+
+      await clickToolbar(page, 'session-tree-show-archived')
+      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-archived-0"]').waitFor({ state: 'detached', timeout: 15_000 })
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+      const seen = await page.evaluate(() => {
+        const w = window as unknown as { __stLoadingSeen: number; __stObserver?: MutationObserver }
+
+        w.__stObserver?.disconnect()
+
+        return w.__stLoadingSeen
+      })
+      const selected = await page.getAttribute('[data-testid="session-tree-inspector"]', 'data-selected-id')
+
+      for (const [name, view] of [['archived on', during], ['archived off', after]] as const) {
+        assert(near(view.x, before.x, 1) && near(view.y, before.y, 1) && near(view.zoom, before.zoom, 0.001), `${name}: viewport ${JSON.stringify(before)} → ${JSON.stringify(view)}`)
+      }
+
+      assert(seen === 0, `"Loading sessions…" appeared ${seen} time(s)`)
+      assert(selected === 'st-sys-tip', `selection lost: ${selected}`)
+      assert(await page.locator('[data-testid="session-tree-inspector"]').isVisible(), 'inspector hidden')
+      await clickToolbar(page, 'session-tree-fit')
+
+      return { viewport: before, after, loadingSeen: seen, selected }
+    })
+
     await check('R10: the profile filter switches to another profile and to All profiles', async () => {
       await setProfile(page, 'work')
       await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-work-0000"]').waitFor({ timeout: 20_000 })
@@ -652,6 +794,31 @@ async function main(): Promise<void> {
       await page.locator(BLOCK('st-sys-tip')).waitFor({ timeout: 20_000 })
 
       return { work, all: both.length }
+    })
+
+    await check('R3: after choosing a profile, Space + left-drag on empty canvas pans (the select gives the keyboard back, NB5)', async () => {
+      await setProfile(page, 'work')
+      await page.locator('[data-testid="session-tree-singles"] [data-node-id="st-work-0000"]').waitFor({ timeout: 20_000 })
+      await setProfile(page, 'default')
+      await page.locator(BLOCK('st-sys-tip')).waitFor({ timeout: 20_000 })
+      await page.waitForTimeout(300)
+      const focused = await page.evaluate(() => document.activeElement?.tagName ?? '')
+      const spot = await emptySpot(page)
+      const before = await viewport(page)
+
+      await page.mouse.move(spot.x, spot.y)
+      await page.keyboard.down('Space')
+      await page.waitForTimeout(100)
+      await drag(page, spot, { x: 80, y: -50 })
+      await page.keyboard.up('Space')
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+
+      assert(focused !== 'SELECT', 'the profile select kept the focus')
+      assert(near(after.x - before.x, 80, 3) && near(after.y - before.y, -50, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+      await clickToolbar(page, 'session-tree-fit')
+
+      return { focused, pan: { x: after.x - before.x, y: after.y - before.y } }
     })
 
     await check('R5: in a project scope other projects are dimmed and read-only (no drag, menu, select, open) with the tooltip', async () => {
@@ -717,14 +884,16 @@ async function main(): Promise<void> {
       return { status: 'running', dot }
     })
 
-    await check('live refresh: a branch seeded while the page is open appears; existing blocks keep their positions', async () => {
+    await check('live refresh: seeded branches appear inside their own project band, overlap nothing; existing blocks keep their positions (B1)', async () => {
       // A user-placed block first, so "keeps positions" covers a dragged block too.
       const moved = await box(page, BLOCK('st-md-katex'))
 
       await drag(page, { x: moved.x + 30, y: moved.y + 10 }, { x: 60, y: 40 })
       await page.waitForTimeout(300)
       const before = await allFlowPositions(page)
-      const liveId = `st-live-${Date.now()}`
+      const stamp = Date.now()
+      const liveId = `st-live-${stamp}`
+      const sysLiveId = `st-live-sys-${stamp}`
       const seeded = seedFixtures(t, ['--branch', liveId, 'st-hp-root', 'Live refresh probe']) as { created: boolean }
       const started = Date.now()
 
@@ -739,9 +908,51 @@ async function main(): Promise<void> {
       assert(!(liveId in before), 'the live branch was drawn before it was seeded')
       assert(moves.length === 0, `blocks moved: ${JSON.stringify(moves)}`)
       assert((await page.getAttribute(`[data-testid="session-tree-link"][data-target="${liveId}"]`, 'data-source')) === 'st-hp-root', 'new branch not linked')
-      facts.liveRefreshMs = ms
+      const hp = await bandPlacement(page, liveId)
 
-      return { created: seeded.created, appearedAfterMs: ms, unchanged: Object.keys(before).length }
+      assert(hp.project === (await page.getAttribute(BLOCK('st-hp-root'), 'data-project-id')), `project ${hp.project}`)
+      assertInBand(hp, liveId)
+
+      // A second one, under the syscanvas tip (its column has no free row in the band).
+      const sysSeeded = seedFixtures(t, ['--branch', sysLiveId, 'st-sys-tip', 'Live refresh probe (syscanvas)']) as { created: boolean }
+
+      await page.locator(BLOCK(sysLiveId)).waitFor({ timeout: 30_000 })
+      await page.waitForTimeout(300)
+      const afterSys = await allFlowPositions(page)
+      const movesSys = Object.entries(after).filter(([id, point]) => point && afterSys[id] && (afterSys[id].x !== point.x || afterSys[id].y !== point.y))
+      const sys = await bandPlacement(page, sysLiveId)
+
+      assert(sysSeeded.created, 'the syscanvas live branch already existed')
+      assert(movesSys.length === 0, `blocks moved: ${JSON.stringify(movesSys)}`)
+      assert(sys.project === (await page.getAttribute(BLOCK('st-sys-tip'), 'data-project-id')), `project ${sys.project}`)
+      assertInBand(sys, sysLiveId)
+      await clickToolbar(page, 'session-tree-fit')
+      await page.screenshot({ path: join(shots, 'live-placement-all-light.png') })
+
+      // The syscanvas scope has its own layout: the new blocks land in its bands too.
+      await setScope(page, 'syscanvas')
+      const scoped = { hp: await bandPlacement(page, liveId), sys: await bandPlacement(page, sysLiveId) }
+
+      assertInBand(scoped.hp, `${liveId} (syscanvas scope)`)
+      assertInBand(scoped.sys, `${sysLiveId} (syscanvas scope)`)
+      await page.screenshot({ path: join(shots, 'live-placement-scope-light.png') })
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await page.waitForTimeout(600)
+      await page.screenshot({ path: join(shots, 'live-placement-scope-dark.png') })
+      await setScope(page, 'All')
+      await page.screenshot({ path: join(shots, 'live-placement-all-dark.png') })
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.waitForTimeout(500)
+      facts.liveRefreshMs = ms
+      facts.livePlacement = { hp, sys, scoped }
+
+      return {
+        created: seeded.created,
+        appearedAfterMs: ms,
+        unchanged: Object.keys(before).length,
+        hp: { at: hp.block, band: [hp.top, hp.bottom], label: hp.label },
+        sys: { at: sys.block, band: [sys.top, sys.bottom], label: sys.label }
+      }
     })
 
     await check('light/dark: blocks paint from the theme variables; screenshots of all projects and one project', async () => {

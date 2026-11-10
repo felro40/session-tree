@@ -76,6 +76,9 @@ function PageBody({ ctx }: { ctx: PluginContext }) {
   const sessions = useQuery({
     queryKey: ['session-tree', 'sessions', profile, showArchived],
     queryFn: () => fetchSessions(ctx, { profile, includeArchived: showArchived }),
+    // Show archived refetches with the same profile: keep the canvas (viewport, selection,
+    // inspector) on the previous rows until the new ones arrive. A new profile loads fresh.
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === profile ? previous : undefined),
     retry: false,
     refetchOnWindowFocus: false
   })

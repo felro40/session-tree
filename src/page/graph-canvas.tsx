@@ -59,6 +59,13 @@ interface Tooltip {
   nodeId: string
 }
 
+/** A form control or editable element: keys typed there are text, not canvas shortcuts. */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+
+  return Boolean(element?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
+}
+
 export function GraphCanvas(props: GraphCanvasProps) {
   const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onOpen, statusOf, snap, nowMs } = props
   const ctx = usePluginCtx()
@@ -67,6 +74,8 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const [menu, setMenu] = useState<MenuState>()
   const [tooltip, setTooltip] = useState<Tooltip>()
   const spaceDown = useRef(false)
+  // R3: while Space is held a left-drag pans from anywhere, also from a block (not a block drag).
+  const [spaceHeld, setSpaceHeld] = useState(false)
   const tooltipTimer = useRef<() => void>(undefined)
 
   const shown = useMemo(() => new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds)), [model, spec])
@@ -171,10 +180,12 @@ export function GraphCanvas(props: GraphCanvasProps) {
     return nodes
   }, [model, positions, labels, shown, style, spec, statusOf, lineage, selectedId, nowMs])
 
-  const nodes = useMemo(
-    () => (drag ? baseNodes.map(node => (drag.has(node.id) ? { ...node, position: drag.get(node.id)!, dragging: true } : node)) : baseNodes),
-    [baseNodes, drag]
-  )
+  const nodes = useMemo(() => {
+    const moved = drag ? baseNodes.map(node => (drag.has(node.id) ? { ...node, position: drag.get(node.id)!, dragging: true } : node)) : baseNodes
+
+    // A non-draggable block has no `nopan` class, so React Flow's Space pan starts on it too.
+    return spaceHeld ? moved.map(node => (node.draggable ? { ...node, draggable: false } : node)) : moved
+  }, [baseNodes, drag, spaceHeld])
 
   const edges = useMemo<FlowEdge[]>(
     () =>
@@ -368,17 +379,22 @@ export function GraphCanvas(props: GraphCanvasProps) {
         true
       ),
       ctx.addEventListener(window, 'keydown', event => {
-        if ((event as KeyboardEvent).code === 'Space') {
+        // Typing a space in a text field (or on a focused control) is not the pan key, as in
+        // React Flow's own key handling.
+        if ((event as KeyboardEvent).code === 'Space' && !isTypingTarget(event.target)) {
           spaceDown.current = true
+          setSpaceHeld(true)
         }
       }),
       ctx.addEventListener(window, 'keyup', event => {
         if ((event as KeyboardEvent).code === 'Space') {
           spaceDown.current = false
+          setSpaceHeld(false)
         }
       }),
       ctx.addEventListener(window, 'blur', () => {
         spaceDown.current = false
+        setSpaceHeld(false)
       })
     ]
 
