@@ -167,6 +167,7 @@ export const SubwayStandin = memo(function SubwayStandin({ data }: NodeProps<Sub
       data-missing-id={node.missingId}
       data-track={env?.plan().track.get(node.id)?.id}
       data-label-spot={spot}
+      data-label-clear={placed ? String(placed.clear) : undefined}
       data-out-of-scope={node.outOfScope ? 'true' : undefined}
       style={{ width: STATION_W, height: STATION_H }}
     >

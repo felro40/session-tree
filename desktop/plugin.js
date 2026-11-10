@@ -10401,7 +10401,7 @@ var SubwayStation = memo6(function({ data, selected: selected2 }) {
     }
   );
 }), SubwayStandin = memo6(function({ data }) {
-  let { node } = data, env = useSubwayEnv(), spot = useLabelSpot(node.id)?.spot ?? "above", children2 = env?.model.childrenOf.get(node.id)?.length ?? 0;
+  let { node } = data, env = useSubwayEnv(), placed = useLabelSpot(node.id), spot = placed?.spot ?? "above", children2 = env?.model.childrenOf.get(node.id)?.length ?? 0;
   return /* @__PURE__ */ jsxs8(
     "div",
     {
@@ -10411,6 +10411,7 @@ var SubwayStation = memo6(function({ data, selected: selected2 }) {
       "data-missing-id": node.missingId,
       "data-track": env?.plan().track.get(node.id)?.id,
       "data-label-spot": spot,
+      "data-label-clear": placed ? String(placed.clear) : void 0,
       "data-out-of-scope": node.outOfScope ? "true" : void 0,
       style: { width: 40, height: 20 },
       children: [
