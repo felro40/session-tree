@@ -951,3 +951,107 @@ All three new unit tests (and the extended failure classification) fail on `b567
   builds and to the committed file (sha256 `f843934a…2725154d`). No new dependency.
 - lint 0; build 0; `npm test` 205/205 (was 171); `test:py` 177 (unchanged, no backend change);
   `test:e2e` 120/120 — foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 21 (new).
+
+## Fix r1 (card 5) — idle freeze every 60 s (B1) + NB1–NB5
+
+Measured 2026-11-10 by the card-5 fix coder, same isolated homes and ports (19350–19354), fresh
+homes (`scripts/test-hermes reset`, then `npm run test:e2e`). Fix start commit `ddb396b`
+(`git status --short` empty); code commit `3d7757e`, docs commit after it. Where this section
+disagrees with the card-5 sections above, this section is current.
+
+### B1 — no re-layout and no re-route on the minute tick
+
+- **Cause (review r1):** the page's `frameLayout` memo depended on `nowMs` (a 60 s tick), so every
+  tick gave a new positions map, the canvas rebuilt its rectangles and `routeLinks` ran the A*
+  detour over every block: 611 ms and 706 ms long tasks exactly 60 s apart on the 500 fixture
+  (reviewer), against 1–2 ms for the layout itself.
+- **Fix (`src/page/frame-cache.ts`):** the page holds one frame cache. It recomputes the layout
+  only when the style, the model, Show all, the collapsed lanes (by content), the local day of now
+  or the offset at now changes; otherwise it returns the previous layout object. A recompute whose
+  positions / shown set equal the previous ones reuses the previous map / set (defence in depth).
+  The canvas keys its shown set on `frameLayout.shown` (not the layout object). The layout's
+  `nowMs` (future clamp) is the one captured at the recompute; the now line and pill follow the
+  live clock through `swimNowX` (same mapping, from today's local midnights). Dense is unchanged.
+- **Unit (`tests/js/frame-cache.test.ts`, 5 tests):** +1 min, +2 min, +5 h, +14 h 59 min in the same
+  local day → the same layout object, `positions` `===`, `compute` ran once, and a canvas memo chain
+  with a counting router routed no link again; across local midnight → recomputed once; a new
+  offset at now (DST) → recomputed; Show all / collapsed lanes → recomputed; the same rows as a new
+  model → recomputed, positions and shown set reused (`===`); control: computing on every tick (the
+  `ddb396b` behaviour) gives a new map and routes every link twice.
+- **e2e (`scripts/e2e-swimlanes.ts`, real 60 s tick, no clock hook):** profile `scale`, Swimlanes,
+  first render settled + 3 s, then 66 s idle with `PerformanceObserver('longtask')` and a
+  MutationObserver on the now pill (`data-now-x`, which only changes on a tick while idle):
+  - Show all off: **1 tick, 0 long tasks** (window 66 003 ms; the marker moved 770.4229 → 770.4521 px);
+  - Show all on (500 blocks): **1 tick, 0 long tasks** (66 002 ms; 649.4521 → 649.4812 px).
+  The check asserts ≥ 1 tick and no task ≥ 200 ms. (The development run before it: the same, 0
+  long tasks in both windows.) Reviewer at `ddb396b`: 611 / 706 ms (Show all off), 473 ms (on).
+
+### NB1 — ghost column and chips
+
+- The scope ghost sits 40 px (`GHOST_GAP`) left of the scoped lane's leftmost block, and never in
+  the day window (`x = min(0, leftmost) − 40 − 170`); the chips' x comes from the blocks of
+  expanded lanes only. Unit tests (fixture scope, a minimal two-project family, a collapsed far-right
+  lane); invariants still hold; the existing ghost e2e (dimmed, read-only) still passes.
+- e2e (1440 × 900): mdesign scope fits at **58.0 %** (reviewer at `ddb396b`: 43 %); ghost right edge
+  541.6 px = first tick 564.8 − 40 × 0.580.
+
+### NB2 — now pill vs today's label
+
+- The pill is centred on the line unless that would cover today's tick label; then it sits 4 px
+  right of the label (measured in a layout effect, written to the pill only; `data-shifted`).
+- e2e: no bounding-box intersection at the fit zoom (0.637) and at the minimum zoom (0.30, where a
+  day column is narrower than label + pill, so the shift path runs: `data-shifted=true`).
+
+### NB3 — header totals at small heights
+
+- A lane shorter on screen than a block (54 px) keeps one compact line `N sessions · T tok`
+  (`data-compact`). e2e: every expanded header's totals line is inside its header at zoom 0.637
+  and 0.30 (2 compact headers at 0.30).
+
+### NB4 — DST
+
+- The layout takes an offset *function* (`offsetAt(ms)`; the page passes `browserOffsetAt`); each
+  timestamp's local day uses its own offset, a local day runs midnight to midnight (23/25 h on a DST
+  change). Unit tests: the reviewer's repro (now 2026-11-05 12:00 EST, start Sat Oct 31 00:30 EDT)
+  is in **Sat 31** with an injected New York function and with `TZ=America/New_York` +
+  `browserOffsetAt` (the old fixed −300 puts it in Fri 30, kept as a control); x monotonic through
+  the repeated hour of Nov 1; the live now mapping equals a fresh layout's. The B1 offset key is the
+  offset at now.
+
+### NB5 — singles popover
+
+- Opens below the chip, or above it when there is less room below than the list needs and more
+  above; height capped to the room on that side (`popoverPlacement` in `spec.ts`, unit-tested).
+- e2e: a chip at y 110 opens below (131–309); the Home chip panned to 824–840 opens above
+  (641–818); both inside the canvas, neither clipped.
+
+### 500-session fixture (final run, fresh homes, `3d7757e`)
+
+- **Swimlanes** (Show all): first render **507 ms**, pan **123 frames / 2004 ms = 61.4 fps**
+  (development run: 580 ms / 61.4 fps).
+- **Dense** (Show all), new check at the end of the swimlanes suite: **340 ms, 60.9 fps** (122 /
+  2003 ms); core-dense's own check: 314 ms, 60.9 fps.
+
+### No position writes
+
+- Unchanged and still proven by the e2e network log: over the whole Swimlanes period the only state
+  writes were `PATCH /settings` (style switches) and the Move's `POST /state/forget`; Dense →
+  Swimlanes → Dense left all 20 stored Dense entries exact and no `swimlanes` layout. The frame
+  cache is page state only; nothing new reaches the store.
+
+### Deviations
+
+- NB1: the ghost goes "just left of the leftmost block" *or* just left of the first day column when
+  the lane's leftmost block is inside the window — a ghost has no time, so it never sits on a day.
+- NB2: the pill moves right of today's label rather than stacking (the 26 px axis has no room for
+  two rows); the line itself stays exact.
+- B1: the e2e's new Dense measurement runs last in the swimlanes suite (Dense saves its scale
+  layout, which the suite's no-write check must not see).
+
+### Gates, bundle and numbers (code commit `3d7757e`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 600 383 bytes** (64 esbuild inputs; was 594 924), byte-identical over two
+  builds and to the committed file (sha256 `e146702a…30cb3375`). Imports: `@hermes/plugin-sdk`,
+  `react`, `react/jsx-runtime` only; no `eval(` / `new Function`. No new dependency.
+- lint 0; build 0; `npm test` 217/217 (was 205); `test:py` 177 (unchanged); `test:e2e` 124/124 —
+  foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 25 (was 21).
