@@ -90,6 +90,59 @@ function layoutOf(state: StateSnapshot, style = 'dense', scope = 'all'): Record<
   return Object.fromEntries(Object.entries(state.layouts[style]?.[scope] ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 }
 
+/**
+ * The layout key the store keeps a block under (card-4 review B2): a compacted conversation's
+ * lineage root, else the block's own id (the fixture's two compacted blocks).
+ */
+const LAYOUT_KEY: Record<string, string> = { 'st-sys-tip': 'st-sys-root', 'st-sys-seg5': 'st-sys-root', 'st-md-tip': 'st-md-root' }
+const key = (id: string) => LAYOUT_KEY[id] ?? id
+/** The block a stored key draws (the live tip of a compacted conversation). */
+let blockOfKey: Record<string, string> = { 'st-sys-root': 'st-sys-tip', 'st-md-root': 'st-md-tip' }
+const blockOf = (stored: string) => blockOfKey[stored] ?? stored
+
+/** Ops queued in this page's device queue (every window's slot, `layoutPending.v2`). */
+async function queuedOps(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const name = Object.keys(localStorage).find(each => each.includes('session-tree') && each.includes('layoutPending.v2'))
+    const raw = name ? (JSON.parse(localStorage.getItem(name) ?? 'null') as { slots?: Record<string, { ops: unknown[] }> } | null) : null
+
+    return raw?.slots ? Object.values(raw.slots).reduce((sum, slot) => sum + slot.ops.length, 0) : -1
+  })
+}
+
+/** Records every `host.notify` the page makes (wraps the SDK's `host` before any plugin loads). */
+async function recordNotices(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __stNotices: unknown[]; __HERMES_PLUGIN_SDK__?: unknown }
+    let sdk: unknown
+
+    w.__stNotices = []
+    Object.defineProperty(window, '__HERMES_PLUGIN_SDK__', {
+      configurable: true,
+      get: () => sdk,
+      set(value: { host?: { notify?: (...args: unknown[]) => unknown; __stWrapped?: boolean } }) {
+        sdk = value
+        const host = value?.host
+
+        if (host?.notify && !host.__stWrapped) {
+          const original = host.notify
+
+          host.notify = function (...args: unknown[]) {
+            w.__stNotices.push(args[0])
+
+            return original.apply(this, args)
+          }
+          host.__stWrapped = true
+        }
+      }
+    })
+  })
+}
+
+async function notices(page: Page): Promise<{ kind?: string; title?: string; message?: string }[]> {
+  return page.evaluate(() => (window as unknown as { __stNotices?: unknown[] }).__stNotices ?? []) as never
+}
+
 async function waitFor<T>(what: string, probe: () => Promise<T>, ok: (value: T) => boolean, timeoutMs = 20_000, everyMs = 200): Promise<T> {
   const deadline = Date.now() + timeoutMs
   let last: T = await probe()
@@ -265,6 +318,8 @@ async function main(): Promise<void> {
   assert(manifest.seeded === true, 'the sync home was not freshly seeded')
   const a = await launch({ colorScheme: 'light' })
   const b = await addContext(a)
+
+  await recordNotices(a.page)
   const logA = stateLog(a.page)
   const logB = stateLog(b.page)
   const stacks: { page: string; stack: string }[] = []
@@ -306,8 +361,10 @@ async function main(): Promise<void> {
 
       assert(first.every(entry => entry.path.startsWith('/state/positions') && entry.body?.includes('"mode":"if_absent"')), `unexpected saves ${JSON.stringify(first.map(e => e.path))}`)
       for (const id of ['st-sys-tip', 'st-hp-root', 'st-md-tip']) {
-        assert(near(await flowPos(a.page, id), layout[id]) && near(await flowPos(b.page, id), layout[id]), `${id} differs from the store`)
+        assert(near(await flowPos(a.page, id), layout[key(id)]) && near(await flowPos(b.page, id), layout[key(id)]), `${id} differs from the store`)
       }
+
+      assert(!('st-sys-tip' in layout) && !('st-md-tip' in layout), `a compacted block stored under its tip id: ${Object.keys(layout).join(', ')}`)
 
       const before = saves(logA).length + saves(logB).length
 
@@ -338,9 +395,9 @@ async function main(): Promise<void> {
       })
       const upAt = await a.page.evaluate(() => (window as unknown as { __stUp?: number }).__stUp ?? Date.now())
       const dropped = await flowPos(a.page, 'st-sys-tip')
-      const state = await waitFor('the drop stored', () => stored(a), value => near(layoutOf(value)['st-sys-tip'], dropped))
+      const state = await waitFor('the drop stored', () => stored(a), value => near(layoutOf(value)[key('st-sys-tip')], dropped))
       const during = saves(logA, downAt, upAt)
-      const after = saves(logA, upAt).filter(entry => entry.body?.includes('st-sys-tip'))
+      const after = saves(logA, upAt).filter(entry => entry.body?.includes(key('st-sys-tip')))
 
       assert(during.length === 0, `saved during the drag: ${JSON.stringify(during)}`)
       assert(after.length === 1 && after[0].body?.includes('"mode":"set"'), `saves after the drop: ${JSON.stringify(after)}`)
@@ -350,7 +407,7 @@ async function main(): Promise<void> {
       const reloaded = await flowPos(a.page, 'st-sys-tip')
 
       assert(!near(before, dropped), 'the drag did not move the block')
-      assert(near(reloaded, layoutOf(state)['st-sys-tip']), `after reload ${JSON.stringify(reloaded)} vs stored ${JSON.stringify(layoutOf(state)['st-sys-tip'])}`)
+      assert(near(reloaded, layoutOf(state)[key('st-sys-tip')]), `after reload ${JSON.stringify(reloaded)} vs stored ${JSON.stringify(layoutOf(state)[key('st-sys-tip')])}`)
       facts.dragSave = { debounceMs: after[0].at - upAt, duringDrag: during.length }
 
       return { before, dropped, reloaded, savedAfterMs: after[0].at - upAt, savesDuringDrag: during.length }
@@ -363,7 +420,7 @@ async function main(): Promise<void> {
       await dragBlock(a.page, 'st-md-tip', { x: 120, y: -60 })
       const target = await flowPos(a.page, 'st-md-tip')
       // When the server has it (polled every 50 ms): the push goes out right then.
-      await waitFor('A\'s drop stored', () => stored(a), value => value.rev > revBefore && near(layoutOf(value)['st-md-tip'], target), 10_000, 50)
+      await waitFor('A\'s drop stored', () => stored(a), value => value.rev > revBefore && near(layoutOf(value)[key('st-md-tip')], target), 10_000, 50)
       const savedAt = Date.now()
       const seen = await waitFor('B shows it', () => flowPos(b.page, 'st-md-tip'), pos => near(pos, target), 8000, 50)
       const latency = Date.now() - savedAt
@@ -481,8 +538,8 @@ async function main(): Promise<void> {
       await waitFor('A follows', () => pageStyle(a.page), style => style === 'e2e-alt', 8000)
       // Positions are per style: the e2e-alt layout is its own (wider spacing).
       const state = await waitFor('the e2e-alt layout stored', () => stored(b), value => Object.keys(layoutOf(value, 'e2e-alt')).length > 10)
-      const dense = layoutOf(state, 'dense')['st-sys-tip']
-      const alt = layoutOf(state, 'e2e-alt')['st-sys-tip']
+      const dense = layoutOf(state, 'dense')[key('st-sys-tip')]
+      const alt = layoutOf(state, 'e2e-alt')[key('st-sys-tip')]
 
       await switchStyle(b.page, 'dense')
       await waitFor('synced dense', () => stored(b), value => value.settings.style === 'dense')
@@ -497,7 +554,7 @@ async function main(): Promise<void> {
     await check('Re-arrange resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
       await fit(a.page)
       const before = layoutOf(await stored(a))
-      const moved = before['st-sys-tip']
+      const moved = before[key('st-sys-tip')]
 
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
       await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ timeout: 5000 })
@@ -505,14 +562,14 @@ async function main(): Promise<void> {
       const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
         const layout = layoutOf(value)
 
-        return Boolean(layout['st-sys-tip']) && !near(layout['st-sys-tip'], moved)
+        return Boolean(layout[key('st-sys-tip')]) && !near(layout[key('st-sys-tip')], moved)
       })
-      const freshTip = layoutOf(fresh)['st-sys-tip']
+      const freshTip = layoutOf(fresh)[key('st-sys-tip')]
 
       await waitFor('A re-arranged', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, freshTip))
       await waitFor('B re-arranged', () => flowPos(b.page, 'st-sys-tip'), pos => near(pos, freshTip), 8000)
       await a.page.locator('[data-testid="session-tree-undo"]').click()
-      const restored = await waitFor('restored in the store', () => stored(a), value => near(layoutOf(value)['st-sys-tip'], moved))
+      const restored = await waitFor('restored in the store', () => stored(a), value => near(layoutOf(value)[key('st-sys-tip')], moved))
       const restoredLayout = layoutOf(restored)
 
       await waitFor('A restored', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, moved))
@@ -522,7 +579,7 @@ async function main(): Promise<void> {
       assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
       assert(saves(logA).some(entry => entry.method === 'DELETE') && saves(logA).some(entry => entry.method === 'PUT'), 'no DELETE / PUT')
 
-      return { dragged: moved, rearranged: freshTip, restored: restoredLayout['st-sys-tip'], entries: Object.keys(before).length }
+      return { dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
     })
 
     await check('a new seeded session is placed without moving any stored block (every stored coordinate unchanged, in the store and on screen)', async () => {
@@ -530,7 +587,7 @@ async function main(): Promise<void> {
       const onScreen: Record<string, null | { x: number; y: number }> = {}
 
       for (const id of Object.keys(before).filter(id => !id.startsWith('group:'))) {
-        onScreen[id] = await flowPos(a.page, id)
+        onScreen[id] = await flowPos(a.page, blockOf(id))
       }
 
       seedFixtures(t, ['--branch', 'st-sync-new', 'st-sys-tip', 'Placed by the sync e2e'])
@@ -541,7 +598,7 @@ async function main(): Promise<void> {
       const movedOnScreen = []
 
       for (const [id, point] of Object.entries(onScreen)) {
-        if (point && !near(await flowPos(a.page, id), point, 0.01)) {
+        if (point && !near(await flowPos(a.page, blockOf(id)), point, 0.01)) {
           movedOnScreen.push(id)
         }
       }
@@ -564,7 +621,7 @@ async function main(): Promise<void> {
 
       await a.page.screenshot({ path: join(shots, 'sync-offline-banner.png') })
       assert(banner === 'offline: showing last saved layout', `banner "${banner}"`)
-      assert(near(cached, expected['st-sys-tip']), `not the cached layout: ${JSON.stringify(cached)} vs ${JSON.stringify(expected['st-sys-tip'])}`)
+      assert(near(cached, expected[key('st-sys-tip')]), `not the cached layout: ${JSON.stringify(cached)} vs ${JSON.stringify(expected[key('st-sys-tip')])}`)
       await a.page.unroute('**/api/plugins/session-tree/state**')
       await a.page.locator('[data-testid="session-tree-offline"]').waitFor({ state: 'detached', timeout: 20_000 })
 
@@ -589,11 +646,7 @@ async function main(): Promise<void> {
       const dropped = await flowPos(a.page, 'st-hp-root')
       const banner = await a.page.locator('[data-testid="session-tree-offline"]').waitFor({ timeout: 20_000 }).then(() => true, () => false)
       const stillThere = await flowPos(a.page, 'st-hp-root')
-      const pending = await a.page.evaluate(() => {
-        const key = Object.keys(localStorage).find(name => name.includes('session-tree') && name.includes('layoutPending'))
-
-        return key ? JSON.parse(localStorage.getItem(key) ?? '[]').length : -1
-      })
+      const pending = await queuedOps(a.page)
 
       await a.page.screenshot({ path: join(shots, 'sync-gateway-down.png') })
       signInLink(t) // restarts the gateway (the link itself is not used yet)
@@ -625,6 +678,68 @@ async function main(): Promise<void> {
       return { dropped, banner, queued: pending, recovery: route, stored: layoutOf(state)['st-hp-root'] }
     }
 
+    await check('B2 migration: a conversation stored under its old tip key (as a card-4 page saved it) comes back at that spot, re-keyed to its lineage root on disk', async () => {
+      await fit(a.page)
+      const now = layoutOf(await stored(a))[key('st-sys-tip')]
+      const spot = { x: Math.round(now.x + 240), y: Math.round(now.y + 160) }
+
+      // The card-4 shape: the block keyed by its tip id, no root key.
+      await api(a, '/api/plugins/session-tree/state/forget?session_profile=default', { method: 'POST', body: { ids: ['st-sys-root'] } })
+      await api(a, '/api/plugins/session-tree/state/positions?session_profile=default', {
+        method: 'PATCH',
+        body: { style: 'dense', scope: 'all', mode: 'set', positions: [{ id: 'st-sys-tip', ...spot }] }
+      })
+      const old = JSON.parse(readFileSync(stateFile, 'utf8')).layouts.default.dense.all as Record<string, { x: number; y: number }>
+      // The other windows' push-driven fetches may canonicalise it at once; either way the spot is kept.
+      const oldShape = near(old['st-sys-tip'], spot) ? 'tip key on disk' : near(old['st-sys-root'], spot) ? 'already re-keyed by a fetch' : 'neither'
+
+      assert(oldShape !== 'neither', `the tip key was not written: ${JSON.stringify({ tip: old['st-sys-tip'], root: old['st-sys-root'] })}`)
+      await reloadTree(a)
+      const shown = await waitFor('the block at its old spot', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, spot), 15_000)
+      const disk = JSON.parse(readFileSync(stateFile, 'utf8')).layouts.default.dense.all as Record<string, { x: number; y: number }>
+
+      assert(near(disk['st-sys-root'], spot), `root key on disk ${JSON.stringify(disk['st-sys-root'])}`)
+      assert(!('st-sys-tip' in disk), 'the old tip key is still on disk')
+
+      return { spot, shown, beforeReload: oldShape, onDisk: { root: disk['st-sys-root'], tipKey: 'st-sys-tip' in disk } }
+    })
+
+    await check('B2: drag the compacted block, compact it again through SessionDB (its tip id changes), reload: it stays at the dragged spot; state.json keys it by the lineage root only, no stale tip key', async () => {
+      await fit(a.page)
+      await dragBlock(a.page, 'st-sys-tip', { x: -120, y: 80 })
+      const dragged = await flowPos(a.page, 'st-sys-tip')
+
+      await waitFor('the drop stored', () => stored(a), value => near(layoutOf(value)['st-sys-root'], dragged))
+      const compacted = seedFixtures(t, ['--compact', 'st-sys-tip', 'st-sys-seg5']) as { root: string; continuation: string; created: boolean; lineage: string[] }
+
+      assert(compacted.created && compacted.root === 'st-sys-root' && compacted.continuation === 'st-sys-seg5', `compaction ${JSON.stringify(compacted)}`)
+      blockOfKey = { ...blockOfKey, 'st-sys-root': 'st-sys-seg5' }
+      const from = Date.now()
+
+      await reloadTree(a)
+      await a.page.locator(BLOCK('st-sys-seg5')).waitFor({ timeout: 30_000 })
+      const after = await flowPos(a.page, 'st-sys-seg5')
+      const text = await a.page.locator(BLOCK('st-sys-seg5')).innerText()
+      const gone = await a.page.locator(BLOCK('st-sys-tip')).count()
+
+      await a.page.locator(BLOCK('st-sys-seg5')).scrollIntoViewIfNeeded().catch(() => undefined)
+      await a.page.screenshot({ path: join(shots, 'b2-compacted-block-stays.png') })
+      const disk = JSON.parse(readFileSync(stateFile, 'utf8')).layouts.default.dense.all as Record<string, { x: number; y: number }>
+      const savedTip = saves(logA, from).filter(entry => /st-sys-seg5|st-sys-tip/.test(entry.body ?? ''))
+
+      assert(gone === 0, 'the old tip is still drawn as a block')
+      assert(near(after, dragged), `after compaction + reload ${JSON.stringify(after)} vs dragged ${JSON.stringify(dragged)}`)
+      assert(/×\s*4/.test(text), `the block does not say ×4: ${text.replace(/\s+/g, ' ')}`)
+      assert(near(disk['st-sys-root'], dragged) && !('st-sys-tip' in disk) && !('st-sys-seg5' in disk), `on disk ${JSON.stringify({ root: disk['st-sys-root'], tip: disk['st-sys-tip'], seg5: disk['st-sys-seg5'] })}`)
+      assert(savedTip.length === 0, `saved under a tip id: ${JSON.stringify(savedTip)}`)
+      const bShows = await waitFor('B shows it', () => flowPos(b.page, 'st-sys-seg5'), pos => near(pos, dragged), 30_000).then(
+        () => true,
+        () => false
+      )
+
+      return { dragged, afterReload: after, compacted: compacted.lineage, onDiskRoot: disk['st-sys-root'], bShows }
+    })
+
     await check('a corrupt state.json (by hand): the page does not crash, the backend serves an empty valid state, the file is kept as .bak', async () => {
       writeFileSync(stateFile, '{"schema": 1, "rev": 12, "layouts": {"default": {"dense": {"all": {"st-sys-tip": {"x": ')
       const state = await stored(a)
@@ -640,6 +755,68 @@ async function main(): Promise<void> {
       assert((await a.page.locator('[data-testid="session-tree-block"]').count()) > 10, 'no blocks after the reload')
 
       return { served: { rev: state.rev, layouts: 0 }, backup: backups[0], newFileRev: fresh.rev }
+    })
+
+    await check('B1: a state.json of a newer schema (the r1 repro: gateway stopped, file written, restarted): over 10 s at most 1 PATCH and 1 notice, the read-only banner, the file untouched, no page errors; a valid file again: saves resume after a reload', async () => {
+      const newer = '{"schema":2,"rev":3,"settings":{"style":"dense","snap":false},"layouts":{},"extra":{}}'
+      const errorsBefore = stacks.length
+
+      stopGateway(t)
+      writeFileSync(stateFile, newer)
+      const from = Date.now()
+
+      await signIn(t, a.page)
+      await openTree(a)
+      const banner = a.page.locator('[data-testid="session-tree-read-only"]')
+
+      await banner.waitFor({ timeout: 20_000 })
+      const shownAt = Date.now()
+
+      await sleep(10_000)
+      const writes = saves(logA, from)
+      const notified = (await notices(a.page)).filter(entry => /Session Tree/.test(`${entry.title ?? ''} ${entry.message ?? ''}`))
+      const text = (await banner.innerText()).trim()
+      const more = await a.page.evaluate(() => (document.body.innerText.match(/Show (\d+) more notifications/) ?? [])[1] ?? null)
+      const pluginErrors = stacks.slice(errorsBefore).filter(entry => /blob:|session-tree|desktop-plugins/.test(entry.stack))
+
+      await a.page.screenshot({ path: join(shots, 'b1-newer-schema-banner.png') })
+      facts.newerSchema = { writes: writes.length, notices: notified, windowMs: Date.now() - from, bannerAfterMs: shownAt - from }
+      assert(writes.length <= 1, `${writes.length} writes: ${JSON.stringify(writes.slice(0, 3).map(entry => `${entry.method} ${entry.path}`))}`)
+      assert(notified.length <= 1, `${notified.length} notices: ${JSON.stringify(notified)}`)
+      assert(text === 'Layout saved by a newer Session Tree version — changes here are not saved', `banner "${text}"`)
+      assert(more === null, `"Show ${more} more notifications"`)
+      assert(readFileSync(stateFile, 'utf8') === newer, 'state.json was changed')
+      assert(pluginErrors.length === 0, pluginErrors.map(entry => entry.stack).join('\n'))
+      // The canvas stays usable: a local drag moves the block (and is still not sent).
+      await fit(a.page)
+      const before = await flowPos(a.page, 'st-hp-root')
+
+      await dragBlock(a.page, 'st-hp-root', { x: 60, y: 40 })
+      await sleep(1500)
+      const moved = await flowPos(a.page, 'st-hp-root')
+
+      assert(!near(before, moved), 'the drag did not move the block locally')
+      assert(saves(logA, from).length === writes.length, 'the local drag was sent')
+      assert(readFileSync(stateFile, 'utf8') === newer, 'state.json was changed by the drag')
+      // A valid file again (an older Session Tree's schema 1, no epoch): saves resume after a reload.
+      writeFileSync(stateFile, '{"schema":1,"rev":0,"settings":{"style":"dense","snap":false},"layouts":{}}')
+      const resumeFrom = Date.now()
+
+      await reloadTree(a)
+      const resumed = await waitFor('saves resumed', () => stored(a), value => Object.keys(layoutOf(value)).length > 10, 20_000)
+      const bannerGone = (await banner.count()) === 0
+
+      assert(bannerGone, 'the read-only banner is still shown')
+      assert(saves(logA, resumeFrom).some(entry => entry.path.startsWith('/state/positions')), 'no save after the reload')
+
+      return {
+        writesIn10s: writes.length,
+        notices: notified.length,
+        banner: text,
+        fileUntouched: true,
+        localDrag: { before, moved },
+        resumed: { entries: Object.keys(layoutOf(resumed)).length, epoch: resumed.epoch, rev: resumed.rev }
+      }
     })
 
     await check('carry-forward 4: a failed session load ends in an error state with Retry (an infinite-cost row the core cannot serialise), and Retry recovers', async () => {

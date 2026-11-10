@@ -5,6 +5,10 @@
  * - **Reads** come from the last server snapshot of a profile, with this window's not yet
  *   acknowledged changes replayed on top. A snapshot is cached in `ctx.storage`, so a page that
  *   cannot reach the backend shows the last saved layout (and keeps working: changes queue).
+ * - **Keys.** Positions are stored per *layout key*, not per block id: a compression lineage's
+ *   block is keyed by the lineage root (its id, the tip, changes on every compaction), every other
+ *   block by its own id (`GraphNode.layoutKey`). `place()` takes the page's key mapping; every
+ *   other call (drop, forget, Re-arrange, Undo) already speaks layout keys.
  * - **Writes** queue and go out debounced (~300 ms) and batched; never while a block is being
  *   dragged (a drop records the final spot; nothing is sent per mouse move).
  *   - a drop is a `set` upsert (last write wins per block on the server);
@@ -12,10 +16,27 @@
  *     can never undo another window's drop;
  *   - Re-arrange is a delete of the style + scope layout; its Undo puts back what this window
  *     showed before (`PUT`).
- * - **Other windows' changes** arrive by push (`plugin.session-tree.layout.changed`) or by the
- *   poll; a refresh never moves a block that is being dragged here.
- * - A failed request (unreachable backend) keeps the queue, marks the profile offline and retries
- *   with a backoff; a refused one (4xx: bad input, caps) is dropped and reported.
+ * - **Failures** (card-4 review B1):
+ *   - *transient* (no answer, a timeout, 5xx, 408, 429): the queue stays, the profile is marked
+ *     offline (the banner) and the send is retried with a backoff; nothing is notified;
+ *   - *newer schema* (409 `newer_schema: …`, or a `GET /state` answering `read_only`): the store
+ *     is read-only for this page's lifetime, or until a later `GET /state` serves a supported
+ *     schema. Nothing more is sent; changes stay in this window only (`storeReadOnly`, the
+ *     page's banner); one notice;
+ *   - *other refusals* (any other 4xx: caps, validation): that op is dropped; an auto-layout's
+ *     refused placements are remembered for the page's lifetime so `place()` never queues them
+ *     again; one notice per refusal kind (status) per page lifetime.
+ * - **Pending queue** (card-4 review NB1): each window owns one slot of the device's queue
+ *   (`layoutPending.v2`: `{slots: {<window id>: {beat, ops}}}`) and rewrites only its own slot.
+ *   A slot whose heartbeat is older than `ORPHAN_MS` (its window closed, or a plugin reload
+ *   disposed it) is adopted by the next window that looks. Every drop also stamps the device's
+ *   drop record (`layoutDrops.v1`, per layout + key); a queued drop older than the latest drop
+ *   of that block on this device is discarded before it is sent, so an older drop never
+ *   overwrites a newer one from another window of the same device.
+ * - **Other windows' changes** arrive by push (`plugin.session-tree.layout.changed`, with `epoch`
+ *   and `rev`) or by the poll (`since_rev` + `epoch`); a refresh never moves a block that is
+ *   being dragged here. A new `epoch` (the file was recreated, its `rev` restarted) always
+ *   refreshes (card-4 review NB2).
  *
  * No React and no SDK in here: the transport, storage and timers are injected (unit tests).
  */
@@ -37,12 +58,17 @@ export interface SyncedSettings {
 
 export interface StateSnapshot {
   schema: number
+  /** Names the state file (with `rev`); a recreated file has a new one. Absent: an old cache. */
+  epoch?: string
   rev: number
   settings: SyncedSettings
   layouts: StoredLayouts
+  /** The file has a newer schema: everything is served empty and every write is refused. */
+  read_only?: boolean
+  store_schema?: number
 }
 
-export type StateAnswer = StateSnapshot | { schema: number; rev: number; unchanged: true }
+export type StateAnswer = StateSnapshot | { schema: number; epoch?: string; rev: number; unchanged: true }
 
 export interface PositionsBody {
   style: string
@@ -51,8 +77,14 @@ export interface PositionsBody {
   positions: { id: string; x: number; y: number }[]
 }
 
+/** What a poll already has: unchanged is answered only for the same epoch and rev. */
+export interface KnownState {
+  rev: number
+  epoch: string
+}
+
 export interface SyncTransport {
-  getState(profile: string, sinceRev?: number): Promise<StateAnswer>
+  getState(profile: string, since?: KnownState): Promise<StateAnswer>
   patchPositions(profile: string, body: PositionsBody): Promise<{ rev: number; changed: boolean }>
   patchSettings(profile: string, patch: Partial<SyncedSettings>): Promise<{ rev: number; changed: boolean; settings: SyncedSettings }>
   deleteLayout(profile: string, style: string, scope: string): Promise<{ rev: number; changed: boolean }>
@@ -77,8 +109,30 @@ export interface LayoutRef {
   scope: string
 }
 
+/**
+ * Block id (what the canvas and the style's layout use) ↔ layout key (what the store keys a
+ * position by). The default is the identity.
+ */
+export interface LayoutKeys {
+  toStore(id: string): string
+  fromStore(key: string): string
+}
+
+/** What a refusal notice is about: `newer_schema`, or the refusing HTTP status (`'413'`, …). */
+export type RefusalKind = string
+
+export interface SyncOptions {
+  debounceMs?: number
+  /** At most once per kind per `LayoutSync` (page) lifetime; never per failed request. */
+  onRefused?: (error: unknown, kind: RefusalKind) => void
+  /** This window's id in the device's pending queue (default: random). */
+  windowId?: string
+  /** The device clock (heartbeats, drop times). */
+  now?: () => number
+}
+
 type Op =
-  | { kind: 'upsert'; ref: LayoutRef; mode: 'if_absent' | 'set'; entries: [string, Point][] }
+  | { kind: 'upsert'; ref: LayoutRef; mode: 'if_absent' | 'set'; entries: [string, Point][]; at?: number }
   | { kind: 'replace'; ref: LayoutRef; entries: [string, Point][] | null }
   | { kind: 'forget'; profile: string; ids: string[] }
   | { kind: 'settings'; profile: string; patch: Partial<SyncedSettings> }
@@ -92,9 +146,21 @@ export const RETRY_MS = [1000, 2000, 5000, 5000, 10_000]
 /** The page polls every this many ms while visible (no push, or a missed push). */
 export const POLL_MS = 5000
 export const CACHE_KEY = 'layoutCache.v1'
-export const PENDING_KEY = 'layoutPending.v1'
+/** The device's pending queue: one slot per window (NB1). */
+export const PENDING_KEY = 'layoutPending.v2'
+/** The card-4 queue (one shared list): adopted once, then cleared. */
+export const LEGACY_PENDING_KEY = 'layoutPending.v1'
+/** The latest drop time per layout + key on this device (NB1). */
+export const DROPS_KEY = 'layoutDrops.v1'
+/** A slot whose heartbeat is older than this belongs to a closed window: adopt it. */
+export const ORPHAN_MS = 30_000
+/** Drop-record entries kept at most this long / this many. */
+export const DROP_RECORD_MS = 30 * 24 * 3600_000
+export const DROP_RECORD_MAX = 5000
 /** Sent per request at most (the backend's batch cap is 2000). */
 export const BATCH_LIMIT = 1000
+/** The refusal kind of a write refused because `state.json` has a newer schema. */
+export const NEWER_SCHEMA = 'newer_schema'
 
 interface ProfileState {
   /** The last server snapshot (fetched, or the cache). */
@@ -104,22 +170,55 @@ interface ProfileState {
   status: SyncStatus
 }
 
+interface PendingSlot {
+  beat: number
+  ops: Op[]
+}
+
 const EMPTY_SETTINGS: SyncedSettings = { style: null, snap: false }
+const IDENTITY_KEYS: LayoutKeys = { toStore: id => id, fromStore: key => key }
 
 const refKey = (ref: LayoutRef) => `${ref.profile}\u0000${ref.style}\u0000${ref.scope}`
+const entryKey = (ref: LayoutRef, key: string) => `${refKey(ref)}\u0000${key}`
 
 const sameRef = (a: LayoutRef, b: LayoutRef) => a.profile === b.profile && a.style === b.style && a.scope === b.scope
 
-/** A refusal the backend will repeat (bad input, a cap): retrying cannot help. */
-export function isRefusal(error: unknown): boolean {
-  const match = /^(\d{3}): /.exec(error instanceof Error ? error.message : String(error ?? ''))
+/**
+ * How a failed write is handled (B1): `null` = transient (no HTTP answer, 5xx, 408, 429: retry),
+ * `newer_schema` (409 from a newer `state.json`: read-only), else the refusing status.
+ */
+export function refusalKind(error: unknown): null | RefusalKind {
+  const match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ''))
 
-  return Boolean(match && ['400', '409', '413', '422'].includes(match[1]))
+  if (!match) {
+    return null
+  }
+
+  const status = Number(match[1])
+
+  if (status < 400 || status > 499 || status === 408 || status === 429) {
+    return null
+  }
+
+  return status === 409 && match[2].includes(NEWER_SCHEMA) ? NEWER_SCHEMA : match[1]
+}
+
+/** A refusal the backend will repeat (bad input, a cap, a newer schema): retrying cannot help. */
+export function isRefusal(error: unknown): boolean {
+  return refusalKind(error) !== null
+}
+
+function randomId(): string {
+  const crypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+
+  return crypto?.randomUUID?.() ?? `w${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
 }
 
 export class LayoutSync {
   private readonly profiles = new Map<string, ProfileState>()
-  private pending: Op[]
+  private pending: Op[] = []
+  /** Changes made while the store is read-only: shown here, never sent, never persisted. */
+  private localOnly: Op[] = []
   private readonly listeners = new Set<() => void>()
   private readonly watched = new Map<string, number>()
   private dragging: ReadonlySet<string> = new Set()
@@ -130,20 +229,31 @@ export class LayoutSync {
   private writeSeq = 0
   private disposed = false
   private version = 0
+  private readOnly = false
+  /** `layout + key` of auto-layout placements the backend refused: never queued again. */
+  private readonly refusedPlacements = new Set<string>()
+  private readonly notified = new Set<RefusalKind>()
+  /** The ops in this window's slot as last written (to tell an adoption by another window). */
+  private persistedOps = new Set<Op>()
+  private ownsSlot = false
+  private lastDropAt = 0
 
   private readonly transport: SyncTransport
   private readonly storage: SyncStorage
   private readonly timers: SyncTimers
-  private readonly options: { debounceMs?: number; onRefused?: (error: unknown) => void }
+  private readonly options: SyncOptions
+  private readonly windowId: string
+  private readonly now: () => number
 
-  constructor(transport: SyncTransport, storage: SyncStorage, timers: SyncTimers, options: { debounceMs?: number; onRefused?: (error: unknown) => void } = {}) {
+  constructor(transport: SyncTransport, storage: SyncStorage, timers: SyncTimers, options: SyncOptions = {}) {
     this.transport = transport
     this.storage = storage
     this.timers = timers
     this.options = options
-    this.pending = (storage.get<Op[] | null>(PENDING_KEY, null) ?? []).filter(isOp)
+    this.windowId = options.windowId ?? randomId()
+    this.now = options.now ?? Date.now
 
-    if (this.pending.length > 0) {
+    if (this.adoptOrphans()) {
       this.schedule(0)
     }
   }
@@ -204,11 +314,21 @@ export class LayoutSync {
     return this.profile(profile).status === 'offline'
   }
 
+  /** The store was written by a newer Session Tree: nothing is saved from this page (B1). */
+  get storeReadOnly(): boolean {
+    return this.readOnly
+  }
+
+  /** This window's ops a reader sees: the unsent queue, then the read-only local changes. */
+  private overlay(): Op[] {
+    return this.localOnly.length > 0 ? [...this.pending, ...this.localOnly] : this.pending
+  }
+
   /** The synced settings as this window has them (its own unsent changes included). */
   settings(profile: string): SyncedSettings {
     const base = { ...(this.profile(profile).server?.settings ?? this.anySettings()) }
 
-    for (const op of this.pending) {
+    for (const op of this.overlay()) {
       if (op.kind === 'settings') {
         Object.assign(base, op.patch)
       }
@@ -230,12 +350,12 @@ export class LayoutSync {
     return best?.settings ?? EMPTY_SETTINGS
   }
 
-  /** The positions of one layout: the server's, this window's unsent changes on top. */
+  /** The positions of one layout, by layout key: the server's, this window's unsent changes on top. */
   positions(ref: LayoutRef): Map<string, Point> {
     const stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}
     const out = new Map<string, Point>(Object.entries(stored).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 
-    for (const op of this.pending) {
+    for (const op of this.overlay()) {
       if (op.kind === 'forget' ? op.profile === ref.profile : op.kind !== 'settings' && sameRef(op.ref, ref)) {
         applyOp(out, op as LayoutOp | Extract<Op, { kind: 'forget' }>)
       }
@@ -249,10 +369,16 @@ export class LayoutSync {
   /**
    * Lay out against the stored positions and keep what the layout placed. Called while the page
    * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
-   * style that saves nothing, Swimlanes).
+   * style that saves nothing, Swimlanes). `keys` maps the layout's block ids to layout keys;
+   * `compute` and the answer speak block ids.
    */
-  place(ref: LayoutRef, compute: (previous: ReadonlyMap<string, Point> | undefined) => LayoutResult, { save = true }: { save?: boolean } = {}): LayoutResult {
-    const previous = this.positions(ref)
+  place(
+    ref: LayoutRef,
+    compute: (previous: ReadonlyMap<string, Point> | undefined) => LayoutResult,
+    { save = true, keys = IDENTITY_KEYS }: { save?: boolean; keys?: LayoutKeys } = {}
+  ): LayoutResult {
+    const stored = this.positions(ref)
+    const previous = keys === IDENTITY_KEYS ? stored : new Map([...stored].map(([key, point]) => [keys.fromStore(key), point]))
     const result = compute(previous.size > 0 ? previous : undefined)
 
     if (!save) {
@@ -262,8 +388,10 @@ export class LayoutSync {
     const placed: [string, Point][] = []
 
     for (const [id, point] of result.positions) {
-      if (!previous.has(id)) {
-        placed.push([id, { x: point.x, y: point.y }])
+      const key = keys.toStore(id)
+
+      if (!stored.has(key) && !this.refusedPlacements.has(entryKey(ref, key))) {
+        placed.push([key, { x: point.x, y: point.y }])
       }
     }
 
@@ -274,16 +402,25 @@ export class LayoutSync {
     return result
   }
 
-  /** A drop: these blocks now sit here. */
+  /** A drop: these blocks (by layout key) now sit here. */
   drop(ref: LayoutRef, moves: ReadonlyMap<string, Point>): void {
     if (moves.size === 0) {
       return
     }
 
-    this.queue({ kind: 'upsert', ref, mode: 'set', entries: [...moves].map(([id, point]) => [id, { x: point.x, y: point.y }]) }, true)
+    // Strictly increasing within this window; across windows the device clock orders drops.
+    const at = Math.max(this.now(), this.lastDropAt + 1)
+
+    this.lastDropAt = at
+
+    if (!this.readOnly) {
+      this.recordDrops(ref, [...moves.keys()], at)
+    }
+
+    this.queue({ kind: 'upsert', ref, mode: 'set', entries: [...moves].map(([id, point]) => [id, { x: point.x, y: point.y }]), at }, true)
   }
 
-  /** Re-arrange: forget this layout. Answers what was shown, for Undo. */
+  /** Re-arrange: forget this layout. Answers what was shown (by layout key), for Undo. */
   rearrange(ref: LayoutRef): Map<string, Point> {
     const previous = this.positions(ref)
 
@@ -298,11 +435,11 @@ export class LayoutSync {
   }
 
   /**
-   * A block moved to another project: forget its stored spot in every layout of the profile (here
-   * and on the server), so each layout places it anew in its new band.
+   * A block moved to another project: forget its stored spot (by layout key) in every layout of
+   * the profile (here and on the server), so each layout places it anew in its new band.
    */
-  forget(profile: string, id: string): void {
-    this.queue({ kind: 'forget', profile, ids: [id] }, true)
+  forget(profile: string, key: string): void {
+    this.queue({ kind: 'forget', profile, ids: [key] }, true)
   }
 
   setSettings(profile: string, patch: Partial<SyncedSettings>): void {
@@ -325,22 +462,156 @@ export class LayoutSync {
   }
 
   private queue(op: Op, notify: boolean): void {
-    this.pending.push(op)
-    this.persistPending()
-    this.schedule(this.options.debounceMs ?? DEBOUNCE_MS)
+    if (this.readOnly) {
+      // B1: nothing is sent while the store is read-only; the change shows in this window only.
+      this.localOnly.push(op)
+    } else {
+      this.pending.push(op)
+      this.persistPending()
+      this.schedule(this.options.debounceMs ?? DEBOUNCE_MS)
+    }
 
     if (notify) {
       this.emit()
     }
   }
 
-  private persistPending(): void {
-    this.storage.set(PENDING_KEY, this.pending)
+  // --- the device's pending queue (NB1) ------------------------------------------------------
+
+  private readSlots(): Record<string, PendingSlot> {
+    const raw = this.storage.get<{ slots?: unknown } | null>(PENDING_KEY, null)
+    const slots: Record<string, PendingSlot> = {}
+
+    if (raw && typeof raw === 'object' && raw.slots && typeof raw.slots === 'object') {
+      for (const [owner, value] of Object.entries(raw.slots as Record<string, unknown>)) {
+        const slot = value as PendingSlot | null
+
+        if (slot && typeof slot.beat === 'number' && Array.isArray(slot.ops)) {
+          slots[owner] = { beat: slot.beat, ops: slot.ops.filter(isOp) }
+        }
+      }
+    }
+
+    return slots
+  }
+
+  private writeSlots(slots: Record<string, PendingSlot>): void {
+    this.storage.set(PENDING_KEY, { slots })
+  }
+
+  /**
+   * Another window adopted this window's slot (it looked orphaned, e.g. a long-hidden tab): it
+   * sends those ops, so this window keeps only what it queued since.
+   */
+  private reconcileSlot(slots: Record<string, PendingSlot>): void {
+    if (this.ownsSlot && !(this.windowId in slots)) {
+      this.pending = this.pending.filter(op => !this.persistedOps.has(op))
+      this.ownsSlot = false
+      this.persistedOps = new Set()
+    }
+  }
+
+  /** Rewrites this window's slot only (and refreshes its heartbeat). */
+  private persistPending(beat = this.now()): void {
+    const slots = this.readSlots()
+
+    this.reconcileSlot(slots)
+
+    if (this.pending.length > 0) {
+      slots[this.windowId] = { beat, ops: this.pending }
+      this.ownsSlot = true
+      this.persistedOps = new Set(this.pending)
+    } else {
+      delete slots[this.windowId]
+      this.ownsSlot = false
+      this.persistedOps = new Set()
+    }
+
+    this.writeSlots(slots)
+  }
+
+  /** Takes over the slots of closed windows (and the card-4 shared queue). True: adopted some. */
+  private adoptOrphans(): boolean {
+    const slots = this.readSlots()
+    const now = this.now()
+    const adopted: Op[] = []
+    const legacy = this.storage.get<unknown>(LEGACY_PENDING_KEY, null)
+
+    if (Array.isArray(legacy)) {
+      adopted.push(...legacy.filter(isOp))
+      this.storage.set(LEGACY_PENDING_KEY, null)
+    }
+
+    for (const [owner, slot] of Object.entries(slots)) {
+      if (owner !== this.windowId && now - slot.beat > ORPHAN_MS) {
+        adopted.push(...slot.ops)
+        delete slots[owner]
+      }
+    }
+
+    if (adopted.length === 0) {
+      return false
+    }
+
+    this.writeSlots(slots)
+    this.pending = [...adopted, ...this.pending]
+    this.persistPending()
+
+    return true
+  }
+
+  private recordDrops(ref: LayoutRef, keys: string[], at: number): void {
+    const record = { ...this.storage.get<Record<string, number>>(DROPS_KEY, {}) }
+
+    for (const key of keys) {
+      const name = entryKey(ref, key)
+
+      record[name] = Math.max(typeof record[name] === 'number' ? record[name] : 0, at)
+    }
+
+    const kept = Object.entries(record)
+      .filter(([, when]) => typeof when === 'number' && at - when < DROP_RECORD_MS)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, DROP_RECORD_MAX)
+
+    this.storage.set(DROPS_KEY, Object.fromEntries(kept))
+  }
+
+  /**
+   * Discards queued drops that a newer drop of the same block on this device (any window)
+   * supersedes, before anything is sent: last write wins per block on the server, so an older
+   * drop sent late would overwrite the newer one.
+   */
+  private supersede(): void {
+    const record = this.storage.get<Record<string, number>>(DROPS_KEY, {})
+    let changed = false
+
+    this.pending = this.pending.flatMap(op => {
+      if (op.kind !== 'upsert' || op.mode !== 'set' || typeof op.at !== 'number') {
+        return [op]
+      }
+
+      const at = op.at
+      const entries = op.entries.filter(([key]) => !((record[entryKey(op.ref, key)] ?? 0) > at))
+
+      if (entries.length === op.entries.length) {
+        return [op]
+      }
+
+      changed = true
+
+      return entries.length > 0 ? [{ ...op, entries }] : []
+    })
+
+    if (changed) {
+      this.persistPending()
+      this.emit()
+    }
   }
 
   /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
   private schedule(ms: number): void {
-    if (this.disposed) {
+    if (this.disposed || this.readOnly) {
       return
     }
 
@@ -355,7 +626,7 @@ export class LayoutSync {
 
   /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
   async flush(): Promise<void> {
-    if (this.flushing || this.disposed) {
+    if (this.flushing || this.disposed || this.readOnly) {
       return
     }
 
@@ -367,21 +638,48 @@ export class LayoutSync {
     this.flushing = true
 
     try {
-      while (this.pending.length > 0 && this.dragging.size === 0 && !this.disposed) {
+      if (this.pending.length > 0) {
+        // The heartbeat of this window's slot, and an adoption by another window noticed.
+        this.persistPending()
+      }
+
+      while (this.pending.length > 0 && this.dragging.size === 0 && !this.disposed && !this.readOnly) {
+        this.supersede()
+
+        if (this.pending.length === 0) {
+          break
+        }
+
         const [op, count] = this.nextBatch()
+        const batch = this.pending.slice(0, count)
 
         try {
           await this.send(op)
           this.ack(op)
-          this.pending.splice(0, count)
-          this.persistPending()
+          this.dequeue(batch)
           this.failures = 0
           this.markOnline(opProfile(op))
         } catch (error) {
-          if (isRefusal(error)) {
-            this.pending.splice(0, count)
-            this.persistPending()
-            this.options.onRefused?.(error)
+          const kind = refusalKind(error)
+
+          if (kind === NEWER_SCHEMA) {
+            this.enterReadOnly(error)
+
+            return
+          }
+
+          if (kind !== null) {
+            // A deterministic refusal: drop it, never re-queue the same placement, one notice
+            // per kind (B1).
+            this.dequeue(batch)
+
+            if (op.kind === 'upsert' && op.mode === 'if_absent') {
+              for (const [key] of op.entries) {
+                this.refusedPlacements.add(entryKey(op.ref, key))
+              }
+            }
+
+            this.notifyOnce(kind, error)
             this.emit()
             continue
           }
@@ -397,6 +695,52 @@ export class LayoutSync {
     }
 
     if (this.pending.length > 0 && this.dragging.size === 0) {
+      this.schedule(0)
+    }
+  }
+
+  /** Removes these ops (sent or refused); gone already if another window took them over. */
+  private dequeue(batch: readonly Op[]): void {
+    const sent = new Set(batch)
+
+    this.pending = this.pending.filter(op => !sent.has(op))
+    this.persistPending()
+  }
+
+  private notifyOnce(kind: RefusalKind, error: unknown): void {
+    if (this.notified.has(kind)) {
+      return
+    }
+
+    this.notified.add(kind)
+    this.options.onRefused?.(error, kind)
+  }
+
+  /** B1: a newer Session Tree wrote the store. Send nothing more; keep changes local. */
+  private enterReadOnly(error: unknown): void {
+    if (this.readOnly) {
+      return
+    }
+
+    this.readOnly = true
+    this.cancelFlush?.()
+    this.cancelFlush = undefined
+    this.notifyOnce(NEWER_SCHEMA, error ?? new Error(`409: ${NEWER_SCHEMA}`))
+    this.emit()
+  }
+
+  private leaveReadOnly(): void {
+    if (!this.readOnly) {
+      return
+    }
+
+    // The store is supported again: what was changed meanwhile was never saved (the banner said
+    // so); the layouts come from the store again, and saves resume.
+    this.readOnly = false
+    this.localOnly = []
+    this.failures = 0
+
+    if (this.pending.length > 0) {
       this.schedule(0)
     }
   }
@@ -530,7 +874,7 @@ export class LayoutSync {
   private cache(profile: string): void {
     const server = this.profile(profile).server
 
-    if (server) {
+    if (server && !server.read_only) {
       this.storage.set(`${CACHE_KEY}:${profile}`, server)
     }
   }
@@ -544,7 +888,9 @@ export class LayoutSync {
     }
 
     const state = this.profile(profile)
-    const known = state.settled && state.status === 'online' ? state.server?.rev : undefined
+    const server = state.server
+    // NB2: "unchanged" only for the same file (epoch) and revision.
+    const known = state.settled && state.status === 'online' && server?.epoch ? { rev: server.rev, epoch: server.epoch } : undefined
     const seq = this.writeSeq
 
     try {
@@ -557,16 +903,24 @@ export class LayoutSync {
         return
       }
 
-      if (!('unchanged' in answer)) {
+      const full = !('unchanged' in answer)
+
+      if (full) {
         state.server = answer
         this.cache(profile)
       }
 
       const wasOnline = state.status === 'online'
-      const changed = !('unchanged' in answer) || !wasOnline || !state.settled
+      const changed = full || !wasOnline || !state.settled
 
       state.status = 'online'
       state.settled = true
+
+      if (full && answer.read_only) {
+        this.enterReadOnly(null)
+      } else if (full) {
+        this.leaveReadOnly()
+      }
 
       // Back from offline: send what queued meanwhile now. Online, the debounce timer (if any)
       // stays as it is: a poll must not flush a drop early.
@@ -624,8 +978,14 @@ export class LayoutSync {
     }
   }
 
-  /** The poll: every watched profile, cheaply (`since_rev`). */
+  /** The poll: every watched profile, cheaply (`since_rev` + `epoch`); closed windows' queues. */
   poll(): void {
+    if (this.adoptOrphans()) {
+      this.schedule(0)
+    } else if (this.pending.length > 0 && !this.flushing) {
+      this.persistPending() // the heartbeat while a drag or a backoff holds the queue
+    }
+
     for (const profile of this.watched.keys()) {
       void this.refresh(profile)
     }
@@ -633,12 +993,14 @@ export class LayoutSync {
 
   /** A push from the backend: refresh what it touched, unless this window already has it. */
   onRemoteChange(payload: unknown): void {
-    const { rev, profile } = (payload ?? {}) as { rev?: unknown; profile?: unknown }
+    const { rev, epoch, profile } = (payload ?? {}) as { rev?: unknown; epoch?: unknown; profile?: unknown }
 
     for (const name of this.watched.keys()) {
-      const known = this.profile(name).server?.rev ?? -1
+      const server = this.profile(name).server
+      // NB2: a rev of another file (a new epoch) says nothing about this window's snapshot.
+      const sameFile = typeof epoch === 'string' && server?.epoch === epoch
 
-      if (typeof rev === 'number' && rev <= known) {
+      if (typeof rev === 'number' && sameFile && rev <= (server?.rev ?? -1)) {
         continue
       }
 
@@ -648,9 +1010,23 @@ export class LayoutSync {
     }
   }
 
+  /**
+   * The page is going away (`pagehide`: a reload, a closed tab): mark this window's slot as
+   * orphaned, so the next window (the reloaded page) adopts the queue at once instead of after
+   * `ORPHAN_MS`. If the page comes back (the back/forward cache), its next write reclaims the slot
+   * unless another window adopted it meanwhile.
+   */
+  release(): void {
+    if (this.pending.length > 0) {
+      this.persistPending(0)
+    }
+  }
+
   dispose(): void {
     this.disposed = true
     this.cancelFlush?.()
+    // The next window (a plugin reload) adopts the queue at once.
+    this.release()
 
     for (const cancel of this.refreshTimers.values()) {
       cancel()

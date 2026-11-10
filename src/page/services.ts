@@ -11,7 +11,10 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { LAYOUT_CHANGED_EVENT, stateTransport } from '../api.ts'
 import { restErrorText } from '../model/actions.ts'
 import { DevicePrefs } from '../model/device-prefs.ts'
-import { LayoutSync, POLL_MS } from '../model/layout-sync.ts'
+import { LayoutSync, NEWER_SCHEMA, POLL_MS } from '../model/layout-sync.ts'
+
+/** The store was written by a newer Session Tree (B1 of the card-4 review): the page's banner. */
+export const READ_ONLY_MESSAGE = 'Layout saved by a newer Session Tree version — changes here are not saved'
 
 export interface Services {
   sync: LayoutSync
@@ -24,11 +27,19 @@ export function createServices(ctx: PluginContext): Services {
     ctx.storage,
     { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms) },
     {
-      onRefused: error => host.notify({ kind: 'error', title: 'Session Tree could not save the layout', message: restErrorText(error) })
+      // LayoutSync calls this at most once per refusal kind per page lifetime, never per request.
+      onRefused: (error, kind) =>
+        host.notify(
+          kind === NEWER_SCHEMA
+            ? { kind: 'warning', title: 'Session Tree', message: READ_ONLY_MESSAGE }
+            : { kind: 'error', title: 'Session Tree could not save the layout', message: restErrorText(error) }
+        )
     }
   )
 
   ctx.onDispose(() => sync.dispose())
+  // A reload or a closed tab: the next window adopts this window's unsent queue at once (NB1).
+  ctx.addEventListener(window, 'pagehide', () => sync.release())
   // Push (card 1 pre-check 5: `broadcast_plugin_event` reaches `host.onEvent` in the Webapp; a
   // plugin `ctx.socket` never dials there), and the poll as the fallback, only while visible.
   ctx.onEvent(LAYOUT_CHANGED_EVENT, event => sync.onRemoteChange(event.payload))

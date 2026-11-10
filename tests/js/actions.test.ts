@@ -10,6 +10,7 @@ import {
   decodeExportEnvelope,
   deleteBlockedReason,
   exportFilename,
+  guardedBranch,
   isActionable,
   isAlreadyAbsent,
   moveTargets,
@@ -18,6 +19,7 @@ import {
   restErrorText,
   settleOverrides
 } from '../../src/model/actions.ts'
+import type { GatewayRequest } from '../../src/model/actions.ts'
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import { EMPTY_HOST_STATUS, liveStatus } from '../../src/model/status.ts'
 import { project, row } from './fixtures.ts'
@@ -191,6 +193,59 @@ describe('createBranchCooldown (card-3 review: a second Branch click at human sp
     assert.equal(cooldown.blocks('other'), false, 'another session is not held back')
     now += 600
     assert.equal(cooldown.blocks('child'), false, 'a deliberate Branch later on is a new branch')
+  })
+
+  it('NB4 (card-4 review): with a slow refetch the parent stays selected; a second Branch on it while the request flies or ≤ 800 ms after it returns makes no sibling', async () => {
+    let now = 10_000
+    const cooldown = createBranchCooldown(800, () => now)
+    const requests: { params: Record<string, unknown>; resolve: (value: unknown) => void }[] = []
+    const request = (<T,>(_method: string, params: Record<string, unknown>) =>
+      new Promise<T>(resolve => requests.push({ params, resolve: resolve as (value: unknown) => void }))) as GatewayRequest
+    const flights = createBranchFlights(request, () => `key-${requests.length}`)
+    // A click that is ignored answers null at once; one that sends (or joins) a request waits on it.
+    const click = () =>
+      Promise.race([guardedBranch(cooldown, flights, { parentId: 'parent', profile: 'default' }), new Promise(resolve => setTimeout(() => resolve('waiting on a request'), 50))])
+
+    const first = guardedBranch(cooldown, flights, { parentId: 'parent', profile: 'default' })
+
+    now += 300
+    assert.equal(await click(), null, 'a second click while the request flies is ignored')
+    assert.equal(requests.length, 1)
+    // The request returns at t = 500 ms; the refetch that would select the child is slow, so
+    // the parent is still the selected block (nothing was selected yet).
+    now += 200
+    requests[0].resolve({ stored_session_id: 'child-1', session_id: 'child-1' })
+    assert.deepEqual(await first, { stored_session_id: 'child-1', session_id: 'child-1' })
+    now += 600 // the second click ~600 ms after the return
+    assert.equal(await click(), null, 'a click 600 ms after the return is ignored')
+    now += 199
+    assert.equal(await click(), null, '799 ms after the return')
+    assert.equal(requests.length, 1, 'exactly one child')
+    // Past the window a Branch is a deliberate new one.
+    now += 2
+    const later = guardedBranch(cooldown, flights, { parentId: 'parent', profile: 'default' })
+
+    assert.equal(requests.length, 2)
+    requests[1].resolve({ stored_session_id: 'child-2' })
+    assert.deepEqual(await later, { stored_session_id: 'child-2' })
+  })
+
+  it('NB4: a failed request also holds the source for the window, then a retry goes out', async () => {
+    let now = 0
+    const cooldown = createBranchCooldown(800, () => now)
+    let calls = 0
+    const request = (async () => {
+      calls += 1
+      throw new Error('boom')
+    }) as GatewayRequest
+    const flights = createBranchFlights(request, () => 'k')
+
+    await assert.rejects(guardedBranch(cooldown, flights, { parentId: 'p', profile: 'default' }), /boom/)
+    now += 500
+    assert.equal(await guardedBranch(cooldown, flights, { parentId: 'p', profile: 'default' }), null)
+    now += 400
+    await assert.rejects(guardedBranch(cooldown, flights, { parentId: 'p', profile: 'default' }), /boom/)
+    assert.equal(calls, 2)
   })
 })
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { ALL_PROFILES, ALL_PROJECTS, buildGraph, filterRows, lineageOf, singlesInScope, STANDIN_PREFIX } from '../../src/model/graph.ts'
+import { ALL_PROFILES, ALL_PROJECTS, buildGraph, filterRows, layoutKeysOf, lineageOf, singlesInScope, STANDIN_PREFIX } from '../../src/model/graph.ts'
 import type { GraphOptions } from '../../src/model/graph.ts'
 import { mergeProjects, NO_PROJECT_ID, parseProjectsTree, projectIndex } from '../../src/model/projects.ts'
 import { loadFixture, project, row } from './fixtures.ts'
@@ -26,6 +26,29 @@ describe('buildGraph on the seeded fixture', () => {
     for (const segment of ['st-sys-root', 'st-sys-seg2', 'st-sys-seg3']) {
       assert.ok(!model.nodeById.has(segment), `${segment} drawn`)
     }
+  })
+
+  it('B2 (card-4 review): a compacted block\'s layout key is its lineage root, every other block keeps its id', () => {
+    assert.equal(model.nodeById.get('st-sys-tip')!.layoutKey, 'st-sys-root')
+    assert.equal(model.nodeById.get('st-md-tip')!.layoutKey, 'st-md-root')
+    assert.equal(model.nodeById.get('st-hp-root')!.layoutKey, 'st-hp-root')
+    assert.equal(model.nodeById.get('st-sys-comments')!.layoutKey, 'st-sys-comments')
+
+    for (const node of model.nodes.filter(each => each.kind === 'standin')) {
+      assert.equal(node.layoutKey, node.id)
+    }
+
+    const keys = layoutKeysOf(model)
+
+    assert.equal(keys.toStore('st-sys-tip'), 'st-sys-root')
+    assert.equal(keys.fromStore('st-sys-root'), 'st-sys-tip')
+    assert.equal(keys.toStore('group:x'), 'group:x')
+    // Another compaction: a new tip row with the same lineage root keeps the key.
+    const compacted = fixture.rows.map(each => (each.id === 'st-sys-tip' ? { ...each, id: 'st-sys-seg5', _lineage_ids: [...(each._lineage_ids ?? []), 'st-sys-seg5'] } : each))
+    const after = buildGraph(compacted, fixture.projects, ALL)
+
+    assert.equal(after.nodeById.get('st-sys-seg5')!.layoutKey, 'st-sys-root')
+    assert.equal(layoutKeysOf(after).fromStore('st-sys-root'), 'st-sys-seg5')
   })
 
   it('nests /branch children by forkParentId, a middle-segment branch under the visible tip', () => {

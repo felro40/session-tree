@@ -7501,7 +7501,7 @@ function fetchExport(ctx, profile, id2) {
 var profileQuery = (profile, extra = {}) => new URLSearchParams({ [PROFILE_PARAM]: profile, ...extra }).toString();
 function stateTransport(ctx) {
   return {
-    getState: (profile, sinceRev) => ctx.rest(`/state?${profileQuery(profile, sinceRev === void 0 ? {} : { since_rev: String(sinceRev) })}`, { timeoutMs: 1e4 }),
+    getState: (profile, since) => ctx.rest(`/state?${profileQuery(profile, since === void 0 ? {} : { since_rev: String(since.rev), epoch: since.epoch })}`, { timeoutMs: 1e4 }),
     patchPositions: (profile, body) => ctx.rest(`/state/positions?${profileQuery(profile)}`, { method: "PATCH", body, timeoutMs: 15e3 }),
     patchSettings: (profile, patch) => ctx.rest(`/settings?${profileQuery(profile)}`, { method: "PATCH", body: patch, timeoutMs: 15e3 }),
     deleteLayout: (profile, style2, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style: style2, scope })}`, { method: "DELETE", timeoutMs: 15e3 }),
@@ -7535,15 +7535,39 @@ function decodeExportEnvelope(envelope) {
   return bytes;
 }
 function createBranchCooldown(windowMs, now2 = Date.now) {
-  let last;
+  let last, inFlight = /* @__PURE__ */ new Map(), returnedAt = /* @__PURE__ */ new Map();
   return {
     branched(childId) {
       last = { id: childId, at: now2() };
     },
+    /** A Branch request on `sourceId` was sent. */
+    started(sourceId) {
+      inFlight.set(sourceId, (inFlight.get(sourceId) ?? 0) + 1);
+    },
+    /** That request answered (or failed). */
+    returned(sourceId) {
+      let count = (inFlight.get(sourceId) ?? 1) - 1;
+      count > 0 ? inFlight.set(sourceId, count) : inFlight.delete(sourceId), returnedAt.set(sourceId, now2());
+    },
     blocks(id2) {
-      return !!(last && last.id === id2 && now2() - last.at < windowMs);
+      let returned = returnedAt.get(id2);
+      return !!(last && last.id === id2 && now2() - last.at < windowMs) || inFlight.has(id2) || returned !== void 0 && now2() - returned < windowMs;
     }
   };
+}
+async function guardedBranch(cooldown, branch, params) {
+  if (cooldown.blocks(params.parentId))
+    return null;
+  let started = branch(params);
+  if (started.joined)
+    return await started.flight.catch(() => {
+    }), null;
+  cooldown.started(params.parentId);
+  try {
+    return await started.flight;
+  } finally {
+    cooldown.returned(params.parentId);
+  }
 }
 var BRANCH_COOLDOWN_MS = 800;
 function createBranchFlights(request, mintKey) {
@@ -7819,10 +7843,14 @@ function buildGraph(rows, projects, options) {
   let nodeIdOf = /* @__PURE__ */ new Map();
   for (let row of sessions)
     nodeIdOf.set(row, (idCount.get(row.id) ?? 0) > 1 ? `${profileKey(row)}/${row.id}` : row.id);
+  let rootOf = (row) => row._lineage_root_id?.trim() || row.id, rootCount = /* @__PURE__ */ new Map();
+  for (let row of sessions)
+    rootCount.set(rootOf(row), (rootCount.get(rootOf(row)) ?? 0) + 1);
   let nodes = [], nodeById = /* @__PURE__ */ new Map();
   for (let row of sessions) {
-    let id2 = nodeIdOf.get(row), projectId = projectsIdx.projectOf(row), node = {
+    let id2 = nodeIdOf.get(row), projectId = projectsIdx.projectOf(row), root2 = rootOf(row), node = {
       id: id2,
+      layoutKey: (rootCount.get(root2) ?? 0) > 1 ? `${profileKey(row)}/${root2}` : root2,
       kind: "session",
       row,
       title: displayTitle(row),
@@ -7852,6 +7880,7 @@ function buildGraph(rows, projects, options) {
       if (!nodeById.has(source)) {
         let standin = {
           id: source,
+          layoutKey: source,
           kind: "standin",
           title: "Parent not loaded",
           profile: profileKey(row),
@@ -7966,6 +7995,15 @@ function lineageOf(model, id2) {
 }
 function singlesInScope(model) {
   return model.singles.filter((node) => !node.outOfScope);
+}
+function layoutKeysOf(model) {
+  let toStore = /* @__PURE__ */ new Map(), fromStore = /* @__PURE__ */ new Map();
+  for (let node of model.nodes)
+    node.layoutKey !== node.id && (toStore.set(node.id, node.layoutKey), fromStore.set(node.layoutKey, node.id));
+  return {
+    toStore: (id2) => toStore.get(id2) ?? id2,
+    fromStore: (key) => fromStore.get(key) ?? key
+  };
 }
 
 // src/model/layout.ts
@@ -9477,22 +9515,19 @@ function useSessionActionsController(options) {
         notifyError(error, latest.current.labels.copyIdFailed);
       },
       async branch(node) {
-        let row = rowOf(node), joined = !1;
-        if (!branchCooldown.blocks(row.id))
-          try {
-            let started = branchFlights({ parentId: row.id, profile: node.profile, cwd: row.cwd });
-            joined = started.joined;
-            let result = await started.flight;
-            if (joined)
-              return;
-            let child = result?.stored_session_id;
-            if (!child)
-              throw new Error("The gateway returned no branch id");
-            result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
-            }), branchCooldown.branched(child), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
-          } catch (error) {
-            joined || notifyError(error, "Could not branch session");
-          }
+        let row = rowOf(node);
+        try {
+          let result = await guardedBranch(branchCooldown, branchFlights, { parentId: row.id, profile: node.profile, cwd: row.cwd });
+          if (!result)
+            return;
+          let child = result.stored_session_id;
+          if (!child)
+            throw new Error("The gateway returned no branch id");
+          result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
+          }), branchCooldown.branched(child), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
+        } catch (error) {
+          notifyError(error, "Could not branch session");
+        }
       },
       async exportSession(node) {
         let row = rowOf(node);
@@ -9691,15 +9726,22 @@ import { useCallback as useCallback4, useSyncExternalStore } from "react";
 
 // src/model/layout-sync.ts
 init_define_import_meta_env();
-var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v1", BATCH_LIMIT = 1e3, EMPTY_SETTINGS = { style: null, snap: !1 };
-var sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
-function isRefusal(error) {
-  let match = /^(\d{3}): /.exec(error instanceof Error ? error.message : String(error ?? ""));
-  return !!(match && ["400", "409", "413", "422"].includes(match[1]));
+var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
+function refusalKind(error) {
+  let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
+  if (!match)
+    return null;
+  let status = Number(match[1]);
+  return status < 400 || status > 499 || status === 408 || status === 429 ? null : status === 409 && match[2].includes(NEWER_SCHEMA) ? NEWER_SCHEMA : match[1];
+}
+function randomId() {
+  return globalThis.crypto?.randomUUID?.() ?? `w${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 var LayoutSync = class {
   profiles = /* @__PURE__ */ new Map();
-  pending;
+  pending = [];
+  /** Changes made while the store is read-only: shown here, never sent, never persisted. */
+  localOnly = [];
   listeners = /* @__PURE__ */ new Set();
   watched = /* @__PURE__ */ new Map();
   dragging = /* @__PURE__ */ new Set();
@@ -9710,12 +9752,22 @@ var LayoutSync = class {
   writeSeq = 0;
   disposed = !1;
   version = 0;
+  readOnly = !1;
+  /** `layout + key` of auto-layout placements the backend refused: never queued again. */
+  refusedPlacements = /* @__PURE__ */ new Set();
+  notified = /* @__PURE__ */ new Set();
+  /** The ops in this window's slot as last written (to tell an adoption by another window). */
+  persistedOps = /* @__PURE__ */ new Set();
+  ownsSlot = !1;
+  lastDropAt = 0;
   transport;
   storage;
   timers;
   options;
+  windowId;
+  now;
   constructor(transport, storage, timers, options = {}) {
-    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.pending = (storage.get(PENDING_KEY, null) ?? []).filter(isOp), this.pending.length > 0 && this.schedule(0);
+    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.windowId = options.windowId ?? randomId(), this.now = options.now ?? Date.now, this.adoptOrphans() && this.schedule(0);
   }
   // --- subscription -------------------------------------------------------------------------
   /** Called after every change a reader can see (positions, settings, status). */
@@ -9755,10 +9807,18 @@ var LayoutSync = class {
   offline(profile) {
     return this.profile(profile).status === "offline";
   }
+  /** The store was written by a newer Session Tree: nothing is saved from this page (B1). */
+  get storeReadOnly() {
+    return this.readOnly;
+  }
+  /** This window's ops a reader sees: the unsent queue, then the read-only local changes. */
+  overlay() {
+    return this.localOnly.length > 0 ? [...this.pending, ...this.localOnly] : this.pending;
+  }
   /** The synced settings as this window has them (its own unsent changes included). */
   settings(profile) {
     let base = { ...this.profile(profile).server?.settings ?? this.anySettings() };
-    for (let op of this.pending)
+    for (let op of this.overlay())
       op.kind === "settings" && Object.assign(base, op.patch);
     return base;
   }
@@ -9769,10 +9829,10 @@ var LayoutSync = class {
       state.server && (!best || state.server.rev > best.rev) && (best = state.server);
     return best?.settings ?? EMPTY_SETTINGS;
   }
-  /** The positions of one layout: the server's, this window's unsent changes on top. */
+  /** The positions of one layout, by layout key: the server's, this window's unsent changes on top. */
   positions(ref) {
     let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
-    for (let op of this.pending)
+    for (let op of this.overlay())
       (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
     return out;
   }
@@ -9780,22 +9840,28 @@ var LayoutSync = class {
   /**
    * Lay out against the stored positions and keep what the layout placed. Called while the page
    * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
-   * style that saves nothing, Swimlanes).
+   * style that saves nothing, Swimlanes). `keys` maps the layout's block ids to layout keys;
+   * `compute` and the answer speak block ids.
    */
-  place(ref, compute, { save = !0 } = {}) {
-    let previous = this.positions(ref), result = compute(previous.size > 0 ? previous : void 0);
+  place(ref, compute, { save = !0, keys = IDENTITY_KEYS } = {}) {
+    let stored = this.positions(ref), previous = keys === IDENTITY_KEYS ? stored : new Map([...stored].map(([key, point]) => [keys.fromStore(key), point])), result = compute(previous.size > 0 ? previous : void 0);
     if (!save)
       return result;
     let placed = [];
-    for (let [id2, point] of result.positions)
-      previous.has(id2) || placed.push([id2, { x: point.x, y: point.y }]);
+    for (let [id2, point] of result.positions) {
+      let key = keys.toStore(id2);
+      !stored.has(key) && !this.refusedPlacements.has(entryKey(ref, key)) && placed.push([key, { x: point.x, y: point.y }]);
+    }
     return placed.length > 0 && this.queue({ kind: "upsert", ref, mode: "if_absent", entries: placed }, !1), result;
   }
-  /** A drop: these blocks now sit here. */
+  /** A drop: these blocks (by layout key) now sit here. */
   drop(ref, moves) {
-    moves.size !== 0 && this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
+    if (moves.size === 0)
+      return;
+    let at = Math.max(this.now(), this.lastDropAt + 1);
+    this.lastDropAt = at, this.readOnly || this.recordDrops(ref, [...moves.keys()], at), this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), at }, !0);
   }
-  /** Re-arrange: forget this layout. Answers what was shown, for Undo. */
+  /** Re-arrange: forget this layout. Answers what was shown (by layout key), for Undo. */
   rearrange(ref) {
     let previous = this.positions(ref);
     return this.queue({ kind: "replace", ref, entries: null }, !0), previous;
@@ -9805,11 +9871,11 @@ var LayoutSync = class {
     this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
   }
   /**
-   * A block moved to another project: forget its stored spot in every layout of the profile (here
-   * and on the server), so each layout places it anew in its new band.
+   * A block moved to another project: forget its stored spot (by layout key) in every layout of
+   * the profile (here and on the server), so each layout places it anew in its new band.
    */
-  forget(profile, id2) {
-    this.queue({ kind: "forget", profile, ids: [id2] }, !0);
+  forget(profile, key) {
+    this.queue({ kind: "forget", profile, ids: [key] }, !0);
   }
   setSettings(profile, patch) {
     this.queue({ kind: "settings", profile, patch }, !0);
@@ -9823,30 +9889,91 @@ var LayoutSync = class {
     return this.dragging.size > 0;
   }
   queue(op, notify) {
-    this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300), notify && this.emit();
+    this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit();
   }
-  persistPending() {
-    this.storage.set(PENDING_KEY, this.pending);
+  // --- the device's pending queue (NB1) ------------------------------------------------------
+  readSlots() {
+    let raw = this.storage.get(PENDING_KEY, null), slots = {};
+    if (raw && typeof raw == "object" && raw.slots && typeof raw.slots == "object")
+      for (let [owner, value2] of Object.entries(raw.slots)) {
+        let slot = value2;
+        slot && typeof slot.beat == "number" && Array.isArray(slot.ops) && (slots[owner] = { beat: slot.beat, ops: slot.ops.filter(isOp) });
+      }
+    return slots;
+  }
+  writeSlots(slots) {
+    this.storage.set(PENDING_KEY, { slots });
+  }
+  /**
+   * Another window adopted this window's slot (it looked orphaned, e.g. a long-hidden tab): it
+   * sends those ops, so this window keeps only what it queued since.
+   */
+  reconcileSlot(slots) {
+    this.ownsSlot && !(this.windowId in slots) && (this.pending = this.pending.filter((op) => !this.persistedOps.has(op)), this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set());
+  }
+  /** Rewrites this window's slot only (and refreshes its heartbeat). */
+  persistPending(beat = this.now()) {
+    let slots = this.readSlots();
+    this.reconcileSlot(slots), this.pending.length > 0 ? (slots[this.windowId] = { beat, ops: this.pending }, this.ownsSlot = !0, this.persistedOps = new Set(this.pending)) : (delete slots[this.windowId], this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set()), this.writeSlots(slots);
+  }
+  /** Takes over the slots of closed windows (and the card-4 shared queue). True: adopted some. */
+  adoptOrphans() {
+    let slots = this.readSlots(), now2 = this.now(), adopted = [], legacy = this.storage.get(LEGACY_PENDING_KEY, null);
+    Array.isArray(legacy) && (adopted.push(...legacy.filter(isOp)), this.storage.set(LEGACY_PENDING_KEY, null));
+    for (let [owner, slot] of Object.entries(slots))
+      owner !== this.windowId && now2 - slot.beat > ORPHAN_MS && (adopted.push(...slot.ops), delete slots[owner]);
+    return adopted.length === 0 ? !1 : (this.writeSlots(slots), this.pending = [...adopted, ...this.pending], this.persistPending(), !0);
+  }
+  recordDrops(ref, keys, at) {
+    let record = { ...this.storage.get(DROPS_KEY, {}) };
+    for (let key of keys) {
+      let name = entryKey(ref, key);
+      record[name] = Math.max(typeof record[name] == "number" ? record[name] : 0, at);
+    }
+    let kept = Object.entries(record).filter(([, when]) => typeof when == "number" && at - when < DROP_RECORD_MS).sort((a, b) => b[1] - a[1]).slice(0, DROP_RECORD_MAX);
+    this.storage.set(DROPS_KEY, Object.fromEntries(kept));
+  }
+  /**
+   * Discards queued drops that a newer drop of the same block on this device (any window)
+   * supersedes, before anything is sent: last write wins per block on the server, so an older
+   * drop sent late would overwrite the newer one.
+   */
+  supersede() {
+    let record = this.storage.get(DROPS_KEY, {}), changed = !1;
+    this.pending = this.pending.flatMap((op) => {
+      if (op.kind !== "upsert" || op.mode !== "set" || typeof op.at != "number")
+        return [op];
+      let at = op.at, entries = op.entries.filter(([key]) => !((record[entryKey(op.ref, key)] ?? 0) > at));
+      return entries.length === op.entries.length ? [op] : (changed = !0, entries.length > 0 ? [{ ...op, entries }] : []);
+    }), changed && (this.persistPending(), this.emit());
   }
   /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
   schedule(ms) {
-    this.disposed || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
+    this.disposed || this.readOnly || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
       this.cancelFlush = void 0, this.flush();
     }, ms));
   }
   // --- sending ------------------------------------------------------------------------------
   /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
   async flush() {
-    if (!(this.flushing || this.disposed) && !(this.dragging.size > 0)) {
+    if (!(this.flushing || this.disposed || this.readOnly) && !(this.dragging.size > 0)) {
       this.flushing = !0;
       try {
-        for (; this.pending.length > 0 && this.dragging.size === 0 && !this.disposed; ) {
-          let [op, count] = this.nextBatch();
+        for (this.pending.length > 0 && this.persistPending(); this.pending.length > 0 && this.dragging.size === 0 && !this.disposed && !this.readOnly && (this.supersede(), this.pending.length !== 0); ) {
+          let [op, count] = this.nextBatch(), batch = this.pending.slice(0, count);
           try {
-            await this.send(op), this.ack(op), this.pending.splice(0, count), this.persistPending(), this.failures = 0, this.markOnline(opProfile(op));
+            await this.send(op), this.ack(op), this.dequeue(batch), this.failures = 0, this.markOnline(opProfile(op));
           } catch (error) {
-            if (isRefusal(error)) {
-              this.pending.splice(0, count), this.persistPending(), this.options.onRefused?.(error), this.emit();
+            let kind = refusalKind(error);
+            if (kind === NEWER_SCHEMA) {
+              this.enterReadOnly(error);
+              return;
+            }
+            if (kind !== null) {
+              if (this.dequeue(batch), op.kind === "upsert" && op.mode === "if_absent")
+                for (let [key] of op.entries)
+                  this.refusedPlacements.add(entryKey(op.ref, key));
+              this.notifyOnce(kind, error), this.emit();
               continue;
             }
             this.markOffline(opProfile(op)), this.retry();
@@ -9858,6 +9985,21 @@ var LayoutSync = class {
       }
       this.pending.length > 0 && this.dragging.size === 0 && this.schedule(0);
     }
+  }
+  /** Removes these ops (sent or refused); gone already if another window took them over. */
+  dequeue(batch) {
+    let sent = new Set(batch);
+    this.pending = this.pending.filter((op) => !sent.has(op)), this.persistPending();
+  }
+  notifyOnce(kind, error) {
+    this.notified.has(kind) || (this.notified.add(kind), this.options.onRefused?.(error, kind));
+  }
+  /** B1: a newer Session Tree wrote the store. Send nothing more; keep changes local. */
+  enterReadOnly(error) {
+    this.readOnly || (this.readOnly = !0, this.cancelFlush?.(), this.cancelFlush = void 0, this.notifyOnce(NEWER_SCHEMA, error ?? new Error(`409: ${NEWER_SCHEMA}`)), this.emit());
+  }
+  leaveReadOnly() {
+    this.readOnly && (this.readOnly = !1, this.localOnly = [], this.failures = 0, this.pending.length > 0 && this.schedule(0));
   }
   /** The first pending op merged with the consecutive upserts of the same layout and mode. */
   nextBatch() {
@@ -9923,23 +10065,24 @@ var LayoutSync = class {
   }
   cache(profile) {
     let server = this.profile(profile).server;
-    server && this.storage.set(`${CACHE_KEY}:${profile}`, server);
+    server && !server.read_only && this.storage.set(`${CACHE_KEY}:${profile}`, server);
   }
   // --- fetching -----------------------------------------------------------------------------
   /** Fetch (or re-check) one profile's state. A failure leaves the cache in place, offline. */
   async refresh(profile) {
     if (this.disposed)
       return;
-    let state = this.profile(profile), known = state.settled && state.status === "online" ? state.server?.rev : void 0, seq = this.writeSeq;
+    let state = this.profile(profile), server = state.server, known = state.settled && state.status === "online" && server?.epoch ? { rev: server.rev, epoch: server.epoch } : void 0, seq = this.writeSeq;
     try {
       let answer = await this.transport.getState(profile, known);
       if (seq !== this.writeSeq) {
         this.refresh(profile);
         return;
       }
-      "unchanged" in answer || (state.server = answer, this.cache(profile));
-      let wasOnline = state.status === "online", changed = !("unchanged" in answer) || !wasOnline || !state.settled;
-      state.status = "online", state.settled = !0, !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
+      let full = !("unchanged" in answer);
+      full && (state.server = answer, this.cache(profile));
+      let wasOnline = state.status === "online", changed = full || !wasOnline || !state.settled;
+      state.status = "online", state.settled = !0, full && answer.read_only ? this.enterReadOnly(null) : full && this.leaveReadOnly(), !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
     } catch {
       this.markOffline(profile), this.watched.has(profile) && this.retryRefresh(profile);
     }
@@ -9963,21 +10106,31 @@ var LayoutSync = class {
       count <= 0 ? this.watched.delete(profile) : this.watched.set(profile, count);
     };
   }
-  /** The poll: every watched profile, cheaply (`since_rev`). */
+  /** The poll: every watched profile, cheaply (`since_rev` + `epoch`); closed windows' queues. */
   poll() {
+    this.adoptOrphans() ? this.schedule(0) : this.pending.length > 0 && !this.flushing && this.persistPending();
     for (let profile of this.watched.keys())
       this.refresh(profile);
   }
   /** A push from the backend: refresh what it touched, unless this window already has it. */
   onRemoteChange(payload) {
-    let { rev, profile } = payload ?? {};
+    let { rev, epoch, profile } = payload ?? {};
     for (let name of this.watched.keys()) {
-      let known = this.profile(name).server?.rev ?? -1;
-      typeof rev == "number" && rev <= known || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
+      let server = this.profile(name).server, sameFile = typeof epoch == "string" && server?.epoch === epoch;
+      typeof rev == "number" && sameFile && rev <= (server?.rev ?? -1) || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
     }
   }
+  /**
+   * The page is going away (`pagehide`: a reload, a closed tab): mark this window's slot as
+   * orphaned, so the next window (the reloaded page) adopts the queue at once instead of after
+   * `ORPHAN_MS`. If the page comes back (the back/forward cache), its next write reclaims the slot
+   * unless another window adopted it meanwhile.
+   */
+  release() {
+    this.pending.length > 0 && this.persistPending(0);
+  }
   dispose() {
-    this.disposed = !0, this.cancelFlush?.();
+    this.disposed = !0, this.cancelFlush?.(), this.release();
     for (let cancel of this.refreshTimers.values())
       cancel();
     this.refreshTimers.clear(), this.listeners.clear();
@@ -10015,16 +10168,20 @@ function isOp(value2) {
 }
 
 // src/page/services.ts
+var READ_ONLY_MESSAGE = "Layout saved by a newer Session Tree version — changes here are not saved";
 function createServices(ctx) {
   let sync = new LayoutSync(
     stateTransport(ctx),
     ctx.storage,
     { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms) },
     {
-      onRefused: (error) => host3.notify({ kind: "error", title: "Session Tree could not save the layout", message: restErrorText(error) })
+      // LayoutSync calls this at most once per refusal kind per page lifetime, never per request.
+      onRefused: (error, kind) => host3.notify(
+        kind === NEWER_SCHEMA ? { kind: "warning", title: "Session Tree", message: READ_ONLY_MESSAGE } : { kind: "error", title: "Session Tree could not save the layout", message: restErrorText(error) }
+      )
     }
   );
-  return ctx.onDispose(() => sync.dispose()), ctx.onEvent(LAYOUT_CHANGED_EVENT, (event) => sync.onRemoteChange(event.payload)), ctx.setInterval(() => {
+  return ctx.onDispose(() => sync.dispose()), ctx.addEventListener(window, "pagehide", () => sync.release()), ctx.onEvent(LAYOUT_CHANGED_EVENT, (event) => sync.onRemoteChange(event.payload)), ctx.setInterval(() => {
     document.visibilityState === "visible" && sync.poll();
   }, POLL_MS), { sync, prefs: new DevicePrefs(ctx.storage) };
 }
@@ -10300,12 +10457,12 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   let projectList = useMemo5(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo5(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo5(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo5(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo5(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), layout = useMemo5(
+  ), spec = useMemo5(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo5(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo5(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), layout = useMemo5(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
-    () => ready ? sync.place(ref, (previous) => style2.layout(model, previous, spec), { save: style2.savesLayout && !projects.isError }) : EMPTY_LAYOUT,
+    () => ready ? sync.place(ref, (previous) => style2.layout(model, previous, spec), { save: style2.savesLayout && !projects.isError, keys }) : EMPTY_LAYOUT,
     // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
-    [ready, sync, ref, style2, model, spec, syncVersion, projects.isError]
+    [ready, sync, ref, style2, model, keys, spec, syncVersion, projects.isError]
   ), busy = useValue(host4.state.busy), busyBySession = useValue(host4.state.busyBySession), focusedSessionId = useValue(host4.state.focusedSessionId), focusedStoredSessionId = useValue(host4.state.focusedStoredSessionId), hostStatus = useMemo5(
     () => ({
       busy: !!busy,
@@ -10351,7 +10508,10 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       }
     },
     [model, layout, flow, style2, setSelectedId]
-  ), onMove = useCallback5((moves) => sync.drop(ref, moves), [sync, ref]), onDragging = useCallback5((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback5(() => setToast(void 0), [setToast]), onRearrange = useCallback5(() => {
+  ), onMove = useCallback5(
+    (moves) => sync.drop(ref, new Map([...moves].map(([id2, point]) => [keys.toStore(id2), point]))),
+    [sync, ref, keys]
+  ), onDragging = useCallback5((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback5(() => setToast(void 0), [setToast]), onRearrange = useCallback5(() => {
     let previous = sync.rearrange(ref), id2 = Date.now();
     requestFit(), setToast({
       id: id2,
@@ -10391,7 +10551,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       projects.refetch();
     },
     onBranched: (id2) => setPendingSelect(id2),
-    onMoved: (id2) => sync.forget(profile, id2),
+    onMoved: (id2) => sync.forget(profile, keys.toStore(id2)),
     onRemoved: (id2) => setSelectedId((current) => current === id2 ? null : current)
   }), visibleCount = useMemo5(() => visibleRows(rows).length, [rows]), onCanvas = useMemo5(() => laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0), [model, spec]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id), offline = sync.offline(profile), onStyle = useCallback5(
     (id2) => {
@@ -10487,6 +10647,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           }
         ),
         offline && /* @__PURE__ */ jsx9("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
+        sync.storeReadOnly && /* @__PURE__ */ jsx9("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
         /* @__PURE__ */ jsxs9("div", { className: "session-tree__main", children: [
           /* @__PURE__ */ jsx9("div", { className: "session-tree__stage", children: body }),
           Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx9(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })

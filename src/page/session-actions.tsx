@@ -47,6 +47,7 @@ import {
   decodeExportEnvelope,
   deleteBlockedReason,
   exportFilename,
+  guardedBranch,
   isActionable,
   isAlreadyAbsent,
   moveTargets,
@@ -212,27 +213,20 @@ export function useSessionActionsController(options: SessionActionsOptions): {
 
       async branch(node) {
         const row = rowOf(node)
-        let joined = false
-
-        // The second click of a double-click lands on the child the first one just selected.
-        if (branchCooldown.blocks(row.id)) {
-          return
-        }
 
         try {
-          // One request per parent at a time: a double-submit joins the flight in progress
-          // (one idempotency key per attempt), and only the first caller places the child
-          // (or reports the failure).
-          const started = branchFlights({ parentId: row.id, profile: node.profile, cwd: row.cwd })
+          // Ignored: the second click of a double-click lands on the child the first one just
+          // selected (card-3 review), or on the same parent while its request is in flight or
+          // just returned (NB4). One request per parent at a time: a double-submit joins the
+          // flight in progress (one idempotency key per attempt), and only the first caller
+          // places the child (or reports the failure).
+          const result = await guardedBranch(branchCooldown, branchFlights, { parentId: row.id, profile: node.profile, cwd: row.cwd })
 
-          joined = started.joined
-          const result = await started.flight
-
-          if (joined) {
+          if (!result) {
             return
           }
 
-          const child = result?.stored_session_id
+          const child = result.stored_session_id
 
           if (!child) {
             throw new Error('The gateway returned no branch id')
@@ -249,9 +243,7 @@ export function useSessionActionsController(options: SessionActionsOptions): {
           latest.current.options.refreshSessions()
           host.notify({ kind: 'success', message: `Branched “${node.title}”`, durationMs: 2000 })
         } catch (error) {
-          if (!joined) {
-            notifyError(error, 'Could not branch session')
-          }
+          notifyError(error, 'Could not branch session')
         }
       },
 

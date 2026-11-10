@@ -128,8 +128,8 @@ const profileQuery = (profile: string, extra: Record<string, string> = {}) =>
 /** The page's transport for `LayoutSync` (every call names the profile it is for). */
 export function stateTransport(ctx: PluginContext): SyncTransport {
   return {
-    getState: (profile, sinceRev) =>
-      ctx.rest<StateAnswer>(`/state?${profileQuery(profile, sinceRev === undefined ? {} : { since_rev: String(sinceRev) })}`, { timeoutMs: 10000 }),
+    getState: (profile, since) =>
+      ctx.rest<StateAnswer>(`/state?${profileQuery(profile, since === undefined ? {} : { since_rev: String(since.rev), epoch: since.epoch })}`, { timeoutMs: 10000 }),
     patchPositions: (profile, body) => ctx.rest(`/state/positions?${profileQuery(profile)}`, { method: 'PATCH', body, timeoutMs: 15000 }),
     patchSettings: (profile, patch) => ctx.rest(`/settings?${profileQuery(profile)}`, { method: 'PATCH', body: patch, timeoutMs: 15000 }),
     deleteLayout: (profile, style, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style, scope })}`, { method: 'DELETE', timeoutMs: 15000 }),

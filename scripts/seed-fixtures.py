@@ -28,6 +28,8 @@ without the owner stamp (the actions e2e's real ``permission_denied`` refusal); 
 adds an owned ``/branch`` child with ``estimated_cost_usd=2.0`` (a whole-number float: the byte-exact export check).
 ``--inf-cost-branch`` adds one with an infinite cost (card 4: the core JSON answer for such a row fails,
 the page must end in an error state with Retry); ``--delete ID`` removes a row through ``delete_session``.
+``--compact ID [NEW_ID]`` compacts the conversation ID names once more (its tip ends ``compression``,
+a continuation row takes over; card-4 review B2).
 ``--activate ID`` re-opens a
 session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
 so the core list's 300 s ``is_active`` heuristic reports it. Prints a JSON manifest of what it created.
@@ -284,9 +286,48 @@ def activate(sid: str) -> dict:
         db.close()
 
 
+def compact(sid: str, new_id: str | None = None, *, db: SessionDB | None = None) -> dict:
+    """Compact the conversation *sid* names (its root, a segment or its live tip) once more, the
+    way a real compaction leaves it in ``state.db`` (``SessionDB`` API): the live tip ends with
+    ``compression`` and a continuation row takes over (``parent_session_id`` = the old tip, no
+    fork marker), with one message. The lineage root stays; the listing's tip id changes (the
+    card-4 review B2 check: a placed block must stay put). Fixture-only direct SQL re-opens a tip
+    that is already ended (``end_session`` keeps a first end), like ``--activate``."""
+    own = db is None
+    db = db or SessionDB(db_path=HOME / "state.db")
+    try:
+        if db.get_session(sid) is None:
+            sys.exit(f"no session {sid}")
+        tip = db.get_compression_tip(sid) or sid
+        lineage = db.get_compression_lineage(tip)
+        new_id = new_id or f"{lineage[0]}-c{len(lineage)}"
+        if db.get_session(new_id) is not None:
+            return {"compacted": tip, "continuation": new_id, "root": lineage[0], "created": False}
+        row = db.get_session(tip) or {}
+
+        def reopen(conn):
+            conn.execute("UPDATE sessions SET ended_at=NULL, end_reason=NULL WHERE id=?", (tip,))
+        db._execute_write(reopen)
+        db.end_session(tip, "compression")
+        db.create_session(new_id, row.get("source") or "desktop", model=row.get("model"), parent_session_id=tip,
+                          cwd=row.get("cwd"), git_repo_root=row.get("git_repo_root"), user_id=OWNER)
+        db.append_message(new_id, "user", "Continue after compaction", timestamp=time.time())
+        return {"compacted": tip, "continuation": new_id, "root": db.get_compression_lineage(new_id)[0], "created": True,
+                "lineage": db.get_compression_lineage(new_id)}
+    finally:
+        if own:
+            db.close()
+
+
 def main() -> None:
     if "--touch" in sys.argv:
         print(json.dumps(touch()))
+        return
+    if "--compact" in sys.argv:
+        args = sys.argv[sys.argv.index("--compact") + 1:]
+        if not args:
+            sys.exit("usage: --compact ID [NEW_ID]")
+        print(json.dumps(compact(args[0], args[1] if len(args) > 1 else None)))
         return
     if "--branch" in sys.argv or "--unowned-branch" in sys.argv or "--whole-cost-branch" in sys.argv or "--inf-cost-branch" in sys.argv:
         flag = next(f for f in ("--branch", "--unowned-branch", "--whole-cost-branch", "--inf-cost-branch") if f in sys.argv)

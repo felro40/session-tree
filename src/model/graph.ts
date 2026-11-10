@@ -21,6 +21,7 @@ import {
   visibleIdIndex
 } from './branch-tree.ts'
 import { NO_PROJECT_ID, projectIndex } from './projects.ts'
+import type { LayoutKeys } from './layout-sync.ts'
 import type { ProjectInfo } from './projects.ts'
 import { compactedCount, displayTitle, isHiddenRow } from './sessions.ts'
 import type { SessionRow } from './sessions.ts'
@@ -41,6 +42,13 @@ export type EdgeKind = 'branch' | 'reset'
 
 export interface GraphNode {
   id: string
+  /**
+   * The key the layout store keeps this block's position under (card-4 review B2): a compression
+   * lineage's root id (`_lineage_root_id`, stable across compactions, while `id` is the live tip
+   * and changes), else the block's own id. Profile-qualified like `id`, when two profiles share
+   * it. Only positions use it: selection, open, actions and focus use `id` / `row.id`.
+   */
+  layoutKey: string
   kind: NodeKind
   /** The session row (absent on a stand-in). */
   row?: SessionRow
@@ -140,15 +148,25 @@ export function buildGraph(rows: readonly SessionRow[], projects: readonly Proje
     nodeIdOf.set(row, (idCount.get(row.id) ?? 0) > 1 ? `${profileKey(row)}/${row.id}` : row.id)
   }
 
+  // Layout keys (B2): the lineage root, qualified by profile only when two profiles share it.
+  const rootOf = (row: SessionRow) => row._lineage_root_id?.trim() || row.id
+  const rootCount = new Map<string, number>()
+
+  for (const row of sessions) {
+    rootCount.set(rootOf(row), (rootCount.get(rootOf(row)) ?? 0) + 1)
+  }
+
   const nodes: GraphNode[] = []
   const nodeById = new Map<string, GraphNode>()
 
   for (const row of sessions) {
     const id = nodeIdOf.get(row)!
     const projectId = projectsIdx.projectOf(row)
+    const root = rootOf(row)
 
     const node: GraphNode = {
       id,
+      layoutKey: (rootCount.get(root) ?? 0) > 1 ? `${profileKey(row)}/${root}` : root,
       kind: 'session',
       row,
       title: displayTitle(row),
@@ -190,6 +208,7 @@ export function buildGraph(rows: readonly SessionRow[], projects: readonly Proje
       if (!nodeById.has(source)) {
         const standin: GraphNode = {
           id: source,
+          layoutKey: source,
           kind: 'standin',
           title: 'Parent not loaded',
           profile: profileKey(row),
@@ -394,4 +413,25 @@ export function lineageOf(model: GraphModel, id: null | string | undefined): Set
 /** Singles in scope (R8 container lists), most recent first. */
 export function singlesInScope(model: GraphModel): GraphNode[] {
   return model.singles.filter(node => !node.outOfScope)
+}
+
+/**
+ * Block id ↔ layout key for `LayoutSync` (B2). Ids that are not blocks (group labels) map to
+ * themselves.
+ */
+export function layoutKeysOf(model: GraphModel): LayoutKeys {
+  const toStore = new Map<string, string>()
+  const fromStore = new Map<string, string>()
+
+  for (const node of model.nodes) {
+    if (node.layoutKey !== node.id) {
+      toStore.set(node.id, node.layoutKey)
+      fromStore.set(node.layoutKey, node.id)
+    }
+  }
+
+  return {
+    toStore: id => toStore.get(id) ?? id,
+    fromStore: key => fromStore.get(key) ?? key
+  }
 }

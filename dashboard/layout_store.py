@@ -20,7 +20,19 @@ the same code.
   (batch, entries per layout, layouts per profile, profiles, file bytes).
 * **Corrupt file:** a ``state.json`` that does not parse or validate is moved aside to
   ``state.json.corrupt-<time>.bak`` before anything else is written, and an empty state is
-  served. A file of a newer schema is left alone: served as empty, never overwritten (409).
+  served. A file of a newer schema is left alone: served as empty with ``read_only: true``, never
+  overwritten (a write answers 409 ``newer_schema: …``).
+* **Epoch:** a random id minted whenever a fresh ``state.json`` is written (first creation, after a
+  corrupt file was moved aside, after the file was deleted). ``(epoch, rev)`` names a state: a
+  ``rev`` alone restarts at 0 with a new file, so a client comparing revs only could take a new
+  file for one it has. A file without ``epoch`` (written before it existed) still loads, as the
+  one stable :data:`LEGACY_EPOCH`, until its next write persists a real one; no file at all is
+  :data:`NO_EPOCH`. No schema bump: ``epoch`` is an optional key of schema 1.
+* **Compression lineages** (card-4 review B2): a block's layout key is its compression lineage's
+  root id. :meth:`LayoutStore.prune` canonicalises when the state is served: an entry keyed by
+  another member of a lineage (an old tip) moves to the root key (the newer entry by
+  ``updated_at`` wins when both exist), so a stored position survives a compaction and old tip
+  keys do not pile up.
 """
 
 from __future__ import annotations
@@ -41,6 +53,16 @@ except ImportError:  # pragma: no cover - Windows
     fcntl = None  # type: ignore[assignment]
 
 SCHEMA_VERSION = 1
+
+#: The epoch of a ``state.json`` written before epochs existed (until its next write).
+LEGACY_EPOCH = "legacy"
+#: The epoch served while there is no ``state.json`` (nothing stored yet, or it was deleted).
+NO_EPOCH = "none"
+#: The epoch served for a file of a newer schema (read-only here).
+NEWER_EPOCH = "newer"
+#: The 409 detail prefix of a write refused because ``state.json`` has a newer schema.
+NEWER_SCHEMA_CODE = "newer_schema"
+_EPOCH_RE = re.compile(r"^[0-9a-f]{16,64}$")
 
 #: Caps (module attributes so a test can lower them).
 MAX_FILE_BYTES = 8 * 1024 * 1024
@@ -151,7 +173,16 @@ def check_settings_patch(patch: Any) -> dict[str, Any]:
 
 
 def _empty() -> dict[str, Any]:
-    return {"schema": SCHEMA_VERSION, "rev": 0, "settings": {"style": None, "snap": False}, "layouts": {}}
+    return {"schema": SCHEMA_VERSION, "epoch": NO_EPOCH, "rev": 0, "settings": {"style": None, "snap": False}, "layouts": {}}
+
+
+def _newer(exc: "NewerSchema") -> dict[str, Any]:
+    """What a newer-schema file reads as here: empty, read-only, with that file's schema."""
+    return {**_empty(), "epoch": NEWER_EPOCH, "store_schema": int(str(exc))}
+
+
+def new_epoch() -> str:
+    return secrets.token_hex(8)
 
 
 def _validate_file(raw: Any) -> dict[str, Any]:
@@ -161,8 +192,14 @@ def _validate_file(raw: Any) -> dict[str, Any]:
     schema = raw.get("schema")
     if isinstance(schema, int) and not isinstance(schema, bool) and schema > SCHEMA_VERSION:
         raise NewerSchema(str(schema))
-    if schema != SCHEMA_VERSION or set(raw) != {"schema", "rev", "settings", "layouts"}:
+    keys = set(raw)
+    if schema != SCHEMA_VERSION or keys - {"epoch"} != {"schema", "rev", "settings", "layouts"}:
         raise CorruptState("schema")
+    if "epoch" in keys:
+        if not isinstance(raw["epoch"], str) or not _EPOCH_RE.fullmatch(raw["epoch"]):
+            raise CorruptState("epoch")
+    else:
+        raw["epoch"] = LEGACY_EPOCH
     rev = raw["rev"]
     if isinstance(rev, bool) or not isinstance(rev, int) or rev < 0:
         raise CorruptState("rev")
@@ -280,8 +317,8 @@ class LayoutStore:
             return _empty()
         except NewerSchema as exc:
             if for_write:
-                raise StoreError(409, f"state.json has schema {exc}; this Session Tree writes schema {SCHEMA_VERSION}") from exc
-            return _empty()
+                raise StoreError(409, f"{NEWER_SCHEMA_CODE}: state.json has schema {exc}; this Session Tree writes schema {SCHEMA_VERSION}") from exc
+            return _newer(exc)
 
     def _backup_corrupt(self) -> None:
         if not self.path.exists():
@@ -339,6 +376,10 @@ class LayoutStore:
             changed = bool(change(state, stamp))
             if changed:
                 state["rev"] += 1
+                if state["epoch"] in (NO_EPOCH, LEGACY_EPOCH):
+                    # A fresh file (first write, after a corrupt one or a deletion), or the first
+                    # write of a pre-epoch file: a new epoch.
+                    state["epoch"] = new_epoch()
                 self._write_locked(state)
             return state, changed
 
@@ -348,8 +389,8 @@ class LayoutStore:
         """The whole state. A corrupt file is moved aside (under the locks) and reads as empty."""
         try:
             return self._read_file()
-        except NewerSchema:
-            return _empty()
+        except NewerSchema as exc:
+            return _newer(exc)
         except CorruptState:
             with self._locked():
                 return self._load_locked(for_write=False)
@@ -357,12 +398,21 @@ class LayoutStore:
     def revision(self) -> int:
         return self.read()["rev"]
 
+    def version(self) -> tuple[str, int]:
+        """``(epoch, rev)``: what names the served state (the ``since_rev`` + ``epoch`` poll)."""
+        state = self.read()
+        return state["epoch"], state["rev"]
+
     def snapshot(self, profile: str) -> dict[str, Any]:
-        """What one profile's page needs: schema, rev, settings, that profile's layouts."""
+        """What one profile's page needs: schema, epoch, rev, settings, that profile's layouts,
+        and ``read_only`` (the file has a newer schema, ``store_schema``: every write answers 409)."""
         check_profile(profile)
         state = self.read()
-        return {"schema": SCHEMA_VERSION, "rev": state["rev"], "settings": dict(state["settings"]),
-                "layouts": state["layouts"].get(profile, {})}
+        out = {"schema": SCHEMA_VERSION, "epoch": state["epoch"], "rev": state["rev"], "settings": dict(state["settings"]),
+               "layouts": state["layouts"].get(profile, {}), "read_only": "store_schema" in state}
+        if "store_schema" in state:
+            out["store_schema"] = state["store_schema"]
+        return out
 
     # writes -----------------------------------------------------------------------------------
 
@@ -391,7 +441,7 @@ class LayoutStore:
             return True
 
         state, changed = self._mutate(change)
-        return {"ok": True, "rev": state["rev"], "changed": changed, **counts}
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, **counts}
 
     def set_settings(self, patch: Any) -> dict[str, Any]:
         values = check_settings_patch(patch)
@@ -403,7 +453,7 @@ class LayoutStore:
             return True
 
         state, changed = self._mutate(change)
-        return {"ok": True, "rev": state["rev"], "changed": changed, "settings": dict(state["settings"])}
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "settings": dict(state["settings"])}
 
     def delete_layout(self, profile: str, style: str, scope: str) -> dict[str, Any]:
         """Re-arrange: forget one style + scope layout; answers what was removed (for Undo)."""
@@ -422,7 +472,7 @@ class LayoutStore:
             return True
 
         state, changed = self._mutate(change)
-        return {"ok": True, "rev": state["rev"], "changed": changed, "removed": removed}
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "removed": removed}
 
     def replace_layout(self, profile: str, style: str, scope: str, entries: Any) -> dict[str, Any]:
         """Undo of a Re-arrange: this style + scope layout becomes exactly ``entries``."""
@@ -449,7 +499,7 @@ class LayoutStore:
             return True
 
         state, changed = self._mutate(change)
-        return {"ok": True, "rev": state["rev"], "changed": changed, "count": len(items)}
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "count": len(items)}
 
     def forget_blocks(self, profile: str, ids: Any) -> dict[str, Any]:
         """A session moved to another project: drop these blocks from every layout of
@@ -472,44 +522,68 @@ class LayoutStore:
             return removed[0] > 0
 
         state, changed = self._mutate(change)
-        return {"ok": True, "rev": state["rev"], "changed": changed, "removed": removed[0]}
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "removed": removed[0]}
 
-    def prune(self, profile: str, existing: Callable[[dict[Optional[str], set[str]]], Optional[dict[Optional[str], set[str]]]]) -> int:
-        """Drop the positions of sessions that no longer exist from ``profile``'s layouts.
+    def prune(self, profile: str, existing: Callable[[dict[Optional[str], set[str]]], Optional[dict[Optional[str], Any]]]) -> int:
+        """Drop the positions of sessions that no longer exist from ``profile``'s layouts, and
+        canonicalise compression lineages to their root key (card-4 review B2 + NB3).
 
-        ``existing({profile_or_None: {ids}})`` answers which of those ids still exist (archived
-        ones too), per key; ``None`` key = bare ids of the view's own profile(s). It answers
-        ``None`` when that cannot be known (a store read failed): then nothing is pruned. Group
-        labels and stand-ins are not sessions and stay.
+        ``existing({profile_or_None: {ids}})`` answers, per key, the ids that still exist
+        (archived ones too) as ``{id: lineage_root_id}`` (a plain set means every id is its own
+        root); ``None`` key = bare ids of the view's own profile(s). It answers ``None`` when that
+        cannot be known (a store read failed): then nothing is pruned or moved. Group labels and
+        stand-ins are not sessions and stay.
+
+        An entry keyed by a non-root member of a lineage (an old tip, a middle segment) moves to
+        the root's key; when the root key already has an entry the newer by ``updated_at`` wins,
+        and the member key is dropped either way. Answers how many entries were dropped or moved.
         """
         check_profile(profile)
         candidates = _session_candidates(self.read(), profile)
         if not candidates:
             return 0
-        alive = existing({key: set(ids) for key, ids in candidates.items()})
-        if alive is None:
+        answer = existing({key: set(ids) for key, ids in candidates.items()})
+        if answer is None:
             return 0
-        if all(ids <= alive.get(key, set()) for key, ids in candidates.items()):
+        alive: dict[Optional[str], dict[str, str]] = {
+            key: (dict(found) if isinstance(found, dict) else {sid: sid for sid in found}) for key, found in answer.items()}
+
+        def settled(key: Optional[str], sid: str) -> bool:
+            return alive.get(key, {}).get(sid) == sid
+
+        if all(settled(key, sid) for key, ids in candidates.items() for sid in ids):
             return 0
-        removed = [0]
+        changes = [0]
 
         def change(state: dict[str, Any], _stamp: float) -> bool:
             for style, scopes in list(state["layouts"].get(profile, {}).items()):
                 for scope, blocks in list(scopes.items()):
                     for block in list(blocks):
-                        if not is_session_entry(block):
+                        if not is_session_entry(block) or block not in blocks:
                             continue
                         key, sid = split_session_entry(block)
-                        if key in candidates and sid in candidates[key] and sid not in alive.get(key, set()):
+                        if key not in candidates or sid not in candidates[key]:
+                            continue  # stored after the existence check: next time
+                        if sid not in alive.get(key, {}):
                             del blocks[block]
-                            removed[0] += 1
+                            changes[0] += 1
+                            continue
+                        root = alive[key][sid]
+                        if not root or root == sid:
+                            continue
+                        target = f"{key}/{root}" if key is not None else root
+                        entry = blocks.pop(block)
+                        held = blocks.get(target)
+                        if held is None or entry["updated_at"] > held["updated_at"]:
+                            blocks[target] = entry
+                        changes[0] += 1
                     if not blocks:
                         del scopes[scope]
                 _drop_empty(state, profile, style)
-            return removed[0] > 0
+            return changes[0] > 0
 
         self._mutate(change)
-        return removed[0]
+        return changes[0]
 
 
 def _check_many(entries: list[Any]) -> list[tuple[str, float, float]]:

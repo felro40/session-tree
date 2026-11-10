@@ -39,8 +39,8 @@ def pos(entries):
 
 def test_empty_store_serves_a_valid_empty_state(store):
     snap = store.snapshot("default")
-    assert snap == {"schema": store_mod.SCHEMA_VERSION, "rev": 0, "settings": {"style": None, "snap": False},
-                    "layouts": {}}
+    assert snap == {"schema": store_mod.SCHEMA_VERSION, "epoch": "none", "rev": 0, "settings": {"style": None, "snap": False},
+                    "layouts": {}, "read_only": False}
     assert not store.path.exists()  # a read writes nothing
 
 
@@ -254,6 +254,115 @@ def test_prune_without_anything_to_drop_writes_nothing(store):
     mtime = store.path.stat().st_mtime_ns
     assert store.prune("default", lambda qualified: {None: {"a"}}) == 0
     assert store.path.stat().st_mtime_ns == mtime and store.snapshot("default")["rev"] == 1
+
+
+# --- compression lineages (card-4 review B2 + NB3) ---------------------------------------------
+
+def _lineages(roots: dict[str, str]):
+    """An ``existing`` callback: every id in ``roots`` exists, with that lineage root."""
+    def existing(qualified):
+        return {key: {sid: roots[sid] for sid in ids if sid in roots} for key, ids in qualified.items()}
+    return existing
+
+
+def test_canonicalise_moves_a_tip_key_to_the_lineage_root(store):
+    # Stored before the fix (or before a compaction): keyed by the tip.
+    store.upsert_positions("default", "dense", "all", pos([("tip", 125.6, 2.4), ("plain", 7, 7)]))
+    store.upsert_positions("default", "dense", "p1", pos([("work/tip", 3, 4)]))
+    changed = store.prune("default", _lineages({"tip": "root", "plain": "plain"}))
+    assert changed == 2
+    layouts = store.snapshot("default")["layouts"]["dense"]
+    assert {k: (v["x"], v["y"]) for k, v in layouts["all"].items()} == {"root": (125.6, 2.4), "plain": (7, 7)}
+    # A profile-qualified key keeps its profile.
+    assert set(layouts["p1"]) == {"work/root"}
+    # The root key is settled: nothing more to do, nothing written.
+    mtime = store.path.stat().st_mtime_ns
+    assert store.prune("default", _lineages({"root": "root", "plain": "plain"})) == 0
+    assert store.path.stat().st_mtime_ns == mtime
+
+
+def test_canonicalise_conflict_keeps_the_newer_entry_and_drops_every_member_key(store):
+    # all: the root entry is older than the tip's -> the tip's spot wins.
+    store.upsert_positions("default", "dense", "all", pos([("root", 1, 1)]))
+    store.upsert_positions("default", "dense", "all", pos([("tip", 2, 2)]))
+    # p1: the tip's entry is older than the root's -> the root's spot stays.
+    store.upsert_positions("default", "dense", "p1", pos([("tip", 3, 3)]))
+    store.upsert_positions("default", "dense", "p1", pos([("root", 4, 4)]))
+    # p2: an old middle segment and an old tip both stored (keys piling up, NB3): one root entry.
+    store.upsert_positions("default", "dense", "p2", pos([("seg2", 5, 5)]))
+    store.upsert_positions("default", "dense", "p2", pos([("tip", 6, 6)]))
+    store.prune("default", _lineages({"root": "root", "seg2": "root", "tip": "root"}))
+    layouts = store.snapshot("default")["layouts"]["dense"]
+    assert {k: (v["x"], v["y"]) for k, v in layouts["all"].items()} == {"root": (2, 2)}
+    assert {k: (v["x"], v["y"]) for k, v in layouts["p1"].items()} == {"root": (4, 4)}
+    assert {k: (v["x"], v["y"]) for k, v in layouts["p2"].items()} == {"root": (6, 6)}
+
+
+def test_prune_keeps_root_keys_and_drops_keys_of_sessions_that_are_gone(store):
+    store.upsert_positions("default", "dense", "all", pos([("root", 1, 1), ("gone-tip", 2, 2), ("group:x", 0, 0)]))
+    assert store.prune("default", _lineages({"root": "root"})) == 1
+    assert set(store.snapshot("default")["layouts"]["dense"]["all"]) == {"root", "group:x"}
+
+
+# --- epoch (card-4 review NB2) ------------------------------------------------------------------
+
+def test_a_fresh_file_gets_an_epoch_that_stays_until_the_file_is_recreated(store):
+    assert store.version() == ("none", 0)
+    first = store.upsert_positions("default", "dense", "all", pos([("a", 1, 1)]))["epoch"]
+    assert len(first) == 16 and store.version() == (first, 1)
+    store.upsert_positions("default", "dense", "all", pos([("b", 1, 1)]))
+    assert store.version() == (first, 2)
+    assert json.loads(store.path.read_text("utf-8"))["epoch"] == first
+    # Deleted: no epoch, and the next write mints a new one (its rev restarts at 1).
+    store.path.unlink()
+    assert store.version() == ("none", 0)
+    second = store.upsert_positions("default", "dense", "all", pos([("a", 1, 1)]))["epoch"]
+    assert second != first and store.version() == (second, 1)
+    # Corrupt: moved aside, and the next write mints another one.
+    store.path.write_text('{"schema": 1, "rev": 9, "lay', encoding="utf-8")
+    assert store.version() == ("none", 0)
+    third = store.upsert_positions("default", "dense", "all", pos([("a", 1, 1)]))["epoch"]
+    assert third not in (first, second)
+
+
+def test_a_file_without_an_epoch_still_loads_as_one_stable_legacy_epoch(store):
+    store.path.parent.mkdir(parents=True, exist_ok=True)
+    legacy = {"schema": 1, "rev": 5, "settings": {"style": "dense", "snap": True},
+              "layouts": {"default": {"dense": {"all": {"a": {"x": 1, "y": 2, "updated_at": 1.0}}}}}}
+    store.path.write_text(json.dumps(legacy), encoding="utf-8")
+    assert store.version() == ("legacy", 5) and store.version() == ("legacy", 5)
+    snap = store.snapshot("default")
+    assert snap["epoch"] == "legacy" and snap["layouts"]["dense"]["all"]["a"]["x"] == 1
+    assert not list(store.path.parent.glob("state.json.corrupt-*"))
+    # The next write persists a real epoch (and keeps everything else).
+    epoch = store.set_settings({"snap": False})["epoch"]
+    raw = json.loads(store.path.read_text("utf-8"))
+    assert epoch not in ("legacy", "none") and raw["epoch"] == epoch and raw["rev"] == 6
+    assert raw["layouts"]["default"]["dense"]["all"]["a"]["y"] == 2
+
+
+@pytest.mark.parametrize("epoch", ["", "XYZ", 7, "a" * 65])
+def test_a_malformed_epoch_is_a_corrupt_file(store, epoch):
+    store.path.parent.mkdir(parents=True, exist_ok=True)
+    store.path.write_text(json.dumps({"schema": 1, "epoch": epoch, "rev": 1, "settings": {"style": None, "snap": False},
+                                      "layouts": {}}), encoding="utf-8")
+    assert store.snapshot("default")["epoch"] == "none"
+    assert len(list(store.path.parent.glob("state.json.corrupt-*.bak"))) == 1
+
+
+def test_a_newer_schema_reads_as_read_only_and_refuses_writes_with_the_newer_schema_code(store):
+    store.path.parent.mkdir(parents=True, exist_ok=True)
+    original = '{"schema":2,"rev":3,"settings":{"style":"dense","snap":false},"layouts":{},"extra":{}}'
+    store.path.write_text(original, encoding="utf-8")
+    snap = store.snapshot("default")
+    assert snap["read_only"] is True and snap["store_schema"] == 2 and snap["layouts"] == {}
+    for write in (lambda: store.upsert_positions("default", "dense", "all", pos([("a", 1, 1)]), if_absent=True),
+                  lambda: store.set_settings({"snap": True}),
+                  lambda: store.replace_layout("default", "dense", "all", pos([("a", 1, 1)]))):
+        with pytest.raises(StoreError) as error:
+            write()
+        assert error.value.status == 409 and error.value.detail.startswith("newer_schema: ")
+    assert store.path.read_text("utf-8") == original
 
 
 # --- concurrency ------------------------------------------------------------------------------

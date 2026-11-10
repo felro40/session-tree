@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { Locator, Page } from 'playwright-core'
+import type { Locator, Page, Route } from 'playwright-core'
 
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
@@ -761,6 +761,57 @@ async function main(): Promise<void> {
         return { gapMs: gap, parent, child: child.id, created: created.length }
       })
     }
+
+    // Card-4 review NB4: with a slow refetch the parent is still selected when the request
+    // returns; a second real click ~600 ms after the first (≈ 450 ms after the return) made a
+    // sibling. The page's own session list is held back 1.5 s per request during the clicks.
+    await check("Branch with a slow refetch: a second real click on the inspector's Branch ~600 ms later makes exactly one child", async () => {
+      const parent = 'st-sys-reply'
+      const before = new Set((await rowsOf(s)).keys())
+      const slow = { on: false, held: 0 }
+      const hold = async (route: Route) => {
+        if (slow.on) {
+          slow.held += 1
+          await new Promise(resolve => setTimeout(resolve, 1500))
+        }
+
+        await route.continue().catch(() => undefined)
+      }
+
+      await select(page, parent)
+      await page.route('**/api/plugins/session-tree/sessions?**', hold)
+
+      try {
+        const button = page.locator('[data-testid="session-tree-inspector-actions"] [data-action="branch"]')
+        const box = await button.boundingBox()
+
+        assert(box, 'no Branch button')
+        slow.on = true
+        const first = Date.now()
+
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+        await page.waitForTimeout(600)
+        const stillParent = await page.getAttribute('[data-testid="session-tree-inspector"]', 'data-selected-id')
+
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+        const secondAt = Date.now() - first
+
+        await page.waitForTimeout(2500)
+        slow.on = false
+        await page.waitForTimeout(2500)
+        const rows = await rowsOf(s)
+        const created = [...rows.values()].filter(row => !before.has(row.id))
+
+        assert(stillParent === parent, `the refetch was not slow enough: ${stillParent} was selected at the second click`)
+        assert(created.length === 1 && created[0]._branched_from === parent, `new rows: ${JSON.stringify(created.map(row => [row.id, row._branched_from]))}`)
+        await page.locator(`[data-testid="session-tree-inspector"][data-selected-id="${created[0].id}"]`).waitFor({ timeout: 10_000 })
+
+        return { parent, secondClickMs: secondAt, selectedAtSecondClick: stillParent, created: created.length, child: created[0].id, heldRefetches: slow.held }
+      } finally {
+        slow.on = false
+        await page.unroute('**/api/plugins/session-tree/sessions?**', hold)
+      }
+    })
 
     await check('Archive from the menu: hidden; Show archived shows it greyed with Unarchive, which restores it', async () => {
       await openMenu(page, 'st-hp-routing')

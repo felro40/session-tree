@@ -420,10 +420,11 @@ def _emit_plugin_event(event: str, payload: dict[str, Any]) -> None:
     broadcast_plugin_event(PLUGIN_ID, event, payload)
 
 
-def _changed(rev: int, profile: str, kind: str) -> None:
-    """Push one change to every open window. Fire-and-forget: a window that misses it polls."""
+def _changed(rev: int, profile: str, kind: str, epoch: Optional[str] = None) -> None:
+    """Push one change to every open window. Fire-and-forget: a window that misses it polls.
+    ``epoch`` + ``rev`` name the new state (a ``rev`` alone restarts with a fresh file)."""
     try:
-        _emit_plugin_event("layout.changed", {"rev": rev, "profile": profile, "kind": kind})
+        _emit_plugin_event("layout.changed", {"epoch": epoch, "rev": rev, "profile": profile, "kind": kind})
     except Exception:  # noqa: BLE001 - the write already happened; the poll catches up
         logger.debug("session-tree: layout.changed push failed", exc_info=True)
 
@@ -443,7 +444,9 @@ def _store_call(fn, *args, **kwargs):
 
 
 def _existing_ids(profile: str):
-    """For ``LayoutStore.prune``: which stored ids still exist (archived included), per profile.
+    """For ``LayoutStore.prune``: which stored ids still exist (archived included), per profile,
+    each with its compression lineage's root id (``SessionDB.get_compression_lineage``, root
+    first: the id the core list reports as ``_lineage_root_id``, so the page keys the block by it).
     ``None`` (do not prune) when any profile's store cannot be read."""
     from hermes_cli.web_routers.profiles import _read_profile_db
 
@@ -451,23 +454,30 @@ def _existing_ids(profile: str):
     every = dict(_profile_targets())
 
     def existing(candidates: dict[Optional[str], set[str]]):
-        alive: dict[Optional[str], set[str]] = {}
+        alive: dict[Optional[str], dict[str, str]] = {}
         for key, ids in candidates.items():
             # A bare id belongs to the view's profile(s); ``<profile>/<id>`` to that profile (one
             # this Hermes no longer has holds no session).
             homes = view if key is None else {key: every[key]} if key in every else {}
-            found: set[str] = set()
+            found: dict[str, str] = {}
             for name, home in homes.items():
                 errors: list[dict[str, str]] = []
 
                 def read(db, wanted=ids):
-                    return {sid for sid in wanted if db.get_session_list_row(sid)}
+                    roots: dict[str, str] = {}
+                    for sid in wanted:
+                        # [] for an id with no row; [sid] for one never compacted (or a fork).
+                        lineage = db.get_compression_lineage(sid)
+                        if lineage:
+                            roots[sid] = lineage[0]
+                    return roots
 
                 result = _read_profile_db(name, home, errors, read)
                 if errors:
                     return None
                 # No state.db yet: that profile has no sessions at all.
-                found |= result or set()
+                for sid, root in (result or {}).items():
+                    found.setdefault(sid, root)
             alive[key] = found
         return alive
 
@@ -502,20 +512,23 @@ class SettingsBody(BaseModel):
 
 
 @router.get("/state")
-def get_state(profile: str = _profile_query(), since_rev: Optional[int] = Query(None, ge=0)) -> dict[str, Any]:
+def get_state(profile: str = _profile_query(), since_rev: Optional[int] = Query(None, ge=0),
+              epoch: Optional[str] = Query(None, max_length=64)) -> dict[str, Any]:
     """The synced settings and *profile*'s layouts (``*``: the All profiles view's own layouts).
 
-    ``since_rev`` equal to the current revision answers ``{unchanged: true}`` without the layouts
-    (the cheap poll). Serving the layouts first drops the positions of sessions that no longer
-    exist (archived ones keep theirs)."""
+    ``since_rev`` + ``epoch`` naming the current state answer ``{unchanged: true}`` without the
+    layouts (the cheap poll); only both together: a fresh file restarts ``rev`` at 0 under a new
+    epoch. Serving the layouts first drops the positions of sessions that no longer exist
+    (archived ones keep theirs) and moves an entry keyed by a compression lineage member to the
+    lineage root's key. ``read_only: true``: the file has a newer schema (writes answer 409)."""
     name = _view_profile(profile)
     store = _state_store()
-    if since_rev is not None and since_rev == store.revision():
-        return {"schema": layout_store.SCHEMA_VERSION, "rev": since_rev, "unchanged": True}
+    if since_rev is not None and epoch is not None and (epoch, since_rev) == store.version():
+        return {"schema": layout_store.SCHEMA_VERSION, "epoch": epoch, "rev": since_rev, "unchanged": True}
     pruned = _store_call(store.prune, name, _existing_ids(name))
     snapshot = store.snapshot(name)
     if pruned:
-        _changed(snapshot["rev"], name, "prune")
+        _changed(snapshot["rev"], name, "prune", snapshot["epoch"])
     return snapshot
 
 
@@ -526,7 +539,7 @@ def patch_positions(body: PositionsBody, profile: str = _profile_query()) -> dic
     result = _store_call(_state_store().upsert_positions, name, body.style, body.scope, body.positions,
                          if_absent=body.mode == "if_absent")
     if result["changed"]:
-        _changed(result["rev"], name, "positions")
+        _changed(result["rev"], name, "positions", result["epoch"])
     return result
 
 
@@ -537,7 +550,7 @@ def patch_settings(body: SettingsBody, profile: str = _profile_query()) -> dict[
     patch = body.model_dump(exclude_none=True)
     result = _store_call(_state_store().set_settings, patch)
     if result["changed"]:
-        _changed(result["rev"], ALL_PROFILES, "settings")
+        _changed(result["rev"], ALL_PROFILES, "settings", result["epoch"])
     return result
 
 
@@ -548,7 +561,7 @@ def delete_layout(profile: str = _profile_query(), style: str = Query(..., max_l
     name = _view_profile(profile)
     result = _store_call(_state_store().delete_layout, name, style, scope)
     if result["changed"]:
-        _changed(result["rev"], name, "rearrange")
+        _changed(result["rev"], name, "rearrange", result["epoch"])
     return result
 
 
@@ -558,7 +571,7 @@ def put_layout(body: LayoutBody, profile: str = _profile_query()) -> dict[str, A
     name = _view_profile(profile)
     result = _store_call(_state_store().replace_layout, name, body.style, body.scope, body.positions)
     if result["changed"]:
-        _changed(result["rev"], name, "restore")
+        _changed(result["rev"], name, "restore", result["epoch"])
     return result
 
 
@@ -575,5 +588,5 @@ def forget_blocks(body: ForgetBody, profile: str = _profile_query()) -> dict[str
     name = _view_profile(profile)
     result = _store_call(_state_store().forget_blocks, name, body.ids)
     if result["changed"]:
-        _changed(result["rev"], name, "forget")
+        _changed(result["rev"], name, "forget", result["epoch"])
     return result

@@ -92,17 +92,74 @@ export type GatewayRequest = <T>(method: string, params: Record<string, unknown>
  * After a Branch moved the selection to its new child, a Branch on that child is ignored for a
  * short window (card-3 review): the second click of a double-click on the inspector's Branch
  * button lands on the child, 150 ms or more later, and would make a grandchild.
+ *
+ * A Branch on the same *source* session is also ignored while its request is in flight and for
+ * the same window after it returns (card-4 review NB4): with a slow refetch the parent is still
+ * selected when the request returns, and a second click 500–800 ms in would make a sibling.
  */
 export function createBranchCooldown(windowMs: number, now: () => number = Date.now) {
   let last: { id: string; at: number } | undefined
+  const inFlight = new Map<string, number>()
+  const returnedAt = new Map<string, number>()
 
   return {
     branched(childId: string): void {
       last = { id: childId, at: now() }
     },
+    /** A Branch request on `sourceId` was sent. */
+    started(sourceId: string): void {
+      inFlight.set(sourceId, (inFlight.get(sourceId) ?? 0) + 1)
+    },
+    /** That request answered (or failed). */
+    returned(sourceId: string): void {
+      const count = (inFlight.get(sourceId) ?? 1) - 1
+
+      if (count > 0) {
+        inFlight.set(sourceId, count)
+      } else {
+        inFlight.delete(sourceId)
+      }
+
+      returnedAt.set(sourceId, now())
+    },
     blocks(id: string): boolean {
-      return Boolean(last && last.id === id && now() - last.at < windowMs)
+      const returned = returnedAt.get(id)
+
+      return Boolean(last && last.id === id && now() - last.at < windowMs) || inFlight.has(id) || (returned !== undefined && now() - returned < windowMs)
     }
+  }
+}
+
+export type BranchCooldown = ReturnType<typeof createBranchCooldown>
+
+/**
+ * One Branch click through both guards: `null` when it is ignored (the cooldown, or a request on
+ * the same parent already in flight), else the created branch. Throws what the request throws.
+ */
+export async function guardedBranch(
+  cooldown: BranchCooldown,
+  branch: (params: BranchParams) => { flight: Promise<BranchResult>; joined: boolean },
+  params: BranchParams
+): Promise<BranchResult | null> {
+  if (cooldown.blocks(params.parentId)) {
+    return null
+  }
+
+  const started = branch(params)
+
+  if (started.joined) {
+    // Only the first caller places the child or reports a failure.
+    await started.flight.catch(() => undefined)
+
+    return null
+  }
+
+  cooldown.started(params.parentId)
+
+  try {
+    return await started.flight
+  } finally {
+    cooldown.returned(params.parentId)
   }
 }
 

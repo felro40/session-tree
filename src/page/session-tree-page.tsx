@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchHealth, fetchProfiles, fetchProjects, fetchSessions } from '../api.ts'
 import { applyOverrides } from '../model/actions.ts'
 import { viewportKey } from '../model/device-prefs.ts'
-import { ALL_PROFILES, ALL_PROJECTS, buildGraph } from '../model/graph.ts'
+import { ALL_PROFILES, ALL_PROJECTS, buildGraph, layoutKeysOf } from '../model/graph.ts'
 import type { GraphNode } from '../model/graph.ts'
 import { laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
@@ -30,7 +30,7 @@ import { GraphCanvas, MAX_ZOOM, MIN_ZOOM } from './graph-canvas.tsx'
 import { PluginCtx } from './plugin-context.ts'
 import { useRowOverrides, useSessionActionsController } from './session-actions.tsx'
 import { SessionActionsCtx } from './session-actions-context.ts'
-import { usePrefsVersion, useSyncVersion } from './services.ts'
+import { READ_ONLY_MESSAGE, usePrefsVersion, useSyncVersion } from './services.ts'
 import type { Services } from './services.ts'
 import { Toolbar } from './toolbar.tsx'
 import { useLiveRefresh } from './use-live-refresh.ts'
@@ -151,16 +151,19 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   const spec = useMemo(() => style.layoutSpec({ showAll }), [style, showAll])
   const ref = useMemo<LayoutRef>(() => ({ profile, style: style.id, scope }), [profile, style, scope])
+  // B2 (card-4 review): positions are stored by layout key (a compacted block's lineage root),
+  // so a compaction (a new tip id) does not move a placed block.
+  const keys = useMemo(() => layoutKeysOf(model), [model])
   // Lay out only complete data: a layout made before the projects arrive would group every
   // block under "no project", and one made before the stored positions arrive would be saved
   // over nothing (and shown, then moved).
   const ready = Boolean(sessions.data) && !projects.isPending && sync.settled(profile)
   const layout = useMemo(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
-    () => (ready ? sync.place(ref, previous => style.layout(model, previous, spec), { save: style.savesLayout && !projects.isError }) : EMPTY_LAYOUT),
+    () => (ready ? sync.place(ref, previous => style.layout(model, previous, spec), { save: style.savesLayout && !projects.isError, keys }) : EMPTY_LAYOUT),
     // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
-    [ready, sync, ref, style, model, spec, syncVersion, projects.isError]
+    [ready, sync, ref, style, model, keys, spec, syncVersion, projects.isError]
   )
 
   const busy = useValue(host.state.busy)
@@ -262,7 +265,10 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     [model, layout, flow, style, setSelectedId]
   )
 
-  const onMove = useCallback((moves: ReadonlyMap<string, Point>) => sync.drop(ref, moves), [sync, ref])
+  const onMove = useCallback(
+    (moves: ReadonlyMap<string, Point>) => sync.drop(ref, new Map([...moves].map(([id, point]) => [keys.toStore(id), point]))),
+    [sync, ref, keys]
+  )
   const onDragging = useCallback((ids: null | string[]) => sync.setDragging(ids), [sync])
 
   const dismissToast = useCallback(() => setToast(undefined), [setToast])
@@ -334,7 +340,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     refreshSessions: () => void sessions.refetch(),
     refreshProjects: () => void projects.refetch(),
     onBranched: id => setPendingSelect(id),
-    onMoved: id => sync.forget(profile, id),
+    onMoved: id => sync.forget(profile, keys.toStore(id)),
     onRemoved: id => setSelectedId(current => (current === id ? null : current))
   })
 
@@ -478,6 +484,11 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         {offline && (
           <div className="session-tree__banner" role="status" data-testid="session-tree-offline">
             {OFFLINE_MESSAGE}
+          </div>
+        )}
+        {sync.storeReadOnly && (
+          <div className="session-tree__banner" role="status" data-testid="session-tree-read-only">
+            {READ_ONLY_MESSAGE}
           </div>
         )}
         <div className="session-tree__main">
