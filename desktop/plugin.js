@@ -8100,27 +8100,53 @@ function rectOf(id2, point, spec) {
 function overlaps(a, b) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
+function anyInView(rects, viewport, width2, height) {
+  let view = { x: -viewport.x / viewport.zoom, y: -viewport.y / viewport.zoom, width: width2 / viewport.zoom, height: height / viewport.zoom };
+  for (let rect of rects)
+    if (overlaps(rect, view))
+      return !0;
+  return !1;
+}
 var CONTINUATION = "";
 function labelGroup(id2) {
   let cut = id2.indexOf(CONTINUATION);
   return cut === -1 ? id2 : id2.slice(0, cut);
 }
+function drawnLabels(positions, shown) {
+  let labels = [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)), tops = labels.map(([, point]) => point.y), blocks = [...shown].flatMap(([id2, key]) => {
+    let point = positions.get(id2);
+    return point ? [{ key, y: point.y }] : [];
+  });
+  return labels.filter(([id2, point]) => {
+    let key = labelGroup(id2), bottom = Math.min(1 / 0, ...tops.filter((y) => y > point.y));
+    return blocks.some((block) => block.key === key && block.y >= point.y && block.y < bottom);
+  }).map(([id2]) => {
+    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
+    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
+  });
+}
+function blockGroups(families) {
+  return new Map(families.flatMap((family) => family.nodeIds.map((id2) => [id2, groupKey(family.projectId)])));
+}
 function mergeLayout(previous, model, spec) {
   if (!previous || previous.size === 0)
     return layoutGraph(model, spec);
-  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels2) => {
-    let next = labels2.find(([, point]) => point.y > labelY);
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels) => {
+    let next = labels.find(([, point]) => point.y > labelY);
     return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : 1 / 0 };
   }, bandOf = (key, anchorY) => {
-    let labels2 = labelEntries(), own = labels2.filter(([id2]) => labelGroup(id2) === key);
+    let labels = labelEntries(), own = labels.filter(([id2]) => labelGroup(id2) === key);
     if (own.length === 0) {
       if (anchorY === void 0)
         return;
-      let above = labels2.filter(([, point]) => point.y <= anchorY).pop();
-      return above ? bandUnder(above[1].y, labels2) : { top: -1 / 0, bottom: labels2[0] ? labels2[0][1].y - spec.rowGap : 1 / 0 };
+      let above = labels.filter(([, point]) => point.y <= anchorY).pop();
+      return above ? bandUnder(above[1].y, labels) : { top: -1 / 0, bottom: labels[0] ? labels[0][1].y - spec.rowGap : 1 / 0 };
     }
     let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0];
-    return bandUnder(pick2[1].y, labels2);
+    return bandUnder(pick2[1].y, labels);
+  }, bandsOf = (key) => {
+    let labels = labelEntries();
+    return labels.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => bandUnder(point.y, labels));
   }, findSpot = (shape, height, band, x0, rowsFor) => {
     let all = occupied(), lowest = band.bottom === 1 / 0 ? Math.max(band.top, bottomOf(all)) + step + height : band.bottom, top = band.top === -1 / 0 ? Math.min(0, ...all.map((rect) => rect.y)) : band.top, maxTop = lowest - height;
     if (maxTop < top)
@@ -8181,18 +8207,15 @@ function mergeLayout(previous, model, spec) {
   }
   let unlabelled = [];
   for (let family of newFamilies) {
-    let key = groupKey(family.projectId), band = bandOf(key);
-    if (!band) {
+    let key = groupKey(family.projectId), bands = bandsOf(key);
+    if (bands.length === 0) {
       unlabelled.push(family);
       continue;
     }
-    let local2 = family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }, ids = [...local2.positions.keys()], spot = findSpot(
-      ids.map((id2) => local2.positions.get(id2)),
-      local2.height,
-      band,
-      0,
-      rowsDown
-    );
+    let local2 = family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }, ids = [...local2.positions.keys()], shape = ids.map((id2) => local2.positions.get(id2)), spot;
+    for (let band of bands)
+      if (spot = findSpot(shape, local2.height, band, 0, rowsDown), spot)
+        break;
     if (spot)
       for (let id2 of ids) {
         let point = local2.positions.get(id2);
@@ -8216,11 +8239,7 @@ function mergeLayout(previous, model, spec) {
       [...positions].filter(([id2]) => shown.has(id2) || id2.startsWith(GROUP_PREFIX)).some(([id2, point]) => overlaps(rectOf(id2, point, spec), label)) || positions.set(key, spot);
     }
   }
-  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => {
-    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
-    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
-  });
-  return { positions, labels };
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 
 // src/model/status.ts
@@ -10100,6 +10119,12 @@ function mergeSubwayLayout(previous, model, spec) {
       return;
     let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0], next = all.find(([, point]) => point.y > pick2[1].y);
     return { top: pick2[1].y + 26, bottom: next ? next[1].y : 1 / 0 };
+  }, bandsOf = (key) => {
+    let all = labelsSorted();
+    return all.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => {
+      let next = all.find(([, other]) => other.y > point.y);
+      return { top: point.y + 26, bottom: next ? next[1].y : 1 / 0 };
+    });
   }, inBand = (point, band) => footprint(point).y >= band.top && point.y + 20 + 4 <= band.bottom, free = (point) => index2.hits(footprint(point)).length === 0, place = (id2, point) => {
     positions.set(id2, point);
     let rect = footprint(point);
@@ -10141,9 +10166,11 @@ function mergeSubwayLayout(previous, model, spec) {
       place(id2, spot ?? { x: 0, y: continueGroup(key) });
     }
   }
+  let order = groupOrder(model, families).map((projectId) => projectId ?? NO_PROJECT_ID), rank = (family) => order.indexOf(family.projectId ?? NO_PROJECT_ID);
+  newFamilies.sort((a, b) => rank(a) - rank(b));
   for (let family of newFamilies) {
-    let key = groupKey(family.projectId), cells = [...familyGrid(model, family).cells], band = bandOf(key), spot;
-    if (band) {
+    let key = groupKey(family.projectId), cells = [...familyGrid(model, family).cells], bands = bandsOf(key), spot;
+    for (let band of bands) {
       let first = band.top - 26 + 100;
       for (let row = 0; row < 400 && !spot; row += 1) {
         let y = first + row * 100;
@@ -10154,9 +10181,11 @@ function mergeSubwayLayout(previous, model, spec) {
           cells.every(([, cell]) => inBand({ x: at.x + cell.col * 250, y: at.y + cell.row * 100 }, band) && free({ x: at.x + cell.col * 250, y: at.y + cell.row * 100 })) && (spot = at);
         }
       }
+      if (spot)
+        break;
     }
     if (!spot)
-      if (band)
+      if (bands.length > 0)
         spot = { x: 0, y: continueGroup(key) };
       else {
         let label = { x: 0, y: bottom + 75 };
@@ -10165,11 +10194,7 @@ function mergeSubwayLayout(previous, model, spec) {
     for (let [id2, cell] of cells)
       place(id2, { x: spot.x + cell.col * 250, y: spot.y + cell.row * 100 });
   }
-  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => {
-    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
-    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
-  });
-  return { positions, labels };
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 function layoutSubway(model, previous, spec) {
   return previous && previous.size > 0 ? mergeSubwayLayout(previous, model, spec) : freshSubwayLayout(model, spec);
@@ -11485,7 +11510,7 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) 
 
 // src/page/graph-canvas.tsx
 import { jsx as jsx14, jsxs as jsxs12 } from "react/jsx-runtime";
-var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350;
+var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350, PAN_KEYS = ["Space", "Alt"];
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
@@ -11496,7 +11521,7 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
     let { width: width2, height } = style2.nodeSize, handles = blockHandles(width2, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -11546,8 +11571,8 @@ function GraphCanvas(props) {
     return frame2 && frameLayout && nodes2.push(...frame2.extraNodes(frameLayout)), nodes2;
   }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
-    return spaceHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
-  }, [baseNodes, drag2, spaceHeld]), edges = useMemo7(
+    return panKeyHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
+  }, [baseNodes, drag2, panKeyHeld]), edges = useMemo7(
     () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
       let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
       return {
@@ -11670,7 +11695,7 @@ function GraphCanvas(props) {
         "pointerdown",
         (event) => {
           let pointer2 = event, target = pointer2.target;
-          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && onSelect(null);
+          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || altDown.current || pointer2.altKey || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && onSelect(null);
         },
         !0
       ),
@@ -11678,22 +11703,33 @@ function GraphCanvas(props) {
         window,
         "keydown",
         (event) => {
+          if (event.key === "Alt") {
+            altDown.current = !0, setPanKeyHeld(!0);
+            return;
+          }
           if (event.code === "Space") {
             if (releaseSelect(event.target)) {
               event.preventDefault(), event.stopPropagation(), document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: !0 }));
               return;
             } else if (isTypingTarget(event.target))
               return;
-            spaceDown.current = !0, setSpaceHeld(!0);
+            spaceDown.current = !0, setPanKeyHeld(!0);
           }
         },
         !0
       ),
       ctx.addEventListener(window, "keyup", (event) => {
-        event.code === "Space" && (spaceDown.current = !1, setSpaceHeld(!1));
+        let key = event;
+        if (key.code === "Space")
+          spaceDown.current = !1;
+        else if (key.key === "Alt")
+          altDown.current = !1;
+        else
+          return;
+        setPanKeyHeld(spaceDown.current || altDown.current);
       }),
       ctx.addEventListener(window, "blur", () => {
-        spaceDown.current = !1, setSpaceHeld(!1);
+        spaceDown.current = !1, altDown.current = !1, setPanKeyHeld(!1);
       })
     ];
     return () => offs.forEach((off) => off());
@@ -11732,7 +11768,7 @@ function GraphCanvas(props) {
               onInit,
               nodesDraggable: style2.draggable,
               panOnDrag: [1],
-              panActivationKeyCode: "Space",
+              panActivationKeyCode: PAN_KEYS,
               zoomOnScroll: !0,
               panOnScroll: !1,
               zoomOnDoubleClick: !1,
@@ -13001,7 +13037,21 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   useEffect8(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
+  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), showsMap = useCallback6(
+    (viewport) => {
+      let { width: width2, height } = flowStore.getState();
+      if (style2.frame || width2 <= 0 || height <= 0)
+        return !0;
+      let blocks = laidOutFamilies(model, spec).flatMap(
+        (family) => family.nodeIds.flatMap((id2) => {
+          let point = layout.positions.get(id2);
+          return point ? [{ x: point.x, y: point.y, ...style2.nodeSize }] : [];
+        })
+      );
+      return anyInView(blocks, viewport, width2, height);
+    },
+    [flowStore, layout, model, spec, style2]
+  ), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
   useEffect8(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
       appliedKey.current = null;
@@ -13009,15 +13059,17 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     }
     if (appliedKey.current === null) {
       appliedKey.current = vpKey, appliedScope.current = scope;
+      let saved = prefs.viewport(vpKey);
+      saved && !showsMap(saved) && fit();
       return;
     }
     if (appliedKey.current !== vpKey) {
       let refit = !!style2.frame && appliedScope.current !== scope;
       appliedKey.current = vpKey, appliedScope.current = scope;
       let saved = prefs.viewport(vpKey);
-      saved && !refit ? flow.setViewport(saved, { duration: 0 }) : fit();
+      saved && !refit && showsMap(saved) ? flow.setViewport(saved, { duration: 0 }) : fit();
     }
-  }, [vpKey, canvasShown, prefs, flow, fit, scope, style2]);
+  }, [vpKey, canvasShown, prefs, flow, fit, scope, style2, showsMap]);
   let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback6(
     (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;

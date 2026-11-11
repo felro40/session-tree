@@ -558,6 +558,67 @@ async function main(): Promise<void> {
       return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
     })
 
+    await check('R3: Alt + left-drag pans (a laptop touchpad has no middle button); the selection stays', async () => {
+      await page.locator(BLOCK('st-hp-root')).click()
+      await page.locator('[data-testid="session-tree-inspector"][data-selected-id="st-hp-root"]').waitFor({ timeout: 5000 })
+      const spot = await emptySpot(page)
+      const before = await viewport(page)
+
+      await page.mouse.move(spot.x, spot.y)
+      await page.keyboard.down('Alt')
+      await page.waitForTimeout(100)
+      await drag(page, spot, { x: 120, y: -70 })
+      await page.keyboard.up('Alt')
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+      const selected = await page.getAttribute('[data-testid="session-tree-inspector"]', 'data-selected-id')
+
+      assert(near(after.x - before.x, 120, 3) && near(after.y - before.y, -70, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+      assert(selected === 'st-hp-root', `the selection changed: ${selected}`)
+
+      // Alt released: a plain left-drag on empty canvas does not pan.
+      const plain = await emptySpot(page)
+
+      await drag(page, plain, { x: 90, y: 40 })
+      await page.waitForTimeout(300)
+      const still = await viewport(page)
+
+      assert(still.x === after.x && still.y === after.y, `a plain left-drag panned ${still.x - after.x},${still.y - after.y}`)
+      await clickToolbar(page, 'session-tree-fit')
+
+      return { pan: { x: after.x - before.x, y: after.y - before.y }, selected }
+    })
+
+    await check('R3: Alt + left-drag that starts on a block pans; the block does not move; with Alt released it drags again', async () => {
+      const block = await box(page, BLOCK('st-sys-tip'))
+      const start = { x: block.x + 40, y: block.y + block.height / 2 }
+      const before = await viewport(page)
+      const position = await flowPosition(page, 'st-sys-tip')
+
+      await page.mouse.move(start.x, start.y)
+      await page.keyboard.down('Alt')
+      await page.waitForTimeout(100)
+      await drag(page, start, { x: -90, y: 50 })
+      await page.keyboard.up('Alt')
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+      const moved = await flowPosition(page, 'st-sys-tip')
+
+      assert(near(after.x - before.x, -90, 3) && near(after.y - before.y, 50, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+      assert(moved.x === position.x && moved.y === position.y, `block moved ${moved.x - position.x},${moved.y - position.y}`)
+      const again = await box(page, BLOCK('st-sys-tip'))
+
+      await drag(page, { x: again.x + 40, y: again.y + again.height / 2 }, { x: 0, y: 64 })
+      await page.waitForTimeout(300)
+      const dragged = await flowPosition(page, 'st-sys-tip')
+
+      assert(dragged.y > position.y + 30, `no block drag after Alt: ${dragged.y - position.y}`)
+      await clickToolbar(page, 'session-tree-rearrange')
+      await page.waitForTimeout(300)
+
+      return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
+    })
+
     await check('R4: snap on — a visible dot grid, the dropped position is a multiple of the grid; snap off — free', async () => {
       await clickToolbar(page, 'session-tree-snap')
       assert((await page.getAttribute('[data-testid="session-tree-snap"]', 'aria-pressed')) === 'true', 'snap not pressed')
