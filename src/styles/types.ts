@@ -53,7 +53,10 @@ export interface RoutedLink {
 
 export interface StylePanelProps {
   model: GraphModel
+  /** The one selected block; `null` with none or several (card 9). */
   selectedId: null | string
+  /** Card 9: every selected block (the Dense inspector lists them when there are 2 or more). */
+  selectedIds: readonly string[]
   onSelect(id: null | string, reveal?: boolean): void
   onOpen(node: GraphNode): void
   statusOf(node: GraphNode): LiveStatus | undefined

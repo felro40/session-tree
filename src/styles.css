@@ -70,8 +70,19 @@
   --xy-handle-background-color: transparent;
   --xy-handle-border-color: transparent;
   --xy-selection-background-color: var(--ui-selection-background);
-  --xy-selection-border: 1px dotted var(--ui-stroke-secondary);
+  /* Card 9: the selection box (Dense, Subway, Rich cards). */
+  --xy-selection-border: 1px dashed var(--ui-accent);
   --xy-attribution-background-color: transparent;
+}
+
+/* Card 9: React Flow's own frame around a finished selection is not used: it would catch clicks
+   and drags on the empty canvas between the selected blocks. A selected block shows itself. */
+.session-tree .react-flow__nodesselection {
+  display: none;
+}
+
+.session-tree .react-flow__pane.selection {
+  cursor: default;
 }
 
 .session-tree .react-flow__node {
