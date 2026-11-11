@@ -119,18 +119,29 @@ export function liveProcesses(dir: string): number[] {
   return [...pids].sort((a, b) => a - b)
 }
 
-/** Bytes under `path`, symlinks counted as links (never followed). */
-export function sizeOf(path: string): number {
+/** Bytes under `path` (what `du --apparent-size` counts): symlinks as links (never followed), a file
+ *  with several hard links (the uv cache and `installs/` share most of theirs) once. */
+export function sizeOf(path: string, seen: Set<string> = new Set()): number {
   const stat = lstatSync(path)
 
   if (!stat.isDirectory()) {
+    if (stat.nlink > 1) {
+      const key = `${stat.dev}:${stat.ino}`
+
+      if (seen.has(key)) {
+        return 0
+      }
+
+      seen.add(key)
+    }
+
     return stat.size
   }
 
   let total = stat.size
 
   for (const name of readdirSync(path)) {
-    total += sizeOf(join(path, name))
+    total += sizeOf(join(path, name), seen)
   }
 
   return total

@@ -12,13 +12,13 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { after, describe, it } from 'node:test'
 
 import { clean, plan } from '../../scripts/e2e/clean.ts'
-import { deleteTrashEntry, homeName, liveProcesses, moveAside, pruneTrash, TrashRefusal } from '../../scripts/e2e/trash.ts'
+import { deleteTrashEntry, homeName, liveProcesses, moveAside, pruneTrash, sizeOf, TrashRefusal } from '../../scripts/e2e/trash.ts'
 
 const REPO = resolve(import.meta.dirname, '..', '..')
 const scratch = mkdtempSync(join(process.env.TMPDIR || tmpdir(), 'st-trash-'))
@@ -73,6 +73,18 @@ describe('e2e trash: the guarded delete (card 8, F5)', () => {
     assert.equal(homeName('c8-coder-rich-1794369554123'), 'c8-coder-rich')
     assert.equal(homeName('c8-coder-1794369554123'), 'c8-coder')
     assert.equal(homeName('c8-coder'), 'c8-coder')
+  })
+
+  it('sizes count a hard-linked file once and a symlink as a link (as du --apparent-size does)', () => {
+    const dir = join(scratch, `sized-${(rootCount += 1)}`)
+
+    mkdirSync(join(dir, 'a'), { recursive: true })
+    writeFileSync(join(dir, 'a', 'big'), 'x'.repeat(10_000))
+    linkSync(join(dir, 'a', 'big'), join(dir, 'big-again'))
+    symlinkSync(join(dir, 'a', 'big'), join(dir, 'big-link'))
+    const total = sizeOf(dir)
+
+    assert.ok(total >= 10_000 && total < 20_000, String(total))
   })
 
   it('prune keeps the newest moved-aside copy of each home name and deletes the older ones', () => {
