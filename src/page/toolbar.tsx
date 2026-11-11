@@ -7,7 +7,7 @@
  * its own line, then the brand and the tools show icons only, then the tools get a line of their
  * own (`toolbar-layout.ts`). The layout is measured and applied straight to the DOM
  * (`data-layout`, `data-brand`, `data-tools`, the strip's `data-fade`), so a resize re-renders
- * nothing.
+ * nothing. It measures in CSS px, also under Hermes' UI scale (`cssScale`).
  */
 import { Codicon } from '@hermes/plugin-sdk'
 import { useReactFlow, useViewport } from '@xyflow/react'
@@ -17,7 +17,7 @@ import type { MouseEvent, ReactNode, WheelEvent } from 'react'
 import { ALL_PROFILES, ALL_PROJECTS } from '../model/graph.ts'
 import type { ProjectInfo } from '../model/projects.ts'
 import { ProjectGlyph } from '../styles/shared.tsx'
-import { barLayout, fadeEdges, revealBy, wheelScroll } from './toolbar-layout.ts'
+import { barLayout, cssScale, fadeEdges, revealBy, wheelScroll } from './toolbar-layout.ts'
 import type { BarMeasure, Sized } from './toolbar-layout.ts'
 
 /** Toolbar buttons never take focus, so Space (pan, R3) cannot click the last-used button. */
@@ -30,10 +30,36 @@ const Label = ({ children }: { children: ReactNode }) => <span className="st-lab
 const REVEAL_PAD = 12
 
 const px = (value: string) => Number.parseFloat(value) || 0
-const width = (element: Element) => element.getBoundingClientRect().width
+
+/** An element's width in CSS px (client rects are zoomed under Hermes' UI scale). */
+type WidthOf = (element: Element) => number
+
+/** The element's effective CSS zoom: the engine's own, else the product of its ancestors'. */
+function zoomOf(element: HTMLElement): number {
+  const own = (element as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom
+
+  if (typeof own === 'number' && own > 0) {
+    return own
+  }
+
+  let zoom = 1
+
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    const value = Number.parseFloat(getComputedStyle(node).zoom)
+
+    if (value > 0) {
+      zoom *= value
+    }
+  }
+
+  return zoom
+}
+
+/** The factor from CSS px to client-rect px at `element` (`cssScale`). */
+const rectScaleOf = (element: HTMLElement) => cssScale(element.getBoundingClientRect().width, element.offsetWidth, zoomOf(element))
 
 /** A group's content width: its items, their margins and the gaps (not the line it may fill). */
-function contentWidth(group: Element): number {
+function contentWidth(group: Element, width: WidthOf): number {
   const items = [...group.children]
   const gaps = Math.max(0, items.length - 1) * px(getComputedStyle(group).columnGap)
 
@@ -45,7 +71,7 @@ function contentWidth(group: Element): number {
 }
 
 /** An item's width with its text and with its icon only, whether its text is shown now or not. */
-function sized(item: Element, shown: number, textShown: boolean): Sized {
+function sized(item: Element, shown: number, textShown: boolean, width: WidthOf): Sized {
   // A label adds its width and the gap before it; a hidden one is out of the flow (still laid out).
   const text = [...item.querySelectorAll('.st-label')].reduce(
     (sum, label) => sum + width(label) + px(getComputedStyle(label.parentElement!).columnGap),
@@ -63,8 +89,12 @@ interface BarParts {
   strip: HTMLElement
 }
 
-/** The bar's items at their widths, whatever layout is shown now. */
+/** The bar's items at their widths (CSS px), whatever layout is shown now. */
 function measureBar({ bar, brand, pickers, tools, strip }: BarParts): BarMeasure {
+  // One space: rect widths are divided by the UI scale, the computed lengths are CSS px already
+  // (review t_899e3936 B1), and the room is the bar's fractional width, not the rounded clientWidth (N1).
+  const scale = rectScaleOf(bar)
+  const width: WidthOf = element => element.getBoundingClientRect().width / scale
   const style = getComputedStyle(bar)
   const stripStyle = getComputedStyle(strip)
   const chips = [...strip.children]
@@ -74,11 +104,11 @@ function measureBar({ bar, brand, pickers, tools, strip }: BarParts): BarMeasure
     px(stripStyle.paddingLeft) + px(stripStyle.paddingRight) + px(stripStyle.borderLeftWidth) + px(stripStyle.borderRightWidth)
 
   return {
-    room: bar.clientWidth - px(style.paddingLeft) - px(style.paddingRight),
+    room: width(bar) - px(style.borderLeftWidth) - px(style.borderRightWidth) - px(style.paddingLeft) - px(style.paddingRight),
     gap: px(style.columnGap),
-    brand: sized(brand, width(brand), bar.dataset.brand !== 'icon'),
+    brand: sized(brand, width(brand), bar.dataset.brand !== 'icon', width),
     pickers: pickers.map(width),
-    tools: sized(tools, contentWidth(tools), bar.dataset.tools !== 'icons'),
+    tools: sized(tools, contentWidth(tools, width), bar.dataset.tools !== 'icons', width),
     scope
   }
 }
@@ -98,7 +128,9 @@ function revealSelected(strip: HTMLElement): void {
   const chip = strip.querySelector('[aria-checked="true"]')
 
   if (chip && strip.scrollWidth > strip.clientWidth) {
-    const by = revealBy(strip.getBoundingClientRect(), chip.getBoundingClientRect(), REVEAL_PAD)
+    // The rects are zoomed under the UI scale; scrollLeft is in CSS px.
+    const scale = rectScaleOf(strip)
+    const by = revealBy(strip.getBoundingClientRect(), chip.getBoundingClientRect(), REVEAL_PAD * scale) / scale
 
     if (by !== 0) {
       strip.scrollLeft += by
@@ -268,7 +300,7 @@ export function Toolbar(props: ToolbarProps) {
 
   const onStripWheel = (event: WheelEvent<HTMLDivElement>) => {
     const strip = event.currentTarget
-    const by = wheelScroll(event.deltaX, event.deltaY, event.deltaMode, strip.clientWidth)
+    const by = wheelScroll(event.deltaX, event.deltaY, event.deltaMode, strip.clientWidth, event.shiftKey)
 
     if (by !== 0 && strip.scrollWidth > strip.clientWidth) {
       strip.scrollLeft += by

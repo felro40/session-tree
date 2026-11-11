@@ -10,11 +10,15 @@
  *
  * For every style and every window width from 1600 px down to 360 px it reads the toolbar's
  * DOM geometry back: no two controls overlap, no control (and no project chip) is squeezed
- * below its own content, every control lies inside the bar (nothing clipped), and the canvas
- * starts below the bar. The scope strip, when longer than its room, scrolls: a plain wheel over
- * it scrolls it sideways (the canvas zoom stays), and the selected project stays in view when
- * the window narrows. Input is real (page.mouse → CDP Input.*). Screenshots go to
- * <test root>/shots/.
+ * below its own content, every control lies inside the bar (nothing clipped), the canvas starts
+ * below the bar, and the bar shows the layout it applied (row: one row with every chip shown,
+ * stacked: two rows, wrapped: three). The same at fractional page widths (a sweep, then every
+ * layout change again in 0.05 px steps) and under Hermes' UI scale (Settings → text size, CSS
+ * `zoom` on <html>) at 80 / 90 / 110 / 125 %, where a page as wide in CSS px gets the layout it
+ * gets at 100 % (review t_899e3936 B1, N1). The scope strip, when longer than its room, scrolls:
+ * a plain wheel over it scrolls it sideways (Shift + wheel as far, N2; nothing else scrolls), and
+ * the selected project stays in view when the window narrows. Input is real (page.mouse → CDP
+ * Input.*). Screenshots go to <test root>/shots/.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -22,8 +26,8 @@ import { join } from 'node:path'
 import type { Page } from 'playwright-core'
 
 import { close, enableDesktopHalf, launch, signIn } from './e2e/browser.ts'
-import { assert, freshHome, openTree, PAGE, portsFree, sleep, suite, switchStyle, viewport } from './e2e/common.ts'
-import { seedFixtures, setup, signInLink, stopGateway, testHermes, webappBase } from './e2e/harness.ts'
+import { assert, freshHome, openTree, PAGE, portsFree, sleep, suite, switchStyle } from './e2e/common.ts'
+import { seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'toolbar' })
@@ -167,15 +171,99 @@ async function resize(page: Page, width: number): Promise<void> {
   await page.waitForTimeout(450)
 }
 
+/** Below this page width (CSS px) a tool group wraps inside its own line, by design. */
+const GROUP_WRAP_BELOW = 340
+const LINES: Record<string, number> = { row: 1, stacked: 2, wrapped: 3 }
+
+/** Whether the bar shows the layout it applied (empty: it does): its rows, and in one row every chip. */
+function layoutProblems(g: BarGeometry, layout: string, pageWidth: number): string[] {
+  const lines = layout.split('-')[0]
+  const expected = LINES[lines]
+  const rows = rowsOf(g)
+  const out: string[] = []
+
+  if (expected === undefined) {
+    return [`no layout applied (${layout})`]
+  }
+
+  if (pageWidth >= GROUP_WRAP_BELOW ? rows !== expected : rows < expected) {
+    out.push(`${layout} shows ${rows} rows, not ${expected}`)
+  }
+
+  if (lines === 'row' && g.scope.scrollWidth > g.scope.clientWidth + 1) {
+    out.push(`one row with ${g.scope.scrollWidth - g.scope.clientWidth}px of chips hidden in the strip`)
+  }
+
+  return out
+}
+
+/** A layout's step as the page narrows: its lines, then the text it gives up. Never goes down. */
+const stepOf = (layout: string) => LINES[layout.split('-')[0]] * 10 + (layout.includes('-brand') ? 1 : 0) + (layout.includes('-tools') ? 2 : 0)
+
+/** Sets the plugin page to `width` CSS px (fractional too: a split view, the app's own zoom), or
+ *  back to its own width (`null`), and waits two frames for the toolbar to lay itself out. */
+async function setPageWidth(page: Page, width: null | number): Promise<void> {
+  await page.evaluate(
+    async ([selector, to]) => {
+      const root = document.querySelector(selector) as HTMLElement
+
+      if (to === null) {
+        for (const property of ['flex', 'width', 'max-width']) {
+          root.style.removeProperty(property)
+        }
+      } else {
+        root.style.flex = 'none'
+        root.style.width = `${to}px`
+        root.style.maxWidth = `${to}px`
+      }
+
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))))
+    },
+    [PAGE, width] as const
+  )
+}
+
+interface Sample {
+  width: number
+  layout: string
+  problems: string[]
+}
+
+/** The applied layout and what is wrong with the bar at one page width (CSS px). */
+async function sampleAt(page: Page, width: number): Promise<Sample> {
+  await setPageWidth(page, width)
+  const g = await barGeometry(page)
+  const layout = await layoutOf(page)
+
+  return { width, layout, problems: [...problems(g), ...layoutProblems(g, layout, width)] }
+}
+
+/** Steps that go back (a wider layout at a narrower width) in samples sorted widest first. */
+function stepsBack(samples: readonly Sample[]): string[] {
+  const out: string[] = []
+
+  for (let i = 1; i < samples.length; i += 1) {
+    if (stepOf(samples[i].layout) < stepOf(samples[i - 1].layout)) {
+      out.push(`${samples[i].width}px: ${samples[i].layout} after ${samples[i - 1].layout} at ${samples[i - 1].width}px`)
+    }
+  }
+
+  return out
+}
+
+/** Hermes' UI scale (Settings → text size): CSS `zoom` on <html>, through the app's own bridge. */
+async function setUiScale(page: Page, percent: number): Promise<void> {
+  await page.evaluate(to => (window as unknown as { hermesDesktop: { zoom: { setPercent(p: number): void } } }).hermesDesktop.zoom.setPercent(to), percent)
+  await sleep(300)
+}
+
 // --- the suite ---------------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'subway', 'final']) {
-    stopGateway(testHermes(undefined, variant ? { variant } : {}))
-  }
+  stopRoleHomes(t)
 
   freshHome(t)
   console.log(`e2e toolbar — role ${t.role}, home ${t.home}`)
@@ -228,7 +316,7 @@ async function main(): Promise<void> {
             scopeOverflows: g.scope.scrollWidth > g.scope.clientWidth + 1
           }
 
-          for (const problem of problems(g)) {
+          for (const problem of [...problems(g), ...layoutProblems(g, table[style][width].layout, g.bar.w)]) {
             bad.push(`${width}px (bar ${Math.round(g.bar.w)}px): ${problem}`)
           }
 
@@ -237,6 +325,8 @@ async function main(): Promise<void> {
           }
         }
 
+        // In the bar's own width: below ~640 px the app hides its sidebar, so the page gets wider.
+        bad.push(...stepsBack(WIDTHS.map(width => ({ width: Number(table[style][width].bar.split('×')[0]), layout: table[style][width].layout, problems: [] })).sort((a, b) => b.width - a.width)))
         assert(bad.length === 0, bad.slice(0, 12).join('\n') + (bad.length > 12 ? `\n… ${bad.length - 12} more` : ''))
 
         return table[style]
@@ -244,6 +334,97 @@ async function main(): Promise<void> {
     }
 
     facts.widths = table
+
+    // Review t_899e3936 N1: a page width is often fractional (the app's zoom, a percentage split).
+    const sweeps: Record<string, Sample[]> = {}
+
+    for (const style of STYLES) {
+      await check(`${style}: page widths 1400 → 340 px every 2 px, and every layout change again every 0.05 px: the bar shows the layout it applied (row: one row, every chip shown; stacked: 2 rows; wrapped: 3), nothing overlaps, is squeezed or clipped, and it only ever steps on as the page narrows`, async () => {
+        await resize(page, 2400)
+        await switchStyle(page, style)
+        const coarse: Sample[] = []
+        const fine: Sample[] = []
+
+        try {
+          for (let width = 1400; width >= 340; width -= 2) {
+            coarse.push(await sampleAt(page, width))
+          }
+
+          for (let i = 1; i < coarse.length; i += 1) {
+            if (coarse[i].layout !== coarse[i - 1].layout) {
+              for (let n = 1; n < 40; n += 1) {
+                fine.push(await sampleAt(page, Math.round((coarse[i - 1].width - n * 0.05) * 100) / 100))
+              }
+            }
+          }
+        } finally {
+          await setPageWidth(page, null)
+        }
+
+        sweeps[style] = coarse
+        const all = [...coarse, ...fine].sort((a, b) => b.width - a.width)
+        const bad = [...all.flatMap(one => one.problems.map(problem => `${one.width}px: ${problem}`)), ...stepsBack(all)]
+        const changes = all.filter((one, i) => i > 0 && one.layout !== all[i - 1].layout).map(one => `${one.width}px ${one.layout}`)
+
+        assert(bad.length === 0, bad.slice(0, 12).join('\n') + (bad.length > 12 ? `\n… ${bad.length - 12} more` : ''))
+
+        return { samples: all.length, changes }
+      })
+    }
+
+    // Review t_899e3936 B1: the Webapp's UI scale is CSS zoom on <html>; the layout is decided in CSS px.
+    await check('Hermes UI scale 80 / 90 / 110 / 125 % (Settings → text size): a page as wide in CSS px gets the layout it gets at 100 % (16 px or more from a layout change), and the bar shows it with nothing overlapping, squeezed or clipped (Dense, Swimlanes)', async () => {
+      await resize(page, 2400)
+      assert(await page.evaluate(() => typeof (window as unknown as { hermesDesktop?: { zoom?: { setPercent?: unknown } } }).hermesDesktop?.zoom?.setPercent === 'function'), 'the Webapp has no hermesDesktop.zoom bridge')
+      const bad: string[] = []
+      const compared: Record<string, number> = {}
+
+      try {
+        for (const style of ['dense', 'swimlanes']) {
+          await switchStyle(page, style)
+          const base = sweeps[style]
+          // Widths 16 px clear of a layout change at 100 %, every third. Not closer: Chrome draws
+          // the native selects up to ~7 px wider (CSS px) at 80 %, so a change point moves that
+          // far; mixing zoomed and unzoomed px (the bug) moved it 85–250 px.
+          const clear = 8
+          const stable = base
+            .filter((one, i) => i >= clear && i < base.length - clear && base.slice(i - clear, i + clear + 1).every(other => other.layout === one.layout))
+            .filter((_, i) => i % 3 === 0)
+
+          for (const percent of [80, 90, 110, 125]) {
+            await setUiScale(page, percent)
+
+            for (const one of stable) {
+              const at = await sampleAt(page, one.width)
+
+              if (at.layout !== one.layout) {
+                bad.push(`${style} at ${percent} %, page ${one.width}px: ${at.layout}, at 100 % ${one.layout}`)
+              }
+
+              bad.push(...at.problems.map(problem => `${style} at ${percent} %, page ${one.width}px: ${problem}`))
+            }
+
+            if (style === 'dense') {
+              await setPageWidth(page, 1200)
+              const box = (await barGeometry(page)).bar
+
+              await page.screenshot({ path: join(shots, `toolbar-dense-1200-scale${percent}-dark.png`), clip: { x: box.x, y: box.y, width: Math.ceil(box.w), height: Math.ceil(box.h) + 4 } })
+            }
+
+            compared[`${style} ${percent} %`] = stable.length
+          }
+
+          await setUiScale(page, 100)
+        }
+      } finally {
+        await setUiScale(page, 100)
+        await setPageWidth(page, null)
+      }
+
+      assert(bad.length === 0, bad.slice(0, 12).join('\n') + (bad.length > 12 ? `\n… ${bad.length - 12} more` : ''))
+
+      return compared
+    })
 
     await check('one row while everything fits (a 2400 px window); in a 1135 px split view (your screenshot) the strip gets its own row with every chip shown; the canvas keeps most of the window at every width', async () => {
       await resize(page, 2400)
@@ -275,25 +456,54 @@ async function main(): Promise<void> {
       return { wide: `${wideLayout} ${Math.round(wide.bar.h)}px`, split: `${splitLayout} ${Math.round(split.bar.h)}px`, canvasHeights: heights }
     })
 
-    await check('a plain wheel over an overflowing scope strip scrolls it sideways; the canvas zoom stays', async () => {
+    await check('a plain wheel over an overflowing scope strip scrolls it sideways, Shift + wheel as far (not twice as far), and nothing else on the page scrolls', async () => {
       await resize(page, 700)
       const before = await barGeometry(page)
 
       assert(before.scope.scrollWidth > before.scope.clientWidth + 1, `the strip does not overflow at 700 px: ${before.scope.scrollWidth} / ${before.scope.clientWidth}`)
-      const zoom = (await viewport(page)).zoom
+      const stripAt = (to?: number) =>
+        page.$eval(
+          SCOPE,
+          (el, x) => {
+            if (x !== null) {
+              el.scrollLeft = x
+            }
 
+            return el.scrollLeft
+          },
+          to ?? null
+        )
+      // Everything else that is scrolled (the page, an ancestor of the bar), by element.
+      const othersScrolled = () =>
+        page.evaluate(selector => {
+          const strip = document.querySelector(selector)
+          const scrolled = [...document.querySelectorAll('*')].filter(el => el !== strip && (el.scrollTop !== 0 || el.scrollLeft !== 0)).map(el => `${el.tagName}.${el.className}:${el.scrollLeft},${el.scrollTop}`)
+
+          return [...scrolled, `window:${scrollX},${scrollY}`]
+        }, SCOPE)
+      const othersBefore = await othersScrolled()
+
+      await stripAt(0)
       await page.mouse.move(before.scope.x + before.scope.w / 2, before.scope.y + before.scope.h / 2)
-      await page.mouse.wheel(0, 240)
-      await sleep(400)
-      const after = await barGeometry(page)
-      const zoomAfter = (await viewport(page)).zoom
+      await page.mouse.wheel(0, 120)
+      await sleep(600)
+      const plain = await stripAt()
 
-      assert(after.scope.scrollLeft > before.scope.scrollLeft + 50, `scrollLeft ${before.scope.scrollLeft} → ${after.scope.scrollLeft}`)
-      assert(Math.abs(zoomAfter - zoom) < 1e-6, `zoom ${zoom} → ${zoomAfter}`)
-      await page.mouse.wheel(0, -2000)
-      await sleep(300)
+      await stripAt(0)
+      await sleep(100)
+      await page.keyboard.down('Shift')
+      await page.mouse.wheel(0, 120)
+      await sleep(600)
+      await page.keyboard.up('Shift')
+      const shifted = await stripAt()
+      const othersAfter = await othersScrolled()
 
-      return { scrollLeft: [before.scope.scrollLeft, after.scope.scrollLeft], zoom }
+      await stripAt(0)
+      assert(plain >= 100, `a plain wheel (120) scrolled the strip ${plain}px`)
+      assert(Math.abs(shifted - plain) <= 2, `Shift + wheel scrolled ${shifted}px, a plain wheel ${plain}px`)
+      assert(JSON.stringify(othersAfter) === JSON.stringify(othersBefore), `something else scrolled: ${JSON.stringify(othersBefore)} → ${JSON.stringify(othersAfter)}`)
+
+      return { plain, shifted }
     })
 
     await check('the selected project stays in view: select the last chip, narrow the window, it is still inside the strip', async () => {
@@ -318,15 +528,40 @@ async function main(): Promise<void> {
       return { chip: last.name, seen }
     })
 
-    await check('screenshots: light theme at 1135, 800 and 500 px', async () => {
+    await check('light theme at 1135, 800 and 500 px: the layout it has in dark, nothing overlaps, is squeezed or clipped, the bar shows its layout, and a strip that hides chips fades; screenshots', async () => {
       await page.emulateMedia({ colorScheme: 'light' })
+      await switchStyle(page, 'dense')
+      const bad: string[] = []
+      const seen: Record<number, { layout: string; fade: null | string }> = {}
 
-      for (const width of [1135, 800, 500]) {
-        await resize(page, width)
-        await page.screenshot({ path: join(shots, `toolbar-dense-${width}-light.png`), clip: { x: 0, y: 0, width, height: 260 } })
+      try {
+        for (const width of [1135, 800, 500]) {
+          await resize(page, width)
+          const g = await barGeometry(page)
+          const layout = await layoutOf(page)
+          const fade = await page.$eval(SCOPE, el => (el as HTMLElement).dataset.fade ?? null)
+          const hides = g.scope.scrollWidth > g.scope.clientWidth + 1
+
+          seen[width] = { layout, fade }
+
+          if (layout !== table.dense[width].layout) {
+            bad.push(`${width}px: ${layout} in light, ${table.dense[width].layout} in dark`)
+          }
+
+          if (hides !== (fade !== null)) {
+            bad.push(`${width}px: the strip ${hides ? 'hides chips' : 'shows every chip'}, data-fade ${fade}`)
+          }
+
+          bad.push(...[...problems(g), ...layoutProblems(g, layout, g.bar.w)].map(problem => `${width}px: ${problem}`))
+          await page.screenshot({ path: join(shots, `toolbar-dense-${width}-light.png`), clip: { x: 0, y: 0, width, height: 260 } })
+        }
+      } finally {
+        await page.emulateMedia({ colorScheme: 'dark' })
       }
 
-      await page.emulateMedia({ colorScheme: 'dark' })
+      assert(bad.length === 0, bad.join('\n'))
+
+      return seen
     })
 
     await check('no page errors from the plugin', () => {

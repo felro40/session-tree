@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { barLayout, fadeEdges, revealBy, wheelScroll } from '../../src/page/toolbar-layout.ts'
+import { barLayout, cssScale, fadeEdges, FIT_MARGIN, revealBy, wheelScroll } from '../../src/page/toolbar-layout.ts'
 import type { BarLayout, BarMeasure } from '../../src/page/toolbar-layout.ts'
 
 // A Dense toolbar as measured in Chrome: the brand, the two pickers, the tools group and a
@@ -15,16 +15,25 @@ const BAR: Omit<BarMeasure, 'room'> = {
 }
 const at = (room: number, over: Partial<BarMeasure> = {}) => barLayout({ ...BAR, room, ...over })
 const left = (brand: number) => brand + 4 + 112 + 4 + 152
-const ROW = left(104) + 4 + 900 + 4 + 466
-const STACKED = left(104) + 4 + 466
-const NO_BRAND = left(22) + 4 + 466
-const ICONS = left(22) + 4 + 311
+// The least room each layout is kept at.
+const ROW = left(104) + 4 + 900 + 4 + 466 + FIT_MARGIN
+const STACKED = left(104) + 4 + 466 + FIT_MARGIN
+const NO_BRAND = left(22) + 4 + 466 + FIT_MARGIN
+const ICONS = left(22) + 4 + 311 + FIT_MARGIN
 
 describe('barLayout: the toolbar at the page width', () => {
   it('one row when the brand, pickers, the whole scope strip and the tools fit', () => {
     assert.deepEqual(at(ROW), { lines: 'row', brandText: true, toolText: true })
     assert.deepEqual(at(ROW + 400), { lines: 'row', brandText: true, toolText: true })
-    assert.deepEqual(at(ROW - 0.3), { lines: 'row', brandText: true, toolText: true }, 'sub-pixel slack')
+  })
+
+  it('keeps a layout only when it fits: nothing is added to the room (review t_899e3936 N1)', () => {
+    // The old rule kept one row 0.5 px short of room, plus the rounding of clientWidth.
+    assert.equal(at(ROW - 0.01).lines, 'stacked')
+    assert.equal(at(ROW - 0.3).lines, 'stacked')
+    assert.equal(at(STACKED - 0.01).brandText, false)
+    assert.equal(at(ICONS - 0.01).lines, 'wrapped')
+    assert.ok(FIT_MARGIN >= 0 && FIT_MARGIN < 0.1, `margin ${FIT_MARGIN}`)
   })
 
   it('the scope strip gets its own line as soon as a chip would be hidden', () => {
@@ -43,10 +52,10 @@ describe('barLayout: the toolbar at the page width', () => {
 
   it('then puts the tools on their own line, with their text again where it fits', () => {
     assert.deepEqual(at(ICONS - 1), { lines: 'wrapped', brandText: true, toolText: true })
-    assert.deepEqual(at(466), { lines: 'wrapped', brandText: true, toolText: true })
-    assert.deepEqual(at(465), { lines: 'wrapped', brandText: true, toolText: false })
-    assert.deepEqual(at(left(104)), { lines: 'wrapped', brandText: true, toolText: false })
-    assert.deepEqual(at(left(104) - 1), { lines: 'wrapped', brandText: false, toolText: false })
+    assert.deepEqual(at(466 + FIT_MARGIN), { lines: 'wrapped', brandText: true, toolText: true })
+    assert.deepEqual(at(466), { lines: 'wrapped', brandText: true, toolText: false })
+    assert.deepEqual(at(left(104) + FIT_MARGIN), { lines: 'wrapped', brandText: true, toolText: false })
+    assert.deepEqual(at(left(104)), { lines: 'wrapped', brandText: false, toolText: false })
     assert.deepEqual(at(200), { lines: 'wrapped', brandText: false, toolText: false })
   })
 
@@ -64,11 +73,11 @@ describe('barLayout: the toolbar at the page width', () => {
 
     // Below the narrower of the two (the brand icon and pickers, the tool icons) the CSS wraps
     // inside the line too.
-    for (let room = 2000; room >= Math.max(left(22), 311); room -= 3) {
+    for (let room = 2000; room >= Math.max(left(22), 311); room -= 0.25) {
       const layout = at(room)
 
       for (const width of lineWidths(layout)) {
-        assert.ok(width <= room + 0.5, `room ${room}: ${JSON.stringify(layout)} puts ${width} px on a line`)
+        assert.ok(width <= room, `room ${room}: ${JSON.stringify(layout)} puts ${width} px on a line`)
       }
     }
   })
@@ -132,5 +141,35 @@ describe('wheelScroll: a plain wheel over the scope strip scrolls it sideways', 
     assert.equal(wheelScroll(40, 10, 0, 800), 0)
     assert.equal(wheelScroll(-5, 5, 0, 800), 0)
     assert.equal(wheelScroll(0, 0, 0, 800), 0)
+  })
+
+  it('Shift + wheel too: Chrome scrolls it sideways natively from a vertical delta (review t_899e3936 N2)', () => {
+    assert.equal(wheelScroll(0, 100, 0, 800, true), 0)
+    assert.equal(wheelScroll(0, -3, 1, 800, true), 0)
+    assert.equal(wheelScroll(0, 100, 0, 800, false), 100)
+  })
+})
+
+describe('cssScale: from CSS px to client-rect px under Hermes\' UI scale (review t_899e3936 B1)', () => {
+  it('the engine\'s zoom when the measured ratio agrees (rects zoomed, offsetWidth not)', () => {
+    // The reviewer's numbers at 90 %: bar rect 766 px, offsetWidth 851.
+    assert.equal(cssScale(766, 851, 0.9), 0.9)
+    assert.equal(cssScale(1250, 1000, 1.25), 1.25)
+    assert.equal(cssScale(400.4, 500, 0.8), 0.8)
+  })
+
+  it('1 at 100 %, a fractional width included (offsetWidth is rounded)', () => {
+    assert.equal(cssScale(885.5, 886, 1), 1)
+    assert.equal(cssScale(497.5, 498, undefined), 1)
+  })
+
+  it('an engine that does not zoom its rects gets 1; one with no known zoom, the measured ratio', () => {
+    assert.equal(cssScale(1000, 1000, 0.8), 1)
+    assert.equal(cssScale(800, 1000, undefined), 0.8)
+  })
+
+  it('1 for an element not laid out', () => {
+    assert.equal(cssScale(0, 0, 0.9), 1)
+    assert.equal(cssScale(10, 0, 0.9), 1)
   })
 })

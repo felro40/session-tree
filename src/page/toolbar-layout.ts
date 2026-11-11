@@ -13,7 +13,9 @@
  *    with their text again when it fits there (and the brand's text when it fits its line).
  *
  * Every input is the same in every layout (the items are measured with their text, the strip
- * with every chip at its own width), so a layout never flips back and forth.
+ * with every chip at its own width), so a layout never flips back and forth. Every width is in
+ * CSS px, also under Hermes' UI scale (CSS `zoom` on <html>, `cssScale`), so a page as wide in
+ * CSS px gets the same layout at any text size.
  */
 
 export type BarLines = 'row' | 'stacked' | 'wrapped'
@@ -31,7 +33,7 @@ export interface Sized {
 }
 
 export interface BarMeasure {
-  /** The bar's content width, inside its padding. */
+  /** The bar's content width, inside its border and padding (fractional, as laid out). */
   room: number
   /** The column gap between the bar's items. */
   gap: number
@@ -44,11 +46,18 @@ export interface BarMeasure {
   scope: number
 }
 
-/** Sub-pixel slack: measured widths are fractional. */
+/** Sub-pixel slack for the strip's scroll ends. */
 const EPSILON = 0.5
 
+/**
+ * The room a layout must leave spare (CSS px). Never added to the room: a layout is kept only
+ * when it fits (review t_899e3936 N1: a rounded room plus slack kept one that did not, in a band
+ * just above each change). It absorbs the float error of measuring through a UI scale.
+ */
+export const FIT_MARGIN = 0.05
+
 export function barLayout({ room, gap, brand, pickers, tools, scope }: BarMeasure): BarLayout {
-  const fits = (width: number) => width <= room + EPSILON
+  const fits = (width: number) => width + FIT_MARGIN <= room
   // The brand and the pickers with the gaps between them.
   const left = (brandWidth: number) => brandWidth + pickers.reduce((sum, each) => sum + each + gap, 0)
 
@@ -100,12 +109,39 @@ const LINE_PX = 16
 
 /**
  * The sideways scroll for a wheel turn over the scope strip: a plain (vertical) wheel scrolls it
- * sideways; a sideways gesture (a touchpad, Shift + wheel) already scrolls it natively, so 0.
+ * sideways; a sideways gesture (a touchpad) and Shift + wheel (Chrome reports it as a vertical
+ * delta with `shiftKey`, review t_899e3936 N2) already scroll it natively, so 0.
  */
-export function wheelScroll(deltaX: number, deltaY: number, deltaMode: number, pageWidth: number): number {
-  if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+export function wheelScroll(deltaX: number, deltaY: number, deltaMode: number, pageWidth: number, shiftKey = false): number {
+  if (shiftKey || Math.abs(deltaX) >= Math.abs(deltaY)) {
     return 0
   }
 
   return deltaY * (deltaMode === 1 ? LINE_PX : deltaMode === 2 ? pageWidth : 1)
+}
+
+/**
+ * The factor from CSS px to client-rect px for an element (review t_899e3936 B1). Under Hermes'
+ * UI scale (Settings → text size: CSS `zoom` on <html>) getBoundingClientRect() is zoomed while
+ * offsetWidth, clientWidth and computed lengths are not, so every rect width is divided by this.
+ *
+ * - `cssZoom`: the engine's effective zoom of the element (`currentCSSZoom`, else the product of
+ *   the ancestors' computed `zoom`). Exact, so it is used when the measured ratio agrees.
+ * - The measured ratio, `rectWidth / layoutWidth`: `layoutWidth` (offsetWidth) is rounded to a
+ *   whole px, so it is good to about 0.5 px over the width. It decides whether this engine zooms
+ *   its rects at all (1 when they are not), and is the factor when no zoom is known.
+ */
+export function cssScale(rectWidth: number, layoutWidth: number, cssZoom: number | undefined): number {
+  if (!(rectWidth > 0) || !(layoutWidth > 0)) {
+    return 1
+  }
+
+  const measured = rectWidth / layoutWidth
+  const tolerance = 1 / layoutWidth + 0.002
+
+  if (cssZoom !== undefined && cssZoom > 0 && Math.abs(measured - cssZoom) <= tolerance * Math.max(1, cssZoom)) {
+    return cssZoom
+  }
+
+  return Math.abs(measured - 1) <= tolerance ? 1 : measured
 }
