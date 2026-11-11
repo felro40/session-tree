@@ -18,9 +18,11 @@ user (below).
   idle reset is a dashed "continued as" link; a parent that is deleted, hidden or not loaded shows as
   a faded "Parent not loaded" stand-in. Delegate children and cron / kanban / tool sessions are
   hidden, like in the sidebar. The session open in the app is highlighted.
-- **Navigate.** The plain wheel zooms toward the cursor (30–250 %); drag with the middle button (or
-  Space + left-drag) to pan; a left-drag on empty canvas clears the selection. The toolbar has −,
-  zoom %, + and Fit.
+- **Navigate.** The plain wheel zooms toward the cursor (30–250 %); drag with the middle button to
+  pan, or hold Space or Alt and left-drag (from a block too; Alt is for a laptop touchpad, which has
+  no middle button); a left-drag on empty canvas clears the selection. The toolbar has −, zoom %,
+  + and Fit. A view is remembered per style, profile and scope on each device; a remembered view
+  that would show none of the map (it was laid out again since, or panned off it) opens framed.
 - **Arrange.** Drag blocks (every style but Swimlanes); dragging never re-parents. Links follow the
   dragged block and re-route around other blocks on drop. **Snap** shows a dot grid and snaps
   dragged blocks to it. **Re-arrange** resets the current style + scope layout, with Undo.
