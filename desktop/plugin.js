@@ -8242,6 +8242,74 @@ function mergeLayout(previous, model, spec) {
   return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 
+// src/model/selection.ts
+init_define_import_meta_env();
+var EMPTY_SELECTION = Object.freeze({ ids: Object.freeze([]), primary: null }), make = (ids, primary) => ids.length === 0 ? EMPTY_SELECTION : { ids, primary: primary !== null && ids.includes(primary) ? primary : ids[ids.length - 1] };
+function canvasSelectable(model, shown, id2) {
+  let node = model.nodeById.get(id2);
+  return !!(node && shown.has(id2) && node.kind === "session" && !node.readOnly);
+}
+function reduceSelection(selection2, action, selectable, plainSelectable = selectable) {
+  switch (action.type) {
+    case "only":
+      return plainSelectable(action.id) ? make([action.id], action.id) : EMPTY_SELECTION;
+    case "toggle": {
+      if (selection2.ids.includes(action.id)) {
+        let ids = selection2.ids.filter((id2) => id2 !== action.id);
+        return make(ids, selection2.primary === action.id ? null : selection2.primary);
+      }
+      return selectable(action.id) ? make([...selection2.ids.filter(selectable), action.id], action.id) : selection2;
+    }
+    case "box": {
+      let boxed = unique(action.ids.filter(selectable));
+      if (!action.additive)
+        return make(boxed, boxed[0] ?? null);
+      if (boxed.length === 0)
+        return selection2;
+      let kept = selection2.ids.filter(selectable), added = boxed.filter((id2) => !kept.includes(id2));
+      return make([...kept, ...added], added[0] ?? selection2.primary);
+    }
+    case "all": {
+      let ids = unique(action.ids.filter(selectable));
+      return make(ids, selection2.primary);
+    }
+    case "clear":
+      return EMPTY_SELECTION;
+  }
+}
+function unique(ids) {
+  return [...new Set(ids)];
+}
+function singleSelected(selection2) {
+  return selection2.ids.length === 1 ? selection2.ids[0] : null;
+}
+function keepShown(selection2, selectable, singleOk = selectable) {
+  if (selection2.ids.length === 0)
+    return selection2;
+  if (selection2.ids.length === 1)
+    return singleOk(selection2.ids[0]) ? selection2 : EMPTY_SELECTION;
+  let ids = selection2.ids.filter(selectable);
+  return ids.length === selection2.ids.length ? selection2 : make(ids, selection2.primary);
+}
+function boxOf(a, b) {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+}
+function fullyInside(rects, box) {
+  let right = box.x + box.width, bottom = box.y + box.height, out = [];
+  for (let [id2, rect] of rects)
+    rect.x >= box.x && rect.y >= box.y && rect.x + rect.width <= right && rect.y + rect.height <= bottom && out.push(id2);
+  return out;
+}
+function snapPoint(point, grid) {
+  return { x: grid * Math.round(point.x / grid), y: grid * Math.round(point.y / grid) };
+}
+function groupPositions(starts, grabbedId, grabbedNow, snap, grid) {
+  let origin = starts.get(grabbedId) ?? grabbedNow, target = snap ? snapPoint(grabbedNow, grid) : grabbedNow, dx = target.x - origin.x, dy = target.y - origin.y, out = /* @__PURE__ */ new Map();
+  for (let [id2, start2] of starts)
+    out.set(id2, id2 === grabbedId ? { x: target.x, y: target.y } : { x: start2.x + dx, y: start2.y + dy });
+  return out;
+}
+
 // src/model/status.ts
 init_define_import_meta_env();
 function liveStatus(row, host7) {
@@ -9073,11 +9141,21 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }) {
     ] })
   ] });
 }
+function SelectionList({ model, ids, onSelect, onOpen, nowMs }) {
+  return /* @__PURE__ */ jsxs4("div", { className: "st-multi", "data-testid": "session-tree-inspector-multi", "data-count": ids.length, children: [
+    /* @__PURE__ */ jsxs4("div", { className: "st-it", "data-field": "selected-count", children: [
+      ids.length,
+      " selected"
+    ] }),
+    /* @__PURE__ */ jsx4("div", { className: "st-sec", children: ids.map((id2) => /* @__PURE__ */ jsx4(NodeLink, { model, id: id2, relation: "", onSelect: (id3) => onSelect(id3), onOpen, nowMs }, id2)) })
+  ] });
+}
 function DenseInspector(props) {
-  let { model, selectedId, statusOf, onSelect, onOpen, nowMs } = props, [singlesOpen, setSinglesOpen] = useState2(!0), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model);
-  return /* @__PURE__ */ jsxs4("aside", { className: "st-insp", "data-testid": "session-tree-inspector", "data-selected-id": node?.id ?? "", children: [
+  let { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs } = props, [singlesOpen, setSinglesOpen] = useState2(!0), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model), several = selectedIds.length > 1;
+  return /* @__PURE__ */ jsxs4("aside", { className: "st-insp", "data-testid": "session-tree-inspector", "data-selected-id": node?.id ?? "", "data-selected-count": selectedIds.length, children: [
     /* @__PURE__ */ jsxs4("div", { className: "st-ib", children: [
-      !node && /* @__PURE__ */ jsxs4("div", { className: "st-empty", "data-testid": "session-tree-inspector-empty", children: [
+      several && /* @__PURE__ */ jsx4(SelectionList, { model, ids: selectedIds, onSelect, onOpen, nowMs }),
+      !node && !several && /* @__PURE__ */ jsxs4("div", { className: "st-empty", "data-testid": "session-tree-inspector-empty", children: [
         "Select a session to inspect it.",
         /* @__PURE__ */ jsx4("br", {}),
         "Click a block · double-click opens it in a tab"
@@ -10205,9 +10283,44 @@ function labelRect(point, spot) {
   let at = LABEL_SPOTS.find((each) => each.key === spot) ?? LABEL_SPOTS[0];
   return { x: point.x + at.x, y: point.y + at.y, width: 168, height: 46 };
 }
-var area = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-function placeLabels(stations, blocked = []) {
-  let obstacles = new RectIndex2(), placed = new RectIndex2();
+var area = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)), INSET = 0.5;
+function segmentCrosses(a, b, rect) {
+  let dx = b.x - a.x, dy = b.y - a.y, edges = [
+    [-dx, a.x - (rect.x + INSET)],
+    [dx, rect.x + rect.width - INSET - a.x],
+    [-dy, a.y - (rect.y + INSET)],
+    [dy, rect.y + rect.height - INSET - a.y]
+  ], lo = 0, hi = 1;
+  for (let [p, q] of edges) {
+    if (p === 0) {
+      if (q <= 0)
+        return !1;
+    } else p < 0 ? lo = Math.max(lo, q / p) : hi = Math.min(hi, q / p);
+    if (lo >= hi)
+      return !1;
+  }
+  return !0;
+}
+function piecesOf(tracks) {
+  let index2 = new RectIndex2();
+  for (let { source, target, path } of tracks) {
+    let points = path.segs.every((seg) => seg.kind === "L") ? [path.start, ...path.segs.map((seg) => seg.to)] : samplePath(path);
+    for (let i = 1; i < points.length; i += 1) {
+      let [a, b] = [points[i - 1], points[i]], piece = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y), a, b, source, target };
+      index2.add(piece);
+    }
+  }
+  return index2;
+}
+function trackHits(pieces, rect, id2) {
+  let own = /* @__PURE__ */ new Set(), other = /* @__PURE__ */ new Set(), probe = { x: rect.x - 1, y: rect.y - 1, width: rect.width + 2, height: rect.height + 2 };
+  for (let piece of pieces.hits(probe))
+    segmentCrosses(piece.a, piece.b, rect) && (piece.source === id2 || piece.target === id2 ? own : other).add(`${piece.source}>${piece.target}`);
+  return [own.size, other.size];
+}
+var better = (a, b) => a[0] < b[0] || a[0] === b[0] && (a[1] < b[1] || a[1] === b[1] && a[2] < b[2]);
+function placeLabels(stations, blocked = [], tracks = []) {
+  let obstacles = new RectIndex2(), placed = new RectIndex2(), pieces = piecesOf(tracks);
   for (let point of stations.values())
     obstacles.add({ x: point.x, y: point.y, width: 40, height: 20 });
   for (let rect of blocked)
@@ -10216,24 +10329,32 @@ function placeLabels(stations, blocked = []) {
   for (let [id2, point] of order) {
     let best;
     for (let candidate of LABEL_SPOTS) {
-      let rect = labelRect(point, candidate.key), overlap = [...obstacles.hits(rect), ...placed.hits(rect)].reduce((sum, other) => sum + area(rect, other), 0);
-      if ((!best || overlap < best.overlap) && (best = { spot: candidate.key, rect, overlap }), overlap === 0)
+      let rect = labelRect(point, candidate.key), score = [[...obstacles.hits(rect), ...placed.hits(rect)].reduce((sum, other) => sum + area(rect, other), 0), ...trackHits(pieces, rect, id2)];
+      if ((!best || better(score, best.score)) && (best = { spot: candidate.key, rect, score }), score.every((each) => each === 0))
         break;
     }
-    placed.add(best.rect), out.set(id2, { spot: best.spot, rect: best.rect, clear: best.overlap === 0 });
+    placed.add(best.rect), out.set(id2, { spot: best.spot, rect: best.rect, clear: best.score[0] === 0 });
+  }
+  return out;
+}
+function labelTracks(links, routes) {
+  let out = [];
+  for (let link2 of links) {
+    let routed = routes.get(link2.id);
+    routed && out.push({ source: link2.source, target: link2.target, path: routed.route.path });
   }
   return out;
 }
 
 // src/styles/subway/layer.tsx
 import { Fragment as Fragment6, jsx as jsx9, jsxs as jsxs7 } from "react/jsx-runtime";
-function useLabelDriver({ positions, shown }) {
+function useLabelDriver({ positions, shown, links, routes }) {
   let env = useSubwayEnv(), placements = useMemo6(() => {
     let stations = /* @__PURE__ */ new Map(), blocked = [];
     for (let [id2, point] of positions)
       id2.startsWith(GROUP_PREFIX) ? blocked.push({ x: point.x, y: point.y, width: LABEL_WIDTH, height: 26 }) : shown.has(id2) && stations.set(id2, point);
-    return placeLabels(stations, blocked);
-  }, [positions, shown]);
+    return placeLabels(stations, blocked, labelTracks(links, routes));
+  }, [positions, shown, links, routes]);
   useLayoutEffect2(() => {
     env?.labels.set(placements);
   }, [env, placements]);
@@ -11514,6 +11635,11 @@ var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP =
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
+var NOT_TEXT_INPUTS = /* @__PURE__ */ new Set(["button", "checkbox", "color", "file", "image", "radio", "range", "reset", "submit"]);
+function isTextField(target) {
+  let element = target?.closest?.('input, textarea, [contenteditable=""], [contenteditable="true"]');
+  return !!(element && !(element instanceof HTMLInputElement && NOT_TEXT_INPUTS.has(element.type)));
+}
 function StyleProviders({ model, children: children2 }) {
   return registeredStyles().reduceRight((inner, each) => {
     let Provider2 = each.Provider;
@@ -11521,7 +11647,16 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
+    let out = /* @__PURE__ */ new Map();
+    for (let [id2, rect] of rects)
+      canvasSelectable(model, shown, id2) && out.set(id2, rect);
+    return out;
+  }, [model, shown, rects]), selectableRef = useRef4(selectableRects);
+  useEffect5(() => {
+    boxSelectRef.current = boxSelect, selectableRef.current = selectableRects;
+  }, [boxSelect, selectableRects]);
+  let baseNodes = useMemo7(() => {
     let { width: width2, height } = style2.nodeSize, handles = blockHandles(width2, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -11561,7 +11696,7 @@ function GraphCanvas(props) {
         draggable: style2.draggable && !node.readOnly,
         selectable: !node.readOnly,
         connectable: !1,
-        selected: node.id === selectedId && !node.readOnly,
+        selected: selectedIds.has(node.id) && !node.readOnly,
         width: width2,
         height,
         measured: { width: width2, height },
@@ -11569,7 +11704,7 @@ function GraphCanvas(props) {
       });
     }
     return frame2 && frameLayout && nodes2.push(...frame2.extraNodes(frameLayout)), nodes2;
-  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
+  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, selectedIds, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
     return panKeyHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
   }, [baseNodes, drag2, panKeyHeld]), edges = useMemo7(
@@ -11595,35 +11730,51 @@ function GraphCanvas(props) {
     [model, shown, style2, lineage, routes]
   ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback4(() => {
     tooltipTimer.current?.(), tooltipTimer.current = void 0, setTooltip(void 0);
-  }, []), onNodesChange = useCallback4((changes) => {
-    let moves = changes.filter(
-      (change) => change.type === "position" && !!change.position && change.dragging === !0
-    );
-    moves.length > 0 && setDrag((previous) => {
-      let next = new Map(previous);
-      for (let move of moves)
-        next.set(move.id, move.position);
-      return next;
-    });
-  }, []), onNodeDragStart = useCallback4(
-    (_event, _node, dragged) => {
-      hideTooltip(), onDragging(dragged.map((item) => item.id).filter((id2) => !id2.startsWith(GROUP_PREFIX)));
+  }, []), onNodesChange = useCallback4(
+    (changes) => {
+      let moves = changes.filter(
+        (change) => change.type === "position" && !!change.position && change.dragging === !0
+      );
+      if (moves.length === 0)
+        return;
+      let group = dragGroup.current, grabbed = group ? moves.find((move) => move.id === group.grabbed) : void 0;
+      if (!group || !grabbed) {
+        setDrag((previous) => {
+          let next2 = new Map(previous);
+          for (let move of moves)
+            next2.set(move.id, move.position);
+          return next2;
+        });
+        return;
+      }
+      let next = groupPositions(group.starts, group.grabbed, grabbed.position, snap, style2.grid), latest = group.latest;
+      latest && latest.size === next.size && [...next].every(([id2, point]) => latest.get(id2)?.x === point.x && latest.get(id2)?.y === point.y) || (group.latest = next, setDrag(next));
     },
-    [hideTooltip, onDragging]
+    [snap, style2.grid]
+  ), onNodeDragStart = useCallback4(
+    (_event, node, dragged) => {
+      hideTooltip();
+      let blocks = dragged.filter((item) => !item.id.startsWith(GROUP_PREFIX));
+      dragGroup.current = { grabbed: node.id, starts: new Map(blocks.map((item) => [item.id, { x: item.position.x, y: item.position.y }])) }, selectedIds.has(node.id) || onSelection({ type: "only", id: node.id }), onDragging(blocks.map((item) => item.id));
+    },
+    [hideTooltip, onDragging, onSelection, selectedIds]
   ), onNodeDragStop = useCallback4(
     (_event, _node, dragged) => {
-      let moves = /* @__PURE__ */ new Map();
+      let latest = dragGroup.current?.latest, moves = /* @__PURE__ */ new Map();
       for (let item of dragged)
-        item.id.startsWith(GROUP_PREFIX) || moves.set(item.id, { x: item.position.x, y: item.position.y });
-      setDrag(void 0), moves.size > 0 && onMove(moves), onDragging(null);
+        if (!item.id.startsWith(GROUP_PREFIX)) {
+          let point = latest?.get(item.id) ?? item.position;
+          moves.set(item.id, { x: point.x, y: point.y });
+        }
+      dragGroup.current = null, setDrag(void 0), moves.size > 0 && onMove(moves), onDragging(null);
     },
     [onMove, onDragging]
   ), graphNode = useCallback4((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback4(
-    (_event, flowNode) => {
+    (event, flowNode) => {
       let node = graphNode(flowNode);
-      node && !node.readOnly && onSelect(node.id);
+      node && !node.readOnly && onSelection(event.shiftKey ? { type: "toggle", id: node.id } : { type: "only", id: node.id });
     },
-    [graphNode, onSelect]
+    [graphNode, onSelection]
   ), onNodeDoubleClick = useCallback4(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
@@ -11652,9 +11803,24 @@ function GraphCanvas(props) {
     []
   ), onMenuOpen = useCallback4(
     (node) => {
-      hideTooltip(), onSelect(node.id);
+      hideTooltip(), selectedIds.has(node.id) || onSelection({ type: "only", id: node.id });
     },
-    [hideTooltip, onSelect]
+    [hideTooltip, onSelection, selectedIds]
+  ), onSelectionStart = useCallback4(
+    (event) => {
+      let rect = flowStore.getState().userSelectionRect;
+      boxStart.current = rect ? { at: { x: rect.startX, y: rect.startY }, additive: event.shiftKey } : null, hideTooltip();
+    },
+    [flowStore, hideTooltip]
+  ), onSelectionEnd = useCallback4(
+    (event) => {
+      let start2 = boxStart.current;
+      if (boxStart.current = null, !start2)
+        return;
+      let end = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: !1 }), ids = fullyInside(selectableRef.current, boxOf(start2.at, end));
+      onSelection({ type: "box", ids, additive: start2.additive });
+    },
+    [flow, onSelection]
   ), restoreFocus = useCallback4(() => {
     let attempt = () => {
       let active2 = document.activeElement;
@@ -11695,10 +11861,18 @@ function GraphCanvas(props) {
         "pointerdown",
         (event) => {
           let pointer2 = event, target = pointer2.target;
-          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || altDown.current || pointer2.altKey || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && onSelect(null);
+          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || altDown.current || pointer2.altKey || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && !(boxSelectRef.current && pointer2.shiftKey) && onSelection({ type: "clear" });
         },
         !0
       ),
+      // Card 9: Esc clears the selection; Ctrl/⌘+A selects every editable block shown. Neither
+      // acts while the focus is in a text field (Rename, search: Ctrl/⌘+A selects its text there)
+      // or in an open menu or dialog. Delete and Backspace never delete sessions (React Flow's
+      // delete key is off and nothing here listens for them).
+      ctx.addEventListener(window, "keydown", (event) => {
+        let key = event, target = key.target;
+        !(!target || target === document.body || target === document.documentElement || wrapper.current?.closest(".session-tree")?.contains(target)) || key.defaultPrevented || isTextField(target) || target?.closest?.('[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]') || (key.key === "Escape" ? onSelection({ type: "clear" }) : (key.ctrlKey || key.metaKey) && !key.altKey && !key.shiftKey && key.key.toLowerCase() === "a" && (key.preventDefault(), onSelection({ type: "all", ids: [...selectableRef.current.keys()] })));
+      }),
       ctx.addEventListener(
         window,
         "keydown",
@@ -11733,7 +11907,7 @@ function GraphCanvas(props) {
       })
     ];
     return () => offs.forEach((off) => off());
-  }, [ctx, onSelect]), useEffect5(() => () => tooltipTimer.current?.(), []);
+  }, [ctx, onSelection]), useEffect5(() => () => tooltipTimer.current?.(), []);
   let Under = frame2?.Under, Over = frame2?.Over, Layer = style2.Layer;
   return /* @__PURE__ */ jsx14(SessionMenu, { model, onOpenFor: onMenuOpen, onRestoreFocus: restoreFocus, children: /* @__PURE__ */ jsxs12(
     "div",
@@ -11746,6 +11920,10 @@ function GraphCanvas(props) {
       "data-snap": snap ? "on" : "off",
       "data-grid": style2.grid,
       "data-draggable": style2.draggable ? "true" : "false",
+      "data-box-select": boxSelect ? "true" : "false",
+      "data-selected-count": selection2.ids.length,
+      "data-selected": selection2.ids.join(" "),
+      "data-route-passes": routing.routed,
       children: [
         /* @__PURE__ */ jsxs12(FrameUiCtx.Provider, { value: frameUi, children: [
           Under && frameLayout && /* @__PURE__ */ jsx14(Under, { layout: frameLayout, nowMs }),
@@ -11766,6 +11944,8 @@ function GraphCanvas(props) {
               onNodeMouseLeave: hideTooltip,
               onMoveStart,
               onInit,
+              onSelectionStart,
+              onSelectionEnd,
               nodesDraggable: style2.draggable,
               panOnDrag: [1],
               panActivationKeyCode: PAN_KEYS,
@@ -11773,7 +11953,8 @@ function GraphCanvas(props) {
               panOnScroll: !1,
               zoomOnDoubleClick: !1,
               zoomOnPinch: !0,
-              selectionOnDrag: !1,
+              selectionOnDrag: boxSelect,
+              selectionMode: SelectionMode.Full,
               selectionKeyCode: null,
               multiSelectionKeyCode: null,
               deleteKeyCode: null,
@@ -11781,7 +11962,7 @@ function GraphCanvas(props) {
               nodesFocusable: !1,
               edgesFocusable: !1,
               elevateNodesOnSelect: !1,
-              snapToGrid: snap,
+              snapToGrid: !1,
               snapGrid: [style2.grid, style2.grid],
               minZoom: MIN_ZOOM,
               maxZoom: MAX_ZOOM,
@@ -11799,6 +11980,8 @@ function GraphCanvas(props) {
                     model,
                     positions,
                     shown,
+                    links,
+                    routes,
                     nodeSize: style2.nodeSize,
                     showAll: spec.includeSingles,
                     selectedId,
@@ -12962,7 +13145,7 @@ function SessionTreePage({ ctx, services }) {
 function PageBody({ ctx, services: { sync, prefs } }) {
   let activeProfile = useValue(host4.state.profile) || "default", syncVersion = useSyncVersion(sync);
   usePrefsVersion(prefs);
-  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState8(ALL_PROJECTS), [selectedChoice, setSelectedId] = useState8(null), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
+  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState8(ALL_PROJECTS), [selectionChoice, setSelection] = useState8(EMPTY_SELECTION), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
   useEffect8(() => sync.watch(profile), [sync, profile]);
   let health = useQuery({
     queryKey: ["session-tree", "health", activeProfile],
@@ -13025,7 +13208,15 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       needsInput
     }),
     [busy, busyBySession, focusedSessionId, focusedStoredSessionId, needsInput]
-  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback6(() => {
+  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), canvasIds = useMemo9(
+    () => frameLayout?.shown ?? new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)),
+    [frameLayout, model, spec]
+  ), selectable = useCallback6((id2) => canvasSelectable(model, canvasIds, id2), [model, canvasIds]), plainSelectable = useCallback6((id2) => model.nodeById.get(id2)?.readOnly === !1, [model]), selectionKey = `${profile}\0${scope}\0${style2.id}`, [selectionFor, setSelectionFor] = useState8(selectionKey);
+  selectionFor !== selectionKey && (setSelectionFor(selectionKey), setSelection(EMPTY_SELECTION));
+  let selection2 = useMemo9(() => keepShown(selectionChoice, selectable, plainSelectable), [selectionChoice, selectable, plainSelectable]), selectedId = singleSelected(selection2), onSelection = useCallback6(
+    (action) => setSelection((previous) => reduceSelection(keepShown(previous, selectable, plainSelectable), action, selectable, plainSelectable)),
+    [selectable, plainSelectable, setSelection]
+  ), fit = useCallback6(() => {
     if (frameLayout) {
       let { width: width2, height } = flowStore.getState();
       width2 > 0 && height > 0 && flow.setViewport(frameLayout.fit(width2, height, MIN_ZOOM), { duration: 0 });
@@ -13075,14 +13266,14 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       let node = id2 ? model.nodeById.get(id2) : void 0;
       if (id2 && (!node || node.readOnly))
         return;
-      setSelectedId(id2);
+      setSelection(id2 ? { ids: [id2], primary: id2 } : EMPTY_SELECTION);
       let point = id2 ? layout.positions.get(id2) : void 0;
       if (reveal2 && point) {
         let { zoom: zoom3 } = flow.getViewport();
         flow.setCenter(point.x + style2.nodeSize.width / 2, point.y + style2.nodeSize.height / 2, { zoom: zoom3, duration: 0 });
       }
     },
-    [model, layout, flow, style2, setSelectedId]
+    [model, layout, flow, style2, setSelection]
   ), onMove = useCallback6(
     (moves) => sync.drop(ref, new Map([...moves].map(([id2, point]) => [keys.toStore(id2), point]))),
     [sync, ref, keys]
@@ -13108,7 +13299,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     },
     [activeProfile]
   ), [pendingSelect, setPendingSelect] = useState8(null), [reveal, setReveal] = useState8(null);
-  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelectedId(pendingSelect), setReveal({ id: pendingSelect })), useEffect8(() => {
+  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelection({ ids: [pendingSelect], primary: pendingSelect }), setReveal({ id: pendingSelect })), useEffect8(() => {
     let point = reveal ? layout.positions.get(reveal.id) : void 0;
     if (point) {
       let { zoom: zoom3 } = flow.getViewport();
@@ -13129,7 +13320,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     },
     onBranched: (id2) => setPendingSelect(id2),
     onMoved: (id2) => sync.forget(profile, keys.toStore(id2)),
-    onRemoved: (id2) => setSelectedId((current) => current === id2 ? null : current)
+    onRemoved: (id2) => setSelection((current) => current.ids.includes(id2) ? reduceSelection(current, { type: "toggle", id: id2 }, () => !1) : current)
   }), visibleCount = useMemo9(() => visibleRows(rows).length, [rows]), onCanvas = useMemo9(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
@@ -13162,7 +13353,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           model,
           positions: layout.positions,
           labels: layout.labels,
-          selectedId,
+          selection: selection2,
+          onSelection,
           onSelect,
           onMove,
           onDragging,
@@ -13207,7 +13399,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             profiles: profileNames,
             profile,
             onProfile: (next) => {
-              prefs.set({ profile: next === activeProfile ? null : next }), setScope(ALL_PROJECTS), setSelectedId(null);
+              prefs.set({ profile: next === activeProfile ? null : next }), setScope(ALL_PROJECTS), setSelection(EMPTY_SELECTION);
             },
             showAll,
             onShowAll: (on) => {
@@ -13240,7 +13432,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             body,
             refreshFailed && /* @__PURE__ */ jsx17("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
           ] }),
-          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx17(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx17(Panel2, { model, selectedId, selectedIds: selection2.ids, onSelect, onOpen, statusOf, nowMs })
         ] }),
         toast && /* @__PURE__ */ jsxs15("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
           /* @__PURE__ */ jsx17("span", { children: toast.message }),
@@ -13379,8 +13571,19 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   --xy-handle-background-color: transparent;
   --xy-handle-border-color: transparent;
   --xy-selection-background-color: var(--ui-selection-background);
-  --xy-selection-border: 1px dotted var(--ui-stroke-secondary);
+  /* Card 9: the selection box (Dense, Subway, Rich cards). */
+  --xy-selection-border: 1px dashed var(--ui-accent);
   --xy-attribution-background-color: transparent;
+}
+
+/* Card 9: React Flow's own frame around a finished selection is not used: it would catch clicks
+   and drags on the empty canvas between the selected blocks. A selected block shows itself. */
+.session-tree .react-flow__nodesselection {
+  display: none;
+}
+
+.session-tree .react-flow__pane.selection {
+  cursor: default;
 }
 
 .session-tree .react-flow__node {
@@ -14245,6 +14448,14 @@ g.is-dimmed {
   color: var(--ui-text-secondary);
   font-size: 11px;
   pointer-events: none;
+}
+
+/* Card 8 (F1): with the Rich cards singles drawer open (300 px, on the stage's right edge), the
+   note moves left of it, 10 px clear, and stays inside the canvas (it wraps if the canvas is
+   narrow). Closed, and in the other styles, it stays where it is above. */
+.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note {
+  right: calc(300px + 10px);
+  max-width: calc(100% - 300px - 20px);
 }
 
 .session-tree__toast {
@@ -15124,19 +15335,23 @@ g.is-dimmed {
   margin-left: auto;
 }
 
+/* Card 8 (F4): the bar's full extent is a 1 px outline in the tertiary text colour (≥ 3:1 against
+   the card, light and dark; drawn outside the box, so the 54 px width is unchanged), over a clear
+   track, and the fill is the full accent (≥ 3:1 against that track). */
 .st-rc-bar {
   display: block;
   height: 4px;
   overflow: hidden;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  outline: 1px solid var(--ui-text-tertiary);
+  background: transparent;
 }
 
 .st-rc-bar b {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+  background: var(--ui-accent);
 }
 
 /* The stand-in: a dashed skeleton card. Faded by its see-through fill, the dashes and the italic

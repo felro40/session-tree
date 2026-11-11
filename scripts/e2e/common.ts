@@ -4,8 +4,6 @@
  * earlier suites keep their own copies (unchanged); these are the same helpers, gathered.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, renameSync } from 'node:fs'
-import { join } from 'node:path'
 
 import type { Page, Request } from 'playwright-core'
 
@@ -13,8 +11,9 @@ import type { StateSnapshot } from '../../src/model/layout-sync.ts'
 import type { SessionRow, SessionsResponse } from '../../src/model/sessions.ts'
 import { goto } from './browser.ts'
 import type { Session } from './browser.ts'
-import { E2E_ROOT, stopGateway, testHermesPids } from './harness.ts'
+import { stopGateway, testHermesPids } from './harness.ts'
 import type { TestHermes } from './harness.ts'
+import { moveAside } from './trash.ts'
 
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 export const BLOCK = (id: string) => `[data-testid="session-tree-block"][data-session-id="${id}"]`
@@ -339,16 +338,11 @@ export async function themeProbe(page: Page, selector: string, property: 'backgr
   )
 }
 
-/** Moves the test home aside (workers cannot `rm -r`): `<E2E_ROOT>/trash/<name>-<ms>`. */
+/** Moves the test home aside, `<E2E_ROOT>/trash/<name>-<ms>`, then prunes the trash to the newest
+ *  copy of each home name (card 8, F5: `scripts/e2e/trash.ts`, the one guarded delete). */
 export function freshHome(t: TestHermes): void {
   stopGateway(t)
-
-  if (existsSync(t.root)) {
-    const trash = join(E2E_ROOT, 'trash')
-
-    mkdirSync(trash, { recursive: true })
-    renameSync(t.root, join(trash, `${t.root.split('/').pop()}-${Date.now()}`))
-  }
+  moveAside(t.root, { log: line => console.log(`  trash: ${line}`) })
 }
 
 /** No test-Hermes process and no listener left in the role's port block. */

@@ -77,7 +77,9 @@ grey sparkline box while they load), so the details arriving never move or resiz
   **"First prompt:"**. Rendered as React text: no markup, no remote fetch.
 - Footer: model chip (`claude-opus-4.1` → `opus-4.1`), last used, messages, and a 54 px token bar
   whose fill is `tokens / max` of the largest session in the current scope (all sessions for All
-  projects; the scoped project's for a scope), labelled with the value (`480k`, `1.4M`).
+  projects; the scoped project's for a scope), labelled with the value (`480k`, `1.4M`). The bar's
+  full extent is a 1 px `--ui-text-tertiary` outline over a clear track and the fill is the full
+  `--ui-accent` (card 8, F4: ≥ 3:1 against the card and against the track, light and dark; e2e).
 - Sparkline: 7 values, oldest first, today last; its tooltip (`title`) lists each local day
   (`Wed 11-04: 3 msgs`).
 - Compacted ×N: up to two ghost cards stacked behind the card (offset 9 px each) plus a
@@ -113,7 +115,9 @@ the singles in scope). Rows show the title, age and the excerpt (or "First promp
 selects, a double-click opens the session in a tab (R2), a right-click gives the card 3 session
 menu (rows carry `data-st-node`, which the canvas's `SessionMenu` resolves). Its open state is per
 device (R16), closed on a device that never opened it. With Show all the singles are cards on the
-canvas and the drawer is not drawn.
+canvas and the drawer is not drawn. While it is open, the page's "Couldn't refresh — showing the
+last data" note (a failed background refresh) sits left of it, 10 px clear, inside the canvas
+(card 8, F1); closed, the note is in its usual top-right place.
 
 ## Details: `POST /sessions/details`
 

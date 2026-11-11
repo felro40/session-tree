@@ -492,21 +492,29 @@ async function main(): Promise<void> {
       return { pan: { x: after.x - before.x, y: after.y - before.y }, middle }
     })
 
-    await check('R3: left-drag on empty canvas does not pan and clears the selection', async () => {
+    await check('R3 + card 9: a left-drag on empty canvas does not pan; it draws a selection box, and a box around no block leaves nothing selected', async () => {
       await page.locator(BLOCK('st-hp-root')).click()
       await page.locator('[data-testid="session-tree-inspector"][data-selected-id="st-hp-root"]').waitFor({ timeout: 5000 })
       const spot = await emptySpot(page)
       const before = await viewport(page)
 
-      await drag(page, spot, { x: 120, y: 70 })
+      await page.mouse.move(spot.x, spot.y)
+      await page.mouse.down()
+      await page.mouse.move(spot.x + 60, spot.y + 35, { steps: 10 })
+      await page.mouse.move(spot.x + 120, spot.y + 70, { steps: 10 })
+      const drawn = await page.evaluate(() => (document.querySelector('.react-flow__selection')?.getBoundingClientRect().width ?? 0) > 2)
+
+      await page.mouse.up()
       await page.waitForTimeout(300)
       const after = await viewport(page)
       const selected = await page.getAttribute('[data-testid="session-tree-inspector"]', 'data-selected-id')
+      const count = await page.getAttribute('[data-testid="session-tree-canvas"]', 'data-selected-count')
 
       assert(after.x === before.x && after.y === before.y, `viewport moved ${after.x - before.x},${after.y - before.y}`)
-      assert(selected === '', `selection kept: ${selected}`)
+      assert(drawn, 'no selection box was drawn')
+      assert(selected === '' && count === '0', `selection kept: ${selected} (${count})`)
 
-      return { selected }
+      return { selected, drawn }
     })
 
     await check('R3: Space + left-drag pans (trackpad fallback)', async () => {

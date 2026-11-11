@@ -22,6 +22,8 @@ import type { GraphNode } from '../model/graph.ts'
 import { anyInView, laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
 import type { LayoutRef } from '../model/layout-sync.ts'
+import { EMPTY_SELECTION, canvasSelectable, keepShown, reduceSelection, singleSelected } from '../model/selection.ts'
+import type { Selection, SelectionAction } from '../model/selection.ts'
 import { visibleRows } from '../model/sessions.ts'
 import { liveStatus } from '../model/status.ts'
 import type { HostStatusSnapshot } from '../model/status.ts'
@@ -75,7 +77,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const showAll = device.showAll
   const showArchived = device.showArchived
   const [scopeChoice, setScope] = useState(ALL_PROJECTS)
-  const [selectedChoice, setSelectedId] = useState<null | string>(null)
+  // Card 9: the selected blocks (a set with one primary block), per page; never synced.
+  const [selectionChoice, setSelection] = useState<Selection>(EMPTY_SELECTION)
   const [fitRequest, setFitRequest] = useState(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [toast, setToast] = useState<UndoToast>()
@@ -217,7 +220,31 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   )
 
   const statusOf = useCallback((node: GraphNode) => (node.row ? liveStatus(node.row, hostStatus) : undefined), [hostStatus])
-  const selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === false ? selectedChoice : null
+
+  // Card 9: the blocks on the canvas (what a box, Shift+click or Ctrl/⌘+A may select), and the
+  // selection kept to the blocks still shown after a refresh. A one-block selection may also be
+  // a single picked from its list or drawer (as before card 9), while it exists and is editable.
+  const canvasIds = useMemo<ReadonlySet<string>>(
+    () => frameLayout?.shown ?? new Set(laidOutFamilies(model, spec).flatMap(family => family.nodeIds)),
+    [frameLayout, model, spec]
+  )
+  const selectable = useCallback((id: string) => canvasSelectable(model, canvasIds, id), [model, canvasIds])
+  const plainSelectable = useCallback((id: string) => model.nodeById.get(id)?.readOnly === false, [model])
+  // Changing scope, profile or style clears it (adjusted during render, like the Branch select).
+  const selectionKey = `${profile}\u0000${scope}\u0000${style.id}`
+  const [selectionFor, setSelectionFor] = useState(selectionKey)
+
+  if (selectionFor !== selectionKey) {
+    setSelectionFor(selectionKey)
+    setSelection(EMPTY_SELECTION)
+  }
+
+  const selection = useMemo(() => keepShown(selectionChoice, selectable, plainSelectable), [selectionChoice, selectable, plainSelectable])
+  const selectedId = singleSelected(selection)
+  const onSelection = useCallback(
+    (action: SelectionAction) => setSelection(previous => reduceSelection(keepShown(previous, selectable, plainSelectable), action, selectable, plainSelectable)),
+    [selectable, plainSelectable, setSelection]
+  )
 
   const fit = useCallback(() => {
     if (frameLayout) {
@@ -333,7 +360,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         return
       }
 
-      setSelectedId(id)
+      setSelection(id ? { ids: [id], primary: id } : EMPTY_SELECTION)
 
       const point = id ? layout.positions.get(id) : undefined
 
@@ -343,7 +370,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         void flow.setCenter(point.x + style.nodeSize.width / 2, point.y + style.nodeSize.height / 2, { zoom, duration: 0 })
       }
     },
-    [model, layout, flow, style, setSelectedId]
+    [model, layout, flow, style, setSelection]
   )
 
   const onMove = useCallback(
@@ -402,7 +429,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   if (pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === false && layout.positions.has(pendingSelect)) {
     setPendingSelect(null)
-    setSelectedId(pendingSelect)
+    setSelection({ ids: [pendingSelect], primary: pendingSelect })
     setReveal({ id: pendingSelect })
   }
 
@@ -427,7 +454,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     refreshProjects: () => void projects.refetch(),
     onBranched: id => setPendingSelect(id),
     onMoved: id => sync.forget(profile, keys.toStore(id)),
-    onRemoved: id => setSelectedId(current => (current === id ? null : current))
+    onRemoved: id => setSelection(current => (current.ids.includes(id) ? reduceSelection(current, { type: 'toggle', id }, () => false) : current))
   })
 
   const visibleCount = useMemo(() => visibleRows(rows).length, [rows])
@@ -510,7 +537,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           model={model}
           positions={layout.positions}
           labels={layout.labels}
-          selectedId={selectedId}
+          selection={selection}
+          onSelection={onSelection}
           onSelect={onSelect}
           onMove={onMove}
           onDragging={onDragging}
@@ -564,7 +592,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           onProfile={next => {
             prefs.set({ profile: next === activeProfile ? null : next })
             setScope(ALL_PROJECTS)
-            setSelectedId(null)
+            setSelection(EMPTY_SELECTION)
           }}
           showAll={showAll}
           onShowAll={on => {
@@ -610,7 +638,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
             )}
           </div>
           {Panel && panelOpen && sessions.data && (
-            <Panel model={model} selectedId={selectedId} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
+            <Panel model={model} selectedId={selectedId} selectedIds={selection.ids} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
           )}
         </div>
         {toast && (

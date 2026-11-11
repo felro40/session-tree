@@ -11,17 +11,15 @@
  *   backend on|off   put session-tree in / out of plugins.enabled and restart the gateway
  *   touch            rename one fixture (a real state.db change → sessions.changed)
  *   stop             stop the gateway and anything else started under the test home
- *   reset            stop, then move the role's root to <e2e root>/trash/
+ *   reset            stop, then move the role's root to <e2e root>/trash/ (the trash is then pruned
+ *                    to the newest copy of each home; `npm run clean:e2e` empties it)
  *
  * Role: SESSION_TREE_ROLE=coder|reviewer (default coder).
  */
-import { mkdirSync, renameSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
 
 import {
   CARD,
   configure,
-  E2E_ROOT,
   ensureLauncher,
   hermesPython,
   listenersOf,
@@ -32,6 +30,7 @@ import {
   testHermes,
   testHermesPids
 } from './harness.ts'
+import { moveAside } from './trash.ts'
 
 const t = testHermes()
 const [command, arg] = process.argv.slice(2)
@@ -87,13 +86,8 @@ switch (command) {
     break
   case 'reset': {
     stopGateway(t)
-
-    if (existsSync(t.root)) {
-      const trash = join(E2E_ROOT, 'trash')
-
-      mkdirSync(trash, { recursive: true })
-      renameSync(t.root, join(trash, `c${CARD}-${t.role}-${Date.now()}`))
-    }
+    // Card 8 (F5): into the trash, then the trash pruned to the newest copy of each home name.
+    moveAside(t.root, { name: `c${CARD}-${t.role}`, log: line => console.error(`trash: ${line}`) })
 
     console.log(JSON.stringify({ reset: true, root: t.root }))
     break

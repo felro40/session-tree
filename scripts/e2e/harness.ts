@@ -37,8 +37,8 @@ export const DEFAULT_CARD = Number(readFileSync(join(REPO, 'scripts', 'e2e', 'CA
 /** The card whose test home and port block this run uses (each card of the set has its own). */
 export const CARD = Number(process.env.SESSION_TREE_CARD ?? DEFAULT_CARD)
 
-if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
-  throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)
+if (!Number.isInteger(CARD) || CARD < 1 || CARD > 9) {
+  throw new Error(`SESSION_TREE_CARD must be 1..9, got ${process.env.SESSION_TREE_CARD}`)
 }
 
 const PORT_BASE: Record<Role, number> = { coder: 19300 + CARD * 10, reviewer: 19305 + CARD * 10 }

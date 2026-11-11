@@ -19,7 +19,7 @@ import type { LinkRouter, Path } from '../../src/model/route.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 import { createCanvasRouting } from '../../src/page/canvas-routing.ts'
 import type { Routing } from '../../src/page/canvas-routing.ts'
-import { labelRect, placeLabels } from '../../src/styles/subway/labels.ts'
+import { labelRect, labelTracks, placeLabels } from '../../src/styles/subway/labels.ts'
 import { familyGrid, layoutSubway } from '../../src/styles/subway/layout.ts'
 import { subwayPlan, subwaySlots } from '../../src/styles/subway/plan.ts'
 import { COLUMN, GROUP_LABEL_H, LABEL_SPOTS, STATION_H, STATION_W, SUBWAY_GRID, splitOffset, subwayLayoutSpec, subwayPorts } from '../../src/styles/subway/spec.ts'
@@ -156,7 +156,8 @@ function assertMetro(model: GraphModel, positions: ReadonlyMap<string, Point>, r
 
   const stations = stationsOf(model, positions)
   const boxes = [...stations].filter(([id]) => routing.shown.has(id)).map(([id, p]) => ({ id, x: p.x, y: p.y, width: STATION_W, height: STATION_H }))
-  const labels = placeLabels(new Map([...stations].filter(([id]) => routing.shown.has(id))), groupLabelRects(positions))
+  // As the layer places them (card 8: the routed tracks too).
+  const labels = placeLabels(new Map([...stations].filter(([id]) => routing.shown.has(id))), groupLabelRects(positions), labelTracks(routing.links, routing.routes))
   const labelList = [...labels]
 
   for (let i = 0; i < boxes.length; i += 1) {
@@ -317,6 +318,60 @@ describe('Subway auto-layout at scale (500 sessions)', () => {
       assertMetro(model, positions, routed, { corridors: !showAll, crossings: !showAll })
       assert.ok(ms < 3000, `${ms.toFixed(0)} ms`)
     }
+  })
+})
+
+describe('Subway labels and tracks (card 8, F2)', () => {
+  it('the tracks never move an auto-layout label: on both fixtures, Show all off and on, the placement with the routed tracks is the one without them (card 7\'s), every label above and clear', () => {
+    const cases = [
+      { name: 'default', model: graph(fixture.rows) },
+      { name: 'scale', model: bigGraph() }
+    ]
+
+    for (const { name, model } of cases) {
+      for (const showAll of [false, true]) {
+        const { positions } = layoutSubway(model, undefined, subwayLayoutSpec({ showAll }))
+        const routed = route(model, positions, showAll)
+        const stations = new Map([...stationsOf(model, positions)].filter(([id]) => routed.shown.has(id)))
+        const withTracks = placeLabels(stations, groupLabelRects(positions), labelTracks(routed.links, routed.routes))
+        const without = placeLabels(stations, groupLabelRects(positions))
+
+        assert.ok(withTracks.size > 0)
+        assert.equal(JSON.stringify([...withTracks]), JSON.stringify([...without]), `${name} showAll=${showAll}`)
+        assert.ok([...withTracks.values()].every(label => label.spot === 'above' && label.clear), `${name} showAll=${showAll}: a label is not above`)
+      }
+    }
+  })
+
+  it('a station whose first free spot lies on its own split takes the next spot clear of every track', () => {
+    // b sits where a's label would go above; a's split leaves its bottom edge and runs down to c.
+    const stations = new Map<string, Point>([
+      ['a', { x: 0, y: 100 }],
+      ['b', { x: 0, y: 40 }],
+      ['c', { x: 250, y: 200 }]
+    ])
+    const split = { source: 'a', target: 'c', path: { start: { x: 36, y: 120 }, segs: [{ kind: 'L' as const, to: { x: 36, y: 185 } }, { kind: 'L' as const, to: { x: 51, y: 210 } }, { kind: 'L' as const, to: { x: 250, y: 210 } }] } }
+    const before = placeLabels(stations)
+    const after = placeLabels(stations, [], [split])
+
+    assert.equal(before.get('a')!.spot, 'below', 'card 7 put it below, on its own split')
+    assert.ok(samplePath(split.path).some(q => insideRect(q, before.get('a')!.rect, 0.5)))
+    assert.notEqual(after.get('a')!.spot, 'below')
+    assert.ok(!samplePath(split.path).some(q => insideRect(q, after.get('a')!.rect, 0.5)), `a's label ${after.get('a')!.spot} is on its split`)
+    assert.ok(after.get('a')!.clear)
+    // No spot free of the track (it zigzags through all six): the least overlap of stations and
+    // labels, as before (card 7's spot).
+    const zigzag = [
+      { x: 400, y: 60 },
+      { x: 400, y: 110 },
+      { x: -300, y: 110 },
+      { x: -300, y: 160 },
+      { x: 400, y: 160 }
+    ]
+    const everywhere = { source: 'a', target: 'c', path: { start: { x: -300, y: 60 }, segs: zigzag.map(to => ({ kind: 'L' as const, to })) } }
+    const forced = placeLabels(stations, [], [everywhere]).get('a')!
+
+    assert.deepEqual(forced, before.get('a'))
   })
 })
 
