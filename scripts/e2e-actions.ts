@@ -21,7 +21,7 @@ import type { Locator, Page, Route } from 'playwright-core'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { moveAside } from './e2e/trash.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
@@ -302,7 +302,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The other suites' home of this role uses the same ports: make sure it is not running.
-  stopGateway(testHermes())
+  stopRoleHomes(t)
   freshHome()
   mkdirSync(shots, { recursive: true })
   console.log(`e2e actions — role ${t.role}, home ${t.home}`)

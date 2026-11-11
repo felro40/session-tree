@@ -19,7 +19,7 @@ import { compactNumber, costLabel } from '../src/model/format.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids } from './e2e/harness.ts'
+import { seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const OUT_OF_SCOPE_TIP = 'Outside this project — switch to All projects to edit'
@@ -311,6 +311,8 @@ async function main(): Promise<void> {
   mkdirSync(shots, { recursive: true })
   const realBefore = snapshotRealHermes()
 
+  // The role's other homes use the same ports: make sure they are not running.
+  stopRoleHomes(t)
   console.log(`e2e core + Dense — role ${t.role}, home ${t.home}`)
   setup(t)
   const s = await launch({ colorScheme: 'light' })

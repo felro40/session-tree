@@ -24,7 +24,7 @@ import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 import { moveAside } from './e2e/trash.ts'
 import { compositedContrast, parseColor, rgbText } from './e2e/contrast.ts'
@@ -714,9 +714,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  for (const variant of [undefined, 'actions', 'sync', 'swim']) {
-    stopGateway(testHermes(undefined, variant ? { variant } : {}))
-  }
+  stopRoleHomes(t)
 
   freshHome()
   mkdirSync(shots, { recursive: true })

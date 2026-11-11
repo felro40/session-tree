@@ -60,7 +60,7 @@ import {
   viewport,
   waitFor
 } from './e2e/common.ts'
-import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, testHermes, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'subway' })
@@ -260,9 +260,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'final', 'toolbar']) {
-    stopGateway(testHermes(undefined, variant ? { variant } : {}))
-  }
+  stopRoleHomes(t)
 
   freshHome(t)
   console.log(`e2e subway — role ${t.role}, home ${t.home}`)

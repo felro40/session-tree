@@ -349,6 +349,24 @@ export function stopGateway(t: TestHermes): void {
   }
 }
 
+/**
+ * Every variant home a suite uses (`testHermes(role, { variant })`): they share the role's ports,
+ * so a suite stops all the others first (`stopRoleHomes`). One list, so a new suite's home is
+ * stopped by every other suite too (tests/js/e2e-homes.test.ts checks it lists every variant).
+ */
+export const HOME_VARIANTS = ['actions', 'sync', 'swim', 'rich', 'subway', 'toolbar', 'final', 'select'] as const
+
+/** Stops the gateway of every home of `t`'s role (the plain one and every variant) but `t`'s own. */
+export function stopRoleHomes(t: TestHermes): void {
+  for (const variant of [undefined, ...HOME_VARIANTS]) {
+    const other = testHermes(t.role, variant ? { variant } : {})
+
+    if (other.root !== t.root) {
+      stopGateway(other)
+    }
+  }
+}
+
 export function webappBase(t: TestHermes): string {
   return `http://127.0.0.1:${t.webappPort}`
 }

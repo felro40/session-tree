@@ -27,6 +27,7 @@ import {
   setup,
   signInLink,
   stopGateway,
+  stopRoleHomes,
   testHermes,
   testHermesPids
 } from './e2e/harness.ts'
@@ -127,6 +128,8 @@ async function main(): Promise<void> {
   mkdirSync(shots, { recursive: true })
   const realBefore = snapshotRealHermes()
 
+  // The role's other homes use the same ports: make sure they are not running.
+  stopRoleHomes(t)
   console.log(`e2e foundation — role ${t.role}, home ${t.home}`)
 
   const manifest = setup(t) as Manifest & { seeded: boolean }
