@@ -50,8 +50,12 @@ style id (`rich`), separate from Dense's, through the same `LayoutSync.place()` 
   right of its predecessor, or above its child, at the nearest free lattice spot (right, then left,
   then the rows below) **inside its group** (card 7, review r1 N1: the shelves partition the
   canvas into group segments — a label's segment runs to the next label on its shelf row and down
-  to the next shelf row — and a new card's centre may not lie in another group's segment; with no
-  room left it goes under everything, below a continuation label of its group); a new family (or a
+  to the next shelf row — and a new card's centre may not lie in another group's segment; when the
+  base row and the rows below have no room there, the free lattice spot of the group's own
+  segments nearest to the parent (card 7 fix r1, review r1 finding 4: a parent on its group's last
+  shelf row used to send its child under a continuation label 1,392 px away; now it lands beside
+  the parent on its own row, 340 px); only with no room left at all it goes under everything,
+  below a continuation label of its group); a new family (or a
   single with Show all) at the first free spot right of
   and below its group's label, row by row; a group with no label yet gets one under everything.
   Overlap checks go through a bucketed rectangle index, so turning Show all on for the 500-session

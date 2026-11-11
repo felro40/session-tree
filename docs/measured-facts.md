@@ -1671,3 +1671,120 @@ docs (`README.md`, this file).
   246: `test_details_leading.py` 13); `test:e2e` **177/177** at `759c501` — foundation 19 +
   core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 21 + **subway 15** + **final 14**; and
   e2e-sync 5 × 22/22 at `82ed496`.
+- **Correction (card 7 fix r1, review r1 finding 7):** the last full `test:e2e` on `ff5475c` itself
+  (shared home reset by hand first) was **176/177**: e2e-sync's card-4 B1 newer-schema check
+  failed once ("no save after the reload"). The review saw the same check fail in 1 of its 3
+  e2e-sync runs. That was a test race (fix r1 B2, below), now fixed.
+
+## Fix r1 (card 7) — review r1 `t_13edf7f7` findings 1–4, 6–8
+
+Hermes checkout now at **`3b421578588243f920886e6fe79a6faa87ea026e`** (`3b42157`, committed
+2026-11-09 16:24 −0800; client/backend v0.23.1): the user ran `hermes update` on 2026-11-10
+11:25–11:31 EST, between card 6 and card 7's review. Read-only as before; `git status --short`
+there is empty before and after this round. The line references of this file's earlier sections are
+to `2bd378ed1b`.
+
+- **B1 — `npm run test:py` exited 127 in a clean environment.** `run-pytest.sh` defaulted
+  `SESSION_TREE_CARD` to 6, the harness to 7, so the script exec'd `c6-<role>/hermes` that only a
+  leftover `c6-coder` root provided. Now `scripts/e2e/CARD` (`7`) is the one place the number
+  lives: `harness.ts` reads it (`DEFAULT_CARD`), `scripts/test-hermes` goes through the harness,
+  and `run-pytest.sh` takes its root from the launcher path the harness prints (no card of its
+  own). Guard test `tests/js/harness-card.test.ts` (7 tests): the CARD file is a card of the set,
+  the harness default equals it, `test-hermes` and `test-hermes-cli.ts` resolve `c<CARD>-coder` with
+  `SESSION_TREE_CARD` unset (the override still works), `run-pytest.sh` has no card variable and
+  derives the root from the launcher, and no entry point carries a literal default card. After the
+  N8 cleanup (no `c6-*` root left): `env -u SESSION_TREE_CARD npm run test:py` → exit 0, **259
+  passed**.
+- **B2 — e2e-sync's newer-schema "saves resume after a reload" race.** Both contexts are open and
+  B polls too; when the valid file comes back, whichever page fetches it first places the
+  auto-layout and saves it (`if_absent`), and the other then has nothing to save. The check asserted
+  on A's log only. It now counts the position saves of both contexts since the file came back
+  (`logA` and `logB`), which is the real condition (saving resumed). Audit of the other two-context
+  checks: the B2 compaction check ("no save under a tip id") also looked at A's log only — it now
+  checks both logs (a negative check that missed B's saves); the rest assert on A's own action (its
+  drag, its override switch, its Re-arrange) or on the store, and need no change. No sleep added.
+  **e2e-sync 5 × in a row at `74abc1c`: 22/22, 22/22, 22/22, 22/22, 22/22, exit 0 each.**
+- **B3 — a repeat full run needed a manual reset.** `run-e2e.sh` now runs `test-hermes-cli.ts
+  reset` (stop, move the role's shared root to `trash/`) before the first suite and stops if that
+  fails; e2e-foundation and e2e-core-dense then seed a fresh home (every other suite already moved
+  its own variant home aside). Guard test: the reset step precedes the suite loop, and `reset` moves
+  a scratch root to the trash. **Two full `npm run test:e2e` back to back, no manual step: see Gates.**
+- **N3 — a Subway track ran through its own end stations and labels.** See `docs/subway.md`
+  (Links and routing, Own ends). A bottom port whose target is not below and to the right drops
+  30 px, runs to 30 px left of the target, climbs or drops and runs in from the left; the plain shape
+  is also checked against the link's own two stations and the room above each kept for its label
+  (`LABEL_SPOTS[0]`), and a hit detours with them as grid obstacles (the own boxes 0.02 px smaller:
+  a port's stub on its own box's inflated edge used to land a float error inside it, which also
+  caused the one "through another station" case). Only `makeOctilinearRouter` / `octilinearPoints`
+  changed; `orthogonalRoute`, `detour` and the other styles' routers are untouched. All 202
+  auto-layout tracks (default and 500 fixtures, Show all off and on) are byte-identical to
+  `ff5475c`'s (diffed `d` strings). Seeded fuzz `tests/js/subway-fuzz.test.ts`, 447 drops (33 onto
+  another station skipped), through the production routing chain with the labels placed as the
+  layer places them:
+
+  | per track, 447 drops | ff5475c | 74abc1c |
+  |---|---|---|
+  | segments off octilinear (± 0.5°) | 0 | 0 |
+  | through an own station | 108 | **0** |
+  | through an own label at its first spot (above) | 207 | **0** |
+  | through an own label the placement moved (below, beside) | 111 | 167 (limit, below) |
+  | through another station | 1 | **0** |
+  | drag back ≠ original routes | 0 | 0 |
+
+  (The review's own probe counted 106/448 through own ends; it read the stand-in's link ends from
+  the edge id, which also produced its one "through another station".) The moved-label cases are the
+  label placement's: it avoids stations and labels, not tracks, so a label pushed below a station
+  with splits sits on their stubs — listed in `docs/subway.md` § Limits with the count; the fuzz
+  test pins it as a ratchet (≤ 167). Also unit tests of the reviewer's repro (st-sys-pairing at
+  tip + (−123.65, −147.11): was `M28 120 L28 -12.11 L3 -37.11 L-123.65 -37.11`, now leaves
+  downwards) and of the re-slot case (a later `/new` on st-hp-root moves st-hp-routing's link to slot
+  1: no longer through its parent), and a new e2e-subway check of the repro with the real mouse
+  (`M28 120 L28 135 L13 150 L-126.61 150 L-151.61 125 L-151.61 -22.11 L-136.61 -37.11 L-121.61
+  -37.11`: 0 of 401 path samples inside the tip, the pairing or the tip's label).
+- **N4 — Rich merge sent a child far away when its parent is on its group's last shelf row.**
+  After the base row and the rows below, `nearest()` now searches the group's own segments on the
+  lattice around the base, nearest to the parent first, before the continuation label; never
+  another group's segment, no saved position moves. Default fixture: st-sys-reply's child 1,392 →
+  **340 px** (beside it on its row; 4892ca9: 430 px, in hermes-plugins' segment); st-md-redline's
+  child 1,381 → **340 px** (4892ca9: 264 px directly below it — inside the no-project group's
+  segment, which N1 forbids; 340 px is the nearest spot in mdesign's own segment, a card being
+  280 + 60 px wide). Unit test bounds 430 / 340 and asserts the 264 px spot is another group's;
+  the N1 test is unchanged and green. README wording fixed.
+- **N6 — a background refresh that keeps failing was invisible.** A small pill, top right of the
+  stage, "Couldn't refresh — showing the last data" (`--ui-bg-tertiary` / `--ui-text-secondary` /
+  `--ui-stroke-tertiary`), shown while a refresh has failed with data on screen, gone with the next
+  successful refresh. The c5 r4 N2 e2e check now waits for it while the gateway is down (exact
+  text), reads its colours in light and dark (they differ: theme variables), takes both
+  screenshots, and waits for it to go after the restart (`noteCleared: true` in all 7 sync runs).
+- **N7** README's excerpt id count (25) and this file corrected. **N8** `c6-coder`, `c6-reviewer`
+  and the old `c7-coder` roots moved to `~/.cache/session-tree-e2e/trash/*-fixr1-<ts>` before B1
+  was verified (`c3-coder`, an older card's root, is left as found; `c6-r2` and the `*-shots`
+  folders are evidence, not roots).
+
+### Simulated
+
+Unchanged from card 7: needs input via the test-only hook (rich, subway suites); running via the
+real `is_active` heuristic.
+
+### Scope sweep (fix r1, `git diff ff5475c..HEAD --stat`)
+
+`scripts/e2e/CARD`, `scripts/e2e/harness.ts`, `scripts/run-pytest.sh`, `scripts/test-hermes`,
+`tests/js/harness-card.test.ts` (B1); `scripts/e2e-sync.ts` (B2, N6 check); `scripts/run-e2e.sh`
+(B3); `src/model/route.ts` (octilinear router only), `tests/js/subway-fuzz.test.ts`,
+`scripts/e2e-subway.ts`, `docs/subway.md` (N3); `src/styles/rich/layout.ts`,
+`tests/js/rich.test.ts`, `docs/rich-cards.md` (N4); `src/page/session-tree-page.tsx`,
+`src/styles.css` (N6); `desktop/plugin.js` (rebuilt); `README.md` (N4, N7); this file (N7).
+
+### Gates, bundle and numbers (code commit `74abc1c`; the docs commit after it changes only docs)
+
+- **`desktop/plugin.js`: 703 954 bytes** (was 701 199: the N3 router and the N6 note), sha256
+  `6490d0b8…f2f7747ea6`, byte-identical over a rebuild and to the committed file; imports
+  `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no `eval(` / `new Function` (guard tests).
+- lint 0; build 0; `npm test` **306/306** (was 293: harness-card 7, subway-fuzz 5, rich +1);
+  `env -u SESSION_TREE_CARD npm run test:py` exit 0, **259**; e2e-sync 5 × 22/22; `npm run test:e2e`
+  twice back to back with no manual step: **178/178, exit 0** and **178/178, exit 0** — each
+  foundation 19 + core-dense 28 + actions 30 + sync 22 + swimlanes 28 + rich 21 + subway **16** (the
+  N3 browser check) + final 14; every suite's real-Hermes guard passed. In run 2, foundation and
+  core-dense ran on the home `run-e2e.sh` had just reset (B3).
+- 500 fixture (e2e-final, run 1): Dense 314 ms / 61.5 fps, Swimlanes 817 ms / 61.6 fps, Subway
+  337 ms / 61.2 fps, Rich 338 ms / 61.2 fps.

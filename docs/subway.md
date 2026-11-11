@@ -89,6 +89,18 @@ flow). Two small, optional additions to the style contract (`src/styles/types.ts
   `corners` option), chamfered the same way, the cuts kept inside the clearance and checked against
   every station. Tracks that now cross the dropped station re-route in the same pass (the shared
   `routeLinks`).
+- **Own ends (card 7 fix r1, review r1 finding 3).** A track never runs through its own two
+  stations, nor through the room above each where its label goes first (`LABEL_SPOTS[0]`, 168 × 46;
+  the router's `keepOut`). A bottom port whose target is not below and to the right (a reversed
+  drag, or a split re-slotted onto the bottom port by a later `/new`, `plan.ts` putting successors
+  first) drops 30 px, runs to 30 px left of the target, climbs or drops to its height and runs in
+  from the left; a plain shape that still touches an own end detours with the two stations (and
+  the label rooms clear of the ports) as obstacles of the grid search. Every split of the
+  auto-layout keeps its old shape exactly: all 202 auto-layout tracks of the default and 500
+  fixtures (Show all off and on) are byte-identical to ff5475c's. Seeded fuzz of 447 drops
+  (`tests/js/subway-fuzz.test.ts`), ff5475c → now: tracks through an own station 108 → 0, through
+  an own label at its first spot 207 → 0, through another station 1 → 0; off octilinear 0 → 0;
+  dragging back restores every route.
 - Halo: every track is drawn over a casing in the canvas colour (8 px under a 4.5 px line), so where
   one track crosses another the upper one has a gap around it, as on a metro map.
 - "Continued as" is a dotted planned line (`2 9`, round caps) labelled "continued as ›"; the
@@ -128,5 +140,10 @@ are not guaranteed corridor-free (the auto-layout is); Re-arrange gives the auto
   three).
 - Up-splits (the mockup's one line climbing to a new station) are not drawn: every split drops below.
 - Labels are placed to avoid stations and labels, not tracks; after a drag a track may run under a
-  label.
+  label. This includes a station's own label once the placement has moved it off its first spot
+  (above) — below a station with splits, or beside it: in the seeded fuzz (447 drops) 167 tracks
+  run through such a moved own label (111 on ff5475c, when more tracks climbed through the label
+  above instead). The router keeps only the first spot clear (0 tracks through it); making the
+  label placement avoid a station's own track stubs is the follow-up (`labels.ts`, not in fix r1's
+  surface).
 - No continuous obstacle routing while dragging (out of scope, R13).

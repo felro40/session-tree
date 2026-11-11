@@ -70,7 +70,7 @@ Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.m
   the same role with the same timestamp as one. (Card 6 review r1 N4.)
 - **Excerpts (Rich cards):** some Markdown markers stay as text: emphasis across a soft line break,
   link targets over 512 characters, inline code over 240 characters (all inert plain text). The e2e's
-  real-API excerpt timing uses 20 ids; 100 ids in one request are covered in pytest only.
+  real-API excerpt timing uses 25 ids; 100 ids in one request are covered in pytest only.
   (Card 6 review r2 NB2, NB3.)
 - **Space on the profile select:** while the toolbar's profile `<select>` has the focus, Space is
   given back to the canvas (it pans) instead of opening the list; a click and the select's other
@@ -83,8 +83,12 @@ Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.m
   overlap visually); every split drops below its parent (no up-splits); labels avoid stations and
   labels but not tracks after a drag; new sessions placed by the merge are not guaranteed
   corridor-free (Re-arrange gives the corridor-free auto-layout again). See `docs/subway.md`.
-- **Rich cards merge:** when a group has no free room inside its shelf segment, a new card goes
-  under everything below a continuation label of its group, which can be far from its parent.
+- **Rich cards merge:** a new card is placed on its base row or the rows below inside its group's
+  shelf segment, else at the free spot of its group's own segments nearest to its parent (for a
+  parent on its group's last shelf row, typically beside it on its own row). Only when its group's
+  segments have no free spot at all does it go under everything, below a continuation label of
+  its group, which can be far from its parent. It never lands in another group's segment, and no
+  saved position moves.
 - **No sidebar highlighting from the graph** (R19: no SDK verb); highlighting works the other way.
 - Multi-select, bulk actions and keyboard navigation between blocks are not part of this set.
 
@@ -183,7 +187,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook) and `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style). The actions, sync, swimlanes, rich, subway and final suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` on the same ports, the previous one moved to the e2e trash. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook) and `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style). The actions, sync, swimlanes, rich, subway and final suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` on the same ports, the previous one moved to the e2e trash. The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
 ### The isolated test Hermes
@@ -201,7 +205,8 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
 ```
 
 - Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
-  current card, 7): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
+  current card from `scripts/e2e/CARD`, 7 — the one place the number lives; `npm run test:py` and
+  `scripts/test-hermes` take their root from the harness): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
   (+0..+4 coder, +5..+9 reviewer). Card 7: coder home `c7-coder/home`, ports 19370–19374 (the
   Webapp on 19370); reviewer `c7-reviewer`, ports 19375–19379. The actions, sync, swimlanes, rich,
   subway and final suites' own homes are `c7-<role>-actions`, `-sync`, `-swim`, `-rich`, `-subway`
