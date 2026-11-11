@@ -112,6 +112,9 @@ export interface StyleLayerProps {
   /** Block top-lefts (flow coordinates) and the blocks on the canvas. */
   positions: ReadonlyMap<string, Point>
   shown: ReadonlySet<string>
+  /** Card 8: the routed links of the committed positions (their ends and routes; Subway labels keep off them). */
+  links: readonly { id: string; source: string; target: string }[]
+  routes: ReadonlyMap<string, RoutedLink>
   nodeSize: { width: number; height: number }
   /** "Show all": singles are on the canvas, not in the style's container. */
   showAll: boolean

@@ -126,7 +126,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // ends and draw live instead.
   const [routing] = useState(createCanvasRouting)
   const frameShown = frameLayout && style.frame ? frameLayout.shown : undefined
-  const { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router, slots: style.linkSlots })
+  const { shown, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router, slots: style.linkSlots })
   const lineage = useMemo(() => lineageOf(model, selectedId), [model, selectedId])
 
   const baseNodes = useMemo(() => {
@@ -583,6 +583,8 @@ export function GraphCanvas(props: GraphCanvasProps) {
                 model={model}
                 positions={positions}
                 shown={shown}
+                links={links}
+                routes={routes}
                 nodeSize={style.nodeSize}
                 showAll={spec.includeSingles}
                 selectedId={selectedId}

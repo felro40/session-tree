@@ -10180,9 +10180,44 @@ function labelRect(point, spot) {
   let at = LABEL_SPOTS.find((each) => each.key === spot) ?? LABEL_SPOTS[0];
   return { x: point.x + at.x, y: point.y + at.y, width: 168, height: 46 };
 }
-var area = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-function placeLabels(stations, blocked = []) {
-  let obstacles = new RectIndex2(), placed = new RectIndex2();
+var area = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)), INSET = 0.5;
+function segmentCrosses(a, b, rect) {
+  let dx = b.x - a.x, dy = b.y - a.y, edges = [
+    [-dx, a.x - (rect.x + INSET)],
+    [dx, rect.x + rect.width - INSET - a.x],
+    [-dy, a.y - (rect.y + INSET)],
+    [dy, rect.y + rect.height - INSET - a.y]
+  ], lo = 0, hi = 1;
+  for (let [p, q] of edges) {
+    if (p === 0) {
+      if (q <= 0)
+        return !1;
+    } else p < 0 ? lo = Math.max(lo, q / p) : hi = Math.min(hi, q / p);
+    if (lo >= hi)
+      return !1;
+  }
+  return !0;
+}
+function piecesOf(tracks) {
+  let index2 = new RectIndex2();
+  for (let { source, target, path } of tracks) {
+    let points = path.segs.every((seg) => seg.kind === "L") ? [path.start, ...path.segs.map((seg) => seg.to)] : samplePath(path);
+    for (let i = 1; i < points.length; i += 1) {
+      let [a, b] = [points[i - 1], points[i]], piece = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y), a, b, source, target };
+      index2.add(piece);
+    }
+  }
+  return index2;
+}
+function trackHits(pieces, rect, id2) {
+  let own = /* @__PURE__ */ new Set(), other = /* @__PURE__ */ new Set(), probe = { x: rect.x - 1, y: rect.y - 1, width: rect.width + 2, height: rect.height + 2 };
+  for (let piece of pieces.hits(probe))
+    segmentCrosses(piece.a, piece.b, rect) && (piece.source === id2 || piece.target === id2 ? own : other).add(`${piece.source}>${piece.target}`);
+  return [own.size, other.size];
+}
+var better = (a, b) => a[0] < b[0] || a[0] === b[0] && (a[1] < b[1] || a[1] === b[1] && a[2] < b[2]);
+function placeLabels(stations, blocked = [], tracks = []) {
+  let obstacles = new RectIndex2(), placed = new RectIndex2(), pieces = piecesOf(tracks);
   for (let point of stations.values())
     obstacles.add({ x: point.x, y: point.y, width: 40, height: 20 });
   for (let rect of blocked)
@@ -10191,24 +10226,32 @@ function placeLabels(stations, blocked = []) {
   for (let [id2, point] of order) {
     let best;
     for (let candidate of LABEL_SPOTS) {
-      let rect = labelRect(point, candidate.key), overlap = [...obstacles.hits(rect), ...placed.hits(rect)].reduce((sum, other) => sum + area(rect, other), 0);
-      if ((!best || overlap < best.overlap) && (best = { spot: candidate.key, rect, overlap }), overlap === 0)
+      let rect = labelRect(point, candidate.key), score = [[...obstacles.hits(rect), ...placed.hits(rect)].reduce((sum, other) => sum + area(rect, other), 0), ...trackHits(pieces, rect, id2)];
+      if ((!best || better(score, best.score)) && (best = { spot: candidate.key, rect, score }), score.every((each) => each === 0))
         break;
     }
-    placed.add(best.rect), out.set(id2, { spot: best.spot, rect: best.rect, clear: best.overlap === 0 });
+    placed.add(best.rect), out.set(id2, { spot: best.spot, rect: best.rect, clear: best.score[0] === 0 });
+  }
+  return out;
+}
+function labelTracks(links, routes) {
+  let out = [];
+  for (let link2 of links) {
+    let routed = routes.get(link2.id);
+    routed && out.push({ source: link2.source, target: link2.target, path: routed.route.path });
   }
   return out;
 }
 
 // src/styles/subway/layer.tsx
 import { Fragment as Fragment6, jsx as jsx9, jsxs as jsxs7 } from "react/jsx-runtime";
-function useLabelDriver({ positions, shown }) {
+function useLabelDriver({ positions, shown, links, routes }) {
   let env = useSubwayEnv(), placements = useMemo6(() => {
     let stations = /* @__PURE__ */ new Map(), blocked = [];
     for (let [id2, point] of positions)
       id2.startsWith(GROUP_PREFIX) ? blocked.push({ x: point.x, y: point.y, width: LABEL_WIDTH, height: 26 }) : shown.has(id2) && stations.set(id2, point);
-    return placeLabels(stations, blocked);
-  }, [positions, shown]);
+    return placeLabels(stations, blocked, labelTracks(links, routes));
+  }, [positions, shown, links, routes]);
   useLayoutEffect2(() => {
     env?.labels.set(placements);
   }, [env, placements]);
@@ -11496,7 +11539,7 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
     let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -11763,6 +11806,8 @@ function GraphCanvas(props) {
                     model,
                     positions,
                     shown,
+                    links,
+                    routes,
                     nodeSize: style2.nodeSize,
                     showAll: spec.includeSingles,
                     selectedId,
@@ -14001,6 +14046,14 @@ g.is-dimmed {
   pointer-events: none;
 }
 
+/* Card 8 (F1): with the Rich cards singles drawer open (300 px, on the stage's right edge), the
+   note moves left of it, 10 px clear, and stays inside the canvas (it wraps if the canvas is
+   narrow). Closed, and in the other styles, it stays where it is above. */
+.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note {
+  right: calc(300px + 10px);
+  max-width: calc(100% - 300px - 20px);
+}
+
 .session-tree__toast {
   position: absolute;
   bottom: 18px;
@@ -14878,19 +14931,23 @@ g.is-dimmed {
   margin-left: auto;
 }
 
+/* Card 8 (F4): the bar's full extent is a 1 px outline in the tertiary text colour (≥ 3:1 against
+   the card, light and dark; drawn outside the box, so the 54 px width is unchanged), over a clear
+   track, and the fill is the full accent (≥ 3:1 against that track). */
 .st-rc-bar {
   display: block;
   height: 4px;
   overflow: hidden;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  outline: 1px solid var(--ui-text-tertiary);
+  background: transparent;
 }
 
 .st-rc-bar b {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+  background: var(--ui-accent);
 }
 
 /* The stand-in: a dashed skeleton card. Faded by its see-through fill, the dashes and the italic

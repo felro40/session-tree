@@ -856,6 +856,14 @@ g.is-dimmed {
   pointer-events: none;
 }
 
+/* Card 8 (F1): with the Rich cards singles drawer open (300 px, on the stage's right edge), the
+   note moves left of it, 10 px clear, and stays inside the canvas (it wraps if the canvas is
+   narrow). Closed, and in the other styles, it stays where it is above. */
+.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note {
+  right: calc(300px + 10px);
+  max-width: calc(100% - 300px - 20px);
+}
+
 .session-tree__toast {
   position: absolute;
   bottom: 18px;
@@ -1733,19 +1741,23 @@ g.is-dimmed {
   margin-left: auto;
 }
 
+/* Card 8 (F4): the bar's full extent is a 1 px outline in the tertiary text colour (≥ 3:1 against
+   the card, light and dark; drawn outside the box, so the 54 px width is unchanged), over a clear
+   track, and the fill is the full accent (≥ 3:1 against that track). */
 .st-rc-bar {
   display: block;
   height: 4px;
   overflow: hidden;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  outline: 1px solid var(--ui-text-tertiary);
+  background: transparent;
 }
 
 .st-rc-bar b {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+  background: var(--ui-accent);
 }
 
 /* The stand-in: a dashed skeleton card. Faded by its see-through fill, the dashes and the italic

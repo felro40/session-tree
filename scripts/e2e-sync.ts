@@ -15,7 +15,7 @@
  * state file on disk. Input is real (page.mouse / page.keyboard → CDP Input.*).
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Page, Request } from 'playwright-core'
@@ -23,7 +23,8 @@ import type { Page, Request } from 'playwright-core'
 import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { buildTestPackage, E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { moveAside } from './e2e/trash.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'sync' })
@@ -295,13 +296,8 @@ async function pageStyle(page: Page): Promise<null | string> {
 /** A fresh test home for this mutating suite: the previous one goes to the e2e trash. */
 function freshHome(): void {
   stopGateway(t)
-
-  if (existsSync(t.root)) {
-    const trash = join(E2E_ROOT, 'trash')
-
-    mkdirSync(trash, { recursive: true })
-    renameSync(t.root, join(trash, `${t.root.split('/').pop()}-${Date.now()}`))
-  }
+  // Card 8 (F5): into the trash, then the trash pruned to the newest copy of each home.
+  moveAside(t.root, { log: line => console.log(`  trash: ${line}`) })
 }
 
 // --- the suite ---------------------------------------------------------------------------------

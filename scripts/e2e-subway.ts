@@ -19,8 +19,10 @@ import { join } from 'node:path'
 import type { Page } from 'playwright-core'
 
 import { ALL_PROJECTS, buildGraph } from '../src/model/graph.ts'
+import { LABEL_WIDTH } from '../src/model/layout.ts'
 import type { SessionRow } from '../src/model/sessions.ts'
-import { labelRect } from '../src/styles/subway/labels.ts'
+import { labelRect, segmentCrosses } from '../src/styles/subway/labels.ts'
+import { GROUP_LABEL_H } from '../src/styles/subway/spec.ts'
 import type { LabelSpot } from '../src/styles/subway/spec.ts'
 import { addContext, close, enableDesktopHalf, launch, signIn } from './e2e/browser.ts'
 import {
@@ -142,6 +144,99 @@ async function stationGeometry(page: Page) {
 }
 
 const hit = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5
+
+/** Card 8 (F2): what the label placement saw, read back from the page in flow coordinates — every
+ *  station's box and label spot, the project labels, every drawn track's points. */
+async function labelScene(page: Page) {
+  const raw = await page.evaluate(() => {
+    const pos = (el: Element | null) => {
+      const m = el ? /translate\(\s*([-\d.e]+)px,\s*([-\d.e]+)px\)/.exec((el as HTMLElement).style.transform) : null
+
+      return m ? { x: Number(m[1]), y: Number(m[2]) } : null
+    }
+    const stations = [...document.querySelectorAll('[data-testid="session-tree-block"], [data-testid="session-tree-standin"]')].map(el => ({
+      id: el.getAttribute('data-node-id')!,
+      spot: el.getAttribute('data-label-spot'),
+      ...pos(el.closest('.react-flow__node'))!
+    }))
+    const groups = [...document.querySelectorAll('.react-flow__node[data-id^="group:"]')].map(el => pos(el)!)
+    const links = [...document.querySelectorAll('[data-testid="session-tree-link"]')].map(el => ({
+      source: el.getAttribute('data-source')!,
+      target: el.getAttribute('data-target')!,
+      kind: el.getAttribute('data-kind'),
+      d: el.querySelector('path.react-flow__edge-path')?.getAttribute('d') ?? ''
+    }))
+
+    return { stations, groups, links }
+  })
+
+  return { ...raw, links: raw.links.map(link => ({ ...link, points: pathPoints(link.d) })) }
+}
+
+const SPOTS: LabelSpot[] = ['above', 'below', 'above-left', 'below-left', 'right', 'left']
+const rectHit = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+const throughRect = (points: { x: number; y: number }[], rect: { x: number; y: number; width: number; height: number }) => points.some((point, i) => i > 0 && segmentCrosses(points[i - 1], point, rect))
+
+/**
+ * Card 8 (F2), independent of the placement's scoring: for station `id` at `at`, whether its splits
+ * run through card 7's choice (below), which spots are free (no station, project label, label of a
+ * station placed before it — top to bottom, left to right, ties by id — and no track), and which of
+ * its own tracks run through the label it got.
+ */
+function auditLabel(scene: Awaited<ReturnType<typeof labelScene>>, id: string, at: { x: number; y: number }) {
+  const station = scene.stations.find(each => each.id === id)!
+  const order = [...scene.stations].sort((a, b) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const earlier = order.slice(0, order.findIndex(each => each.id === id)).map(each => labelRect(each, each.spot as LabelSpot))
+  const blocked = [
+    ...scene.stations.map(each => ({ x: each.x, y: each.y, width: STATION_W, height: STATION_H })),
+    ...scene.groups.map(group => ({ x: group.x, y: group.y, width: LABEL_WIDTH, height: GROUP_LABEL_H })),
+    ...earlier
+  ]
+  const own = scene.links.filter(link => link.source === id || link.target === id)
+  const splits = own.filter(link => link.source === id && link.kind === 'branch')
+  const label = labelRect(at, station.spot as LabelSpot)
+
+  return {
+    spot: station.spot,
+    splitsThroughBelow: splits.length > 0 && splits.every(link => throughRect(link.points, labelRect(at, 'below'))),
+    freeSpots: SPOTS.filter(spot => {
+      const rect = labelRect(at, spot)
+
+      return !blocked.some(other => rectHit(rect, other)) && !scene.links.some(link => throughRect(link.points, rect))
+    }),
+    ownThroughLabel: own.filter(link => throughRect(link.points, label)).map(link => `${link.source}→${link.target}`)
+  }
+}
+
+/** The station's drawn label box on screen against each own track's points on screen (600 samples each). */
+async function ownTrackPointsInLabel(page: Page, id: string, links: string[]) {
+  return page.evaluate(
+    ({ block, selectors }) => {
+      const label = document.querySelector(`${block} [data-testid="session-tree-station-label"]`)!.getBoundingClientRect()
+      const out: Record<string, number> = {}
+
+      for (const selector of selectors) {
+        const path = document.querySelector(`${selector} path.react-flow__edge-path`) as SVGPathElement
+        const m = path.getScreenCTM()!
+        const length = path.getTotalLength()
+
+        out[selector] = 0
+        for (let i = 0; i <= 600; i += 1) {
+          const p = path.getPointAtLength((length * i) / 600)
+          const x = m.a * p.x + m.c * p.y + m.e
+          const y = m.b * p.x + m.d * p.y + m.f
+
+          if (x > label.left + 0.5 && x < label.right - 0.5 && y > label.top + 0.5 && y < label.bottom - 0.5) {
+            out[selector] += 1
+          }
+        }
+      }
+
+      return { out, label: { x: label.x, y: label.y, w: label.width, h: label.height } }
+    },
+    { block: BLOCK(id), selectors: links }
+  )
+}
 
 /** Tracks the model says there are: families plus their splits plus successor trees (plan.ts). */
 function expectedTracks(rows: SessionRow[]) {
@@ -645,6 +740,56 @@ async function main(): Promise<void> {
       facts.reversedDrag = { tip, at, d, tipLabelSpot: tipSpot, hits, original: originalD, back: await linkD(page, link) }
 
       return facts.reversedDrag
+    })
+
+    await check('card 8 (F2): st-md-tip (two splits) dropped right under another station, so that card 7\'s first free spot for its label (below) lies on its own splits and a spot free of stations, labels and tracks exists: the label takes a spot no track of its own crosses (flow and screen geometry); dragged back, above again', async () => {
+      await fit(page)
+      const id = 'st-md-tip'
+      const home = (await flowPos(page, id))!
+      const scene0 = await labelScene(page)
+      const own = scene0.links.filter(each => each.source === id || each.target === id).map(each => LINK(each.source, each.target))
+      const splits = scene0.links.filter(each => each.source === id && each.kind === 'branch').map(each => each.target)
+      // Candidate drops: right under each other station (6 px gap), on no station.
+      const candidates = scene0.stations
+        .filter(s => s.id !== id && !s.id.startsWith('st-md-'))
+        .map(s => ({ under: s.id, x: s.x, y: s.y + STATION_H + 6 }))
+        .filter(c => scene0.stations.every(s => s.id === id || !(Math.abs(s.x - c.x) < STATION_W + 2 && Math.abs(s.y - c.y) < STATION_H + 2)))
+      const tried: unknown[] = []
+      let found: null | Record<string, unknown> = null
+
+      assert(splits.length === 2 && own.length === 3, `st-md-tip's tracks: ${own.join(', ')} (splits ${splits.join(', ')})`)
+
+      for (const candidate of candidates.slice(0, 12)) {
+        await dragStationTo(page, id, candidate)
+        await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('data-routed') === 'true', LINK(id, splits[0]), { timeout: 5000 })
+        await page.waitForTimeout(400)
+        const at = (await flowPos(page, id))!
+        const scene = await labelScene(page)
+        const audit = auditLabel(scene, id, at)
+
+        tried.push({ under: candidate.under, spot: audit.spot, splitsThroughBelow: audit.splitsThroughBelow, freeSpots: audit.freeSpots, ownThroughLabel: audit.ownThroughLabel })
+
+        if (audit.splitsThroughBelow && audit.freeSpots.length > 0) {
+          const inside = await ownTrackPointsInLabel(page, id, own)
+
+          await page.screenshot({ path: join(shots, 'subway-label-off-own-track-light.png') })
+          found = { under: candidate.under, at, ...audit, screenInside: inside.out, screenLabel: inside.label }
+          assert(audit.spot !== 'below', `label spot ${audit.spot}: on its own splits`)
+          assert(audit.ownThroughLabel.length === 0, `own tracks through the label (flow): ${audit.ownThroughLabel.join(', ')}`)
+          assert(Object.values(inside.out).every(count => count === 0), `own track points inside the label (screen): ${JSON.stringify(inside.out)}`)
+          break
+        }
+      }
+
+      await dragStationTo(page, id, home)
+      const back = (await flowPos(page, id))!
+      const backSpot = await page.getAttribute(BLOCK(id), 'data-label-spot')
+
+      assert(found, `no candidate drop gave the case (below on its own splits, a free spot): ${JSON.stringify(tried)}`)
+      assert(Math.abs(back.x - home.x) < 6 && Math.abs(back.y - home.y) < 6 && backSpot === 'above', `back at ${JSON.stringify(back)}, spot ${backSpot}`)
+      facts.labelOffOwnTrack = { ...found, tried: tried.length, backSpot }
+
+      return facts.labelOffOwnTrack
     })
 
     await check('Snap on: a dot grid at the 25 px pitch; a dragged station lands on the grid and its tracks re-route octilinear; Snap off again', async () => {

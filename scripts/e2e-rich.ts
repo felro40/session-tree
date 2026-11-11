@@ -15,7 +15,7 @@
  * <test root>/shots/.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Page, Request } from 'playwright-core'
@@ -24,8 +24,9 @@ import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { buildTestPackage, E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
+import { moveAside } from './e2e/trash.ts'
 import { compositedContrast, parseColor, rgbText } from './e2e/contrast.ts'
 import type { Kind, Layer } from './e2e/contrast.ts'
 
@@ -543,6 +544,137 @@ async function contrastOf(page: Page, target: ContrastTarget) {
   }
 }
 
+interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+const PAGE_SELECTOR = '[data-testid="session-tree-page"]'
+const NOTE = '[data-testid="session-tree-refresh-failed"]'
+const intersects = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const within = (a: Box, b: Box) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5
+
+/** Card 8 (F1): the refresh-failed note, the Rich drawer (when on the page), the canvas and the stage, on screen. */
+async function noteGeometry(page: Page) {
+  return page.evaluate(([note, pageSelector]) => {
+    const rect = (el: Element | null): Box => {
+      const r = el ? el.getBoundingClientRect() : { x: NaN, y: NaN, width: NaN, height: NaN }
+
+      return { x: r.x, y: r.y, w: r.width, h: r.height }
+    }
+    const drawer = document.querySelector('[data-testid="session-tree-drawer"]')
+    const el = document.querySelector(note)
+
+    return {
+      note: rect(el),
+      noteText: el?.textContent?.trim() ?? '',
+      drawer: rect(drawer),
+      drawerOpen: drawer?.getAttribute('data-open') === 'true',
+      canvas: rect(document.querySelector(`${pageSelector} [data-testid="session-tree-canvas"]`)),
+      stage: rect(el?.parentElement ?? null)
+    }
+  }, [NOTE, PAGE_SELECTOR] as const)
+}
+
+/** Where the note sits with no drawer open (src/styles.css, unchanged since 033096c): 8 px from the stage's top, 10 px from its right. */
+const atCorner = (g: Awaited<ReturnType<typeof noteGeometry>>) => Math.abs(g.note.y - (g.stage.y + 8)) <= 1 && Math.abs(g.note.x + g.note.w - (g.stage.x + g.stage.w - 10)) <= 1
+
+/** Opens or closes the Rich drawer with its grip (real click) and waits out its slide. */
+async function setDrawer(page: Page, open: boolean): Promise<void> {
+  if ((await page.getAttribute('[data-testid="session-tree-drawer"]', 'data-open')) !== String(open)) {
+    await page.locator('[data-testid="session-tree-drawer-grip"]').click()
+  }
+
+  await page.waitForFunction(want => document.querySelector('[data-testid="session-tree-drawer"]')?.getAttribute('data-open') === want, String(open), { timeout: 5000 })
+  await page.waitForTimeout(700)
+}
+
+/**
+ * Card 8 (F4): the token bar's composited contrast (scripts/e2e/contrast.ts), measured where it is
+ * drawn: the track's empty part (on the card with the smallest filled share) — its own fill and
+ * its outline, each against the card behind the bar — and the filled part (on the card with the
+ * largest share) against the track behind it.
+ */
+async function tokenBarContrast(page: Page) {
+  const raw = await page.evaluate(() => {
+    const bars = [...document.querySelectorAll('[data-testid="session-tree-block"]')]
+      .filter(card => card.getAttribute('data-out-of-scope') !== 'true' && Number(card.getAttribute('data-tokens')) > 0)
+      .map(card => {
+        const fill = card.querySelector('[data-testid="session-tree-token-bar"]') as HTMLElement
+        const track = fill.parentElement as HTMLElement
+
+        return { card, fill, track, share: fill.getBoundingClientRect().width / track.getBoundingClientRect().width }
+      })
+      .sort((a, b) => a.share - b.share)
+    const layersAt = (el: Element, point: { x: number; y: number }) => {
+      const chain: Element[] = []
+
+      for (let node: Element | null = el; node; node = node.parentElement) {
+        chain.unshift(node)
+      }
+
+      return chain.map(node => {
+        const r = node.getBoundingClientRect()
+        const style = getComputedStyle(node)
+        const whole = node === document.documentElement || node === document.body
+
+        return { background: style.backgroundColor, opacity: Number(style.opacity), covers: whole || (point.x >= r.left && point.x <= r.right && point.y >= r.top && point.y <= r.bottom) }
+      })
+    }
+    const empty = bars[0]
+    const full = bars[bars.length - 1]
+    const er = empty.track.getBoundingClientRect()
+    const emptyPoint = { x: er.right - 1.5, y: er.top + er.height / 2 }
+    const fr = full.fill.getBoundingClientRect()
+    const fillPoint = { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 }
+    const ts = getComputedStyle(empty.track)
+
+    return {
+      emptyCard: empty.card.getAttribute('data-session-id')!,
+      emptyShare: Math.round(empty.share * 1000) / 1000,
+      fullCard: full.card.getAttribute('data-session-id')!,
+      fullShare: Math.round(full.share * 1000) / 1000,
+      // The track's empty part: the bar itself and what is behind it.
+      trackLayers: layersAt(empty.track, emptyPoint),
+      outline: { color: ts.outlineColor, style: ts.outlineStyle, width: Number.parseFloat(ts.outlineWidth) },
+      border: { color: ts.borderTopColor, style: ts.borderTopStyle, width: Number.parseFloat(ts.borderTopWidth) },
+      cardBackground: getComputedStyle(empty.card).backgroundColor,
+      // The filled part: the fill over its track.
+      fillLayers: layersAt(full.fill, fillPoint),
+      fill: getComputedStyle(full.fill).backgroundColor
+    }
+  })
+  const toLayers = (list: typeof raw.trackLayers): Layer[] => list.map(l => ({ background: parseColor(l.background), opacity: l.opacity, covers: l.covers }))
+  const track = toLayers(raw.trackLayers)
+  const behindBar = track.slice(0, -1)
+  const own = track[track.length - 1]
+  const round = (value: number) => Math.round(value * 100) / 100
+  // The track's own fill against the card behind it (alpha × the bar's opacity, over that backdrop).
+  const trackFillVsCard = round(compositedContrast(behindBar, { ...own.background, a: own.background.a * own.opacity }, 'text').ratio)
+  // The outline (or a border) is drawn around the bar, over the card.
+  const line = raw.outline.style !== 'none' && raw.outline.width > 0 ? raw.outline : raw.border.style !== 'none' && raw.border.width > 0 ? raw.border : null
+  const outlineVsCard = line ? round(compositedContrast(behindBar, parseColor(line.color), 'text').ratio) : 0
+  const fillLayers = toLayers(raw.fillLayers)
+  const fillVsTrack = round(compositedContrast(fillLayers.slice(0, -1), parseColor(raw.fill), 'text').ratio)
+
+  return {
+    emptyCard: raw.emptyCard,
+    emptyShare: raw.emptyShare,
+    fullCard: raw.fullCard,
+    fullShare: raw.fullShare,
+    card: raw.cardBackground,
+    outline: line ? `${line.style} ${line.width}px ${line.color}` : 'none',
+    track: raw.trackLayers[raw.trackLayers.length - 1].background,
+    fill: raw.fill,
+    trackFillVsCard,
+    outlineVsCard,
+    extent: Math.max(trackFillVsCard, outlineVsCard),
+    fillVsTrack
+  }
+}
+
 /** Bring an element to the canvas centre (a real middle-drag pan, R3), zoom in on it with the
  * real wheel (toward the cursor), clip a screenshot around it, then Fit again. */
 async function zoomShot(page: Page, selector: string, file: string): Promise<void> {
@@ -572,13 +704,8 @@ async function zoomShot(page: Page, selector: string, file: string): Promise<voi
 
 function freshHome(): void {
   stopGateway(t)
-
-  if (existsSync(t.root)) {
-    const trash = join(E2E_ROOT, 'trash')
-
-    mkdirSync(trash, { recursive: true })
-    renameSync(t.root, join(trash, `${t.root.split('/').pop()}-${Date.now()}`))
-  }
+  // Card 8 (F5): into the trash, then the trash pruned to the newest copy of each home.
+  moveAside(t.root, { log: line => console.log(`  trash: ${line}`) })
 }
 
 // --- the suite ---------------------------------------------------------------------------------
@@ -1202,6 +1329,116 @@ async function main(): Promise<void> {
       assert(low.length === 0, `below 3:1: ${low.join('; ')} | all: ${JSON.stringify(ratios)}`)
 
       return ratios
+    })
+
+    await check('card 8 (F4): the token bar — its full extent (track fill or outline) ≥ 3:1 against the card, its filled part ≥ 3:1 against the track, light and dark (composited); zoomed screenshots', async () => {
+      const out: Record<string, Awaited<ReturnType<typeof tokenBarContrast>>> = {}
+
+      try {
+        for (const scheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme: scheme })
+          await fit(page)
+          await page.waitForTimeout(800)
+          out[scheme] = await tokenBarContrast(page)
+          await zoomShot(page, CARD(out[scheme].emptyCard), `rich-token-bar-${scheme}.png`)
+        }
+      } finally {
+        await page.emulateMedia({ colorScheme: 'light' })
+        await page.waitForTimeout(500)
+      }
+
+      facts.tokenBar = out
+      const low = Object.entries(out).flatMap(([scheme, m]) => [m.extent < 3 ? `${scheme} extent ${m.extent}:1` : '', m.fillVsTrack < 3 ? `${scheme} fill vs track ${m.fillVsTrack}:1` : ''].filter(Boolean))
+
+      assert(out.light.card !== out.dark.card, 'light and dark measured the same card colour')
+      assert(low.length === 0, `below 3:1: ${low.join('; ')} | ${JSON.stringify(out)}`)
+
+      return Object.fromEntries(Object.entries(out).map(([scheme, m]) => [scheme, { trackFillVsCard: m.trackFillVsCard, outlineVsCard: m.outlineVsCard, extent: m.extent, fillVsTrack: m.fillVsTrack }]))
+    })
+
+    await check('card 8 (F1): a failed background refresh with the Rich drawer open — the note sits clear of the drawer and inside the canvas (light and dark, 1440 × 900 and 1000 px wide); drawer closed and the other three styles: the note where it always was (top 8 px, right 10 px of the stage, ± 1 px)', async () => {
+      // A background refresh that fails: the next poll (10 s) of the plugin's /sessions list is
+      // refused by the browser (the details, the store and /health still answer).
+      const sessionsList = (url: URL) => url.pathname === '/api/plugins/session-tree/sessions'
+
+      await page.route(sessionsList, route => route.abort('connectionrefused'))
+      const measured: Record<string, unknown> = {}
+      const problems: string[] = []
+
+      try {
+        await waitFor('a background refresh to fail', () => page.getAttribute(PAGE_SELECTOR, 'data-refresh-failed'), value => value === 'true', 40_000)
+        await page.locator(NOTE).waitFor({ timeout: 5000 })
+
+        for (const width of [1440, 1000]) {
+          await page.setViewportSize({ width, height: 900 })
+          await page.waitForTimeout(600)
+
+          for (const scheme of ['light', 'dark'] as const) {
+            await page.emulateMedia({ colorScheme: scheme })
+            await page.waitForTimeout(400)
+            const closed = await noteGeometry(page)
+
+            await setDrawer(page, true)
+            const open = await noteGeometry(page)
+
+            await page.screenshot({ path: join(shots, `rich-note-drawer-open-${scheme}-${width}.png`) })
+            await setDrawer(page, false)
+            const closedAgain = await noteGeometry(page)
+
+            measured[`rich ${scheme} ${width}`] = { closed: closed.note, open: open.note, drawer: open.drawer, canvas: open.canvas }
+            // Every case is measured first, the failures listed at the end (033096c's numbers are recorded the same way).
+            if (!(open.drawerOpen && !closed.drawerOpen)) {
+              problems.push(`${scheme} ${width}: drawer state ${JSON.stringify({ open: open.drawerOpen, closed: closed.drawerOpen })}`)
+            }
+
+            if (intersects(open.note, open.drawer)) {
+              problems.push(`${scheme} ${width}: the note ${JSON.stringify(open.note)} overlaps the drawer ${JSON.stringify(open.drawer)}`)
+            }
+
+            if (!within(open.note, open.canvas)) {
+              problems.push(`${scheme} ${width}: the note ${JSON.stringify(open.note)} is not inside the canvas ${JSON.stringify(open.canvas)}`)
+            }
+
+            if (open.noteText !== 'Couldn\u2019t refresh \u2014 showing the last data') {
+              problems.push(`note ${open.noteText}`)
+            }
+
+            for (const [what, g] of [['closed', closed], ['closed again', closedAgain]] as const) {
+              if (!atCorner(g)) {
+                problems.push(`${scheme} ${width} drawer ${what}: the note ${JSON.stringify(g.note)} is not at top 8 / right 10 of the stage ${JSON.stringify(g.stage)}`)
+              }
+            }
+          }
+        }
+
+        await page.emulateMedia({ colorScheme: 'light' })
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.waitForTimeout(600)
+
+        for (const other of ['dense', 'swimlanes', 'subway', 'rich']) {
+          await switchStyle(page, other)
+          const g = await noteGeometry(page)
+
+          measured[other] = g.note
+
+          if (!atCorner(g)) {
+            problems.push(`${other}: the note ${JSON.stringify(g.note)} is not at top 8 / right 10 of the stage ${JSON.stringify(g.stage)}`)
+          }
+        }
+      } finally {
+        await page.emulateMedia({ colorScheme: 'light' })
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.unroute(sessionsList)
+      }
+
+      const cleared = await page.locator(NOTE).waitFor({ state: 'detached', timeout: 30_000 }).then(() => true, () => false)
+
+      await fit(page)
+      facts.refreshNote = measured
+      assert(problems.length === 0, `${problems.join('; ')} | ${JSON.stringify(measured)}`)
+      assert(cleared, 'the note is still shown after the refresh works again')
+
+      return measured
     })
 
     await check('review r1 B1 through the real API: 200 KB pathological last messages (the review\'s pasted code among them) answer fast, and a plugin /health sent meanwhile is not stalled', async () => {
