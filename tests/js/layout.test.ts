@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import type { GraphModel } from '../../src/model/graph.ts'
 import { LayoutMemory } from '../../src/model/layout-memory.ts'
-import { GROUP_PREFIX, groupKey, labelGroup, laidOutFamilies, layoutGraph, mergeLayout, overlaps, rectOf } from '../../src/model/layout.ts'
+import { GROUP_PREFIX, anyInView, groupKey, labelGroup, laidOutFamilies, layoutGraph, mergeLayout, overlaps, rectOf } from '../../src/model/layout.ts'
 import type { LayoutSpec, Point } from '../../src/model/layout.ts'
 import { denseLayoutSpec } from '../../src/styles/dense/spec.ts'
 import { loadFixture, row } from './fixtures.ts'
@@ -293,6 +293,46 @@ describe('mergeLayout on the default fixture (live refresh stays in its project 
     assertKept(result.positions)
   })
 
+  it('two new families too tall for their band share one continuation label (the second goes into the first one\'s band)', () => {
+    const tip = fixture.rows.find(item => item.id === 'st-sys-tip')!
+    const at = { git_repo_root: tip.git_repo_root, cwd: tip.cwd }
+    const tallFamily = (name: string, started: number) => [
+      row(`${name}-root`, { ...at, started_at: started }),
+      ...Array.from({ length: 10 }, (_, i) => row(`${name}-${i}`, { ...at, started_at: started + 1 + i, _branched_from: `${name}-root` }))
+    ]
+    const both = [...tallFamily('tall-a', 9e9), ...tallFamily('tall-b', 9e9 + 100)]
+    const next = buildGraph([...fixture.rows, ...both], fixture.projects, options)
+    const result = mergeLayout(placed, next, spec())
+    const continuations = [...result.positions.keys()].filter(id => id !== groupKey(projectOf('syscanvas')) && labelGroup(id) === groupKey(projectOf('syscanvas')))
+
+    assert.equal(continuations.length, 1, `continuation labels: ${continuations.length}`)
+    const labelY = result.positions.get(continuations[0])!.y
+
+    for (const item of both) {
+      assert.ok(result.positions.get(item.id)!.y >= labelY + spec().labelHeight, `${item.id} is not under the continuation label`)
+    }
+
+    assertNoOverlap(next, result.positions, spec())
+    assertKept(result.positions)
+  })
+
+  it('a continuation label whose band no longer holds a shown block of its group is not drawn; its spot is kept', () => {
+    const tip = fixture.rows.find(item => item.id === 'st-sys-tip')!
+    const at = { git_repo_root: tip.git_repo_root, cwd: tip.cwd }
+    const tall = [row('tall-root', { ...at, started_at: 9e9 }), ...Array.from({ length: 10 }, (_, i) => row(`tall-${i}`, { ...at, started_at: 9e9 + 1 + i, _branched_from: 'tall-root' }))]
+    const withTall = mergeLayout(placed, buildGraph([...fixture.rows, ...tall], fixture.projects, options), spec())
+    const continuation = [...withTall.positions.keys()].find(id => id !== groupKey(projectOf('syscanvas')) && labelGroup(id) === groupKey(projectOf('syscanvas')))!
+
+    assert.ok(withTall.labels.some(label => label.id === continuation), 'drawn while its family is there')
+
+    // The tall family is deleted (or archived); syscanvas keeps its other families.
+    const after = mergeLayout(withTall.positions, first, spec())
+
+    assert.ok(!after.labels.some(label => label.id === continuation), 'the empty continuation label is still drawn')
+    assert.ok(after.labels.some(label => label.id === groupKey(projectOf('syscanvas'))), 'the syscanvas label went too')
+    assert.deepEqual(after.positions.get(continuation), withTall.positions.get(continuation), 'its stored spot was dropped')
+  })
+
   it('Show all: new singles land in their own project bands, clear of everything, deterministically', () => {
     const merged = mergeLayout(placed, first, spec(true))
 
@@ -370,5 +410,25 @@ describe('LayoutMemory', () => {
     memory.forget('a')
     assert.deepEqual([...memory.get('dense|default|all')!.keys()], ['b'])
     assert.deepEqual([...memory.get('dense|default|p1')!.keys()], [])
+  })
+})
+
+describe('anyInView (a remembered view that shows nothing is framed instead)', () => {
+  const block = { x: 100, y: 200, width: 50, height: 20 }
+  const pane = { width: 800, height: 600 }
+
+  it('a block inside, or only partly inside, the view is in view', () => {
+    assert.equal(anyInView([block], { x: 0, y: 0, zoom: 1 }, pane.width, pane.height), true)
+    // Only its right 10 px show at the pane's left edge.
+    assert.equal(anyInView([block], { x: -140, y: 0, zoom: 1 }, pane.width, pane.height), true)
+  })
+
+  it('a view panned or zoomed away from every block shows nothing', () => {
+    assert.equal(anyInView([block], { x: -150, y: 0, zoom: 1 }, pane.width, pane.height), false)
+    assert.equal(anyInView([block], { x: 0, y: -5000 * 0.63, zoom: 0.63 }, pane.width, pane.height), false)
+    // Zoom maps flow to screen: at 2x the block's screen left is 200, outside a 150 px wide pane.
+    assert.equal(anyInView([block], { x: 0, y: 0, zoom: 2 }, 150, pane.height), false)
+    assert.equal(anyInView([block], { x: 0, y: 0, zoom: 2 }, 250, pane.height), true)
+    assert.equal(anyInView([], { x: 0, y: 0, zoom: 1 }, pane.width, pane.height), false)
   })
 })

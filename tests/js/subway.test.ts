@@ -12,8 +12,8 @@ import { describe, it } from 'node:test'
 
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
 import type { GraphModel } from '../../src/model/graph.ts'
-import { GROUP_PREFIX, LABEL_WIDTH, labelGroup, overlaps } from '../../src/model/layout.ts'
-import type { Point, Rect } from '../../src/model/layout.ts'
+import { GROUP_PREFIX, LABEL_WIDTH, groupKey, labelGroup, laidOutFamilies, overlaps } from '../../src/model/layout.ts'
+import type { GroupLabel, LayoutSpec, Point, Rect } from '../../src/model/layout.ts'
 import { chamferPolyline, insideRect, octilinearRouter, samplePath } from '../../src/model/route.ts'
 import type { LinkRouter, Path } from '../../src/model/route.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
@@ -97,6 +97,26 @@ function route(model: GraphModel, positions: ReadonlyMap<string, Point>, showAll
 
 function stationsOf(model: GraphModel, positions: ReadonlyMap<string, Point>): Map<string, Point> {
   return new Map([...positions].filter(([id]) => !id.startsWith(GROUP_PREFIX) && model.nodeById.has(id)))
+}
+
+/** The shown stations' groups (`group:<project>`). */
+function shownGroups(model: GraphModel, spec: LayoutSpec): Map<string, string> {
+  return new Map(laidOutFamilies(model, spec).flatMap(family => family.nodeIds.map(id => [id, groupKey(family.projectId)] as const)))
+}
+
+/** The drawn labels whose band (down to the next stored label) holds no shown station of their group. */
+function emptyBands(model: GraphModel, positions: ReadonlyMap<string, Point>, labels: readonly GroupLabel[], spec: LayoutSpec): string[] {
+  const groups = shownGroups(model, spec)
+  const labelYs = [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).map(([, point]) => point.y)
+
+  return labels
+    .filter(label => {
+      const top = positions.get(label.id)!.y
+      const bottom = Math.min(Infinity, ...labelYs.filter(y => y > top))
+
+      return ![...groups].some(([id, group]) => group === labelGroup(label.id) && positions.get(id)!.y >= top && positions.get(id)!.y < bottom)
+    })
+    .map(label => label.id)
 }
 
 function groupLabelRects(positions: ReadonlyMap<string, Point>): Rect[] {
@@ -465,5 +485,41 @@ describe('Subway merge (R12)', () => {
     const own = labels.findIndex(([id]) => labelGroup(id) === `${GROUP_PREFIX}${next.nodeById.get('st-new-root')!.projectId}`)
 
     assert.ok(own >= 0 && at.y > labels[own][1].y && (!labels[own + 1] || at.y + STATION_H < labels[own + 1][1].y), 'the new family left its group')
+  })
+
+  // The user's empty map: Show all on a saved layout gave every single that did not fit its
+  // group's band a continuation label of its own (400 on this fixture); with Show all off again
+  // the singles went back to the depot and the 400 labels stayed, over empty bands.
+  it('Show all on a saved layout opens at most one continuation band per group, not one per single (500 sessions)', () => {
+    const big = bigGraph()
+    const saved = layoutSubway(big, undefined, subwayLayoutSpec({ showAll: false })).positions
+    const merged = layoutSubway(big, saved, subwayLayoutSpec({ showAll: true }))
+    const continuations = new Map<string, number>()
+
+    for (const id of merged.positions.keys()) {
+      if (id.startsWith(GROUP_PREFIX) && labelGroup(id) !== id) {
+        continuations.set(labelGroup(id), (continuations.get(labelGroup(id)) ?? 0) + 1)
+      }
+    }
+
+    assert.ok([...continuations.values()].every(n => n <= 1), `continuation labels per group: ${JSON.stringify(Object.fromEntries(continuations))}`)
+    assert.equal(stationsOf(big, merged.positions).size, 500)
+    assertMetro(big, merged.positions, route(big, merged.positions, true), { corridors: false, crossings: false })
+  })
+
+  it('a label is drawn only over a band that holds a shown station of its group (Show all on, then off)', () => {
+    const big = bigGraph()
+    const saved = layoutSubway(big, undefined, subwayLayoutSpec({ showAll: false })).positions
+    const withAll = layoutSubway(big, saved, subwayLayoutSpec({ showAll: true })).positions
+    const back = layoutSubway(big, withAll, subwayLayoutSpec({ showAll: false }))
+
+    assert.deepEqual(emptyBands(big, back.positions, back.labels, subwayLayoutSpec({ showAll: false })), [])
+    // The stored spots stay (Show all brings the singles back to them).
+    assert.ok([...withAll.keys()].every(id => back.positions.has(id)), 'a stored spot was dropped')
+    // Every group with a station on the canvas still has a label.
+    const labelled = new Set(back.labels.map(label => labelGroup(label.id)))
+    const groups = new Set(shownGroups(big, subwayLayoutSpec({ showAll: false })).values())
+
+    assert.deepEqual([...groups].filter(group => !labelled.has(group)), [])
   })
 })

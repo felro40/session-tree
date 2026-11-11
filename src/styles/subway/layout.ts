@@ -15,11 +15,14 @@
  *   track would put it (right of its parent on the parent's row for the first row child, else on
  *   a row under its placed siblings), at the nearest free spot *inside its group's band* (from its
  *   label down to the next group's label), keeping its label's room clear; a new family at the
- *   first free spot of its group's band; what does not fit goes under everything, with a
- *   continuation label for its group.
+ *   first free spot of its group's bands (its label's, then its continuation labels'); what does
+ *   not fit goes under everything, with a continuation label for its group, which the group's
+ *   next new families fill before another is opened.
+ * - Only the labels over a band that holds a shown station of their group are drawn: with Show
+ *   all off again, the bands the singles filled are empty and their labels go (`drawnLabels`).
  */
 import type { Family, GraphModel } from '../../model/graph.ts'
-import { GROUP_PREFIX, LABEL_WIDTH, groupKey, groupOrder, labelGroup, laidOutFamilies } from '../../model/layout.ts'
+import { GROUP_PREFIX, LABEL_WIDTH, blockGroups, drawnLabels, groupKey, groupOrder, labelGroup, laidOutFamilies } from '../../model/layout.ts'
 import type { GroupLabel, LayoutResult, LayoutSpec, Point, Rect } from '../../model/layout.ts'
 import { NO_PROJECT_ID } from '../../model/projects.ts'
 import { subwayPlan } from './plan.ts'
@@ -196,6 +199,19 @@ export function mergeSubwayLayout(previous: ReadonlyMap<string, Point>, model: G
     return { top: pick[1].y + GROUP_LABEL_H, bottom: next ? next[1].y : Infinity }
   }
 
+  /** Every band of group `key`, top to bottom: its label's, then its continuation labels'. */
+  const bandsOf = (key: string): Band[] => {
+    const all = labelsSorted()
+
+    return all
+      .filter(([id]) => labelGroup(id) === key)
+      .map(([, point]) => {
+        const next = all.find(([, other]) => other.y > point.y)
+
+        return { top: point.y + GROUP_LABEL_H, bottom: next ? next[1].y : Infinity }
+      })
+  }
+
   const inBand = (point: Point, band: Band) => footprint(point).y >= band.top && point.y + STATION_H + LABEL_GAP <= band.bottom
   const free = (point: Point) => index.hits(footprint(point)).length === 0
   const place = (id: string, point: Point) => {
@@ -281,16 +297,23 @@ export function mergeSubwayLayout(previous: ReadonlyMap<string, Point>, model: G
     }
   }
 
-  // New families (and singles with Show all): the first free spot of their group's band, else under
-  // everything (with a label when the group has none yet, a continuation label when it has one).
+  // New families (and singles with Show all), a group at a time in the groups' order: the first
+  // free spot of one of their group's bands (its label's, then its continuation labels'), else
+  // under everything (with a label when the group has none yet, a continuation label when it has
+  // one; the group's next new families then fill that continuation band, not one label each).
+  const order = groupOrder(model, families).map(projectId => projectId ?? NO_PROJECT_ID)
+  const rank = (family: Family) => order.indexOf(family.projectId ?? NO_PROJECT_ID)
+
+  newFamilies.sort((a, b) => rank(a) - rank(b))
+
   for (const family of newFamilies) {
     const key = groupKey(family.projectId)
     const grid = familyGrid(model, family)
     const cells = [...grid.cells]
-    const band = bandOf(key)
+    const bands = bandsOf(key)
     let spot: Point | undefined
 
-    if (band) {
+    for (const band of bands) {
       const first = band.top - GROUP_LABEL_H + GROUP_TOP
 
       for (let row = 0; row < 400 && !spot; row += 1) {
@@ -303,15 +326,19 @@ export function mergeSubwayLayout(previous: ReadonlyMap<string, Point>, model: G
         for (let col = 0; col < MERGE_COLUMNS && !spot; col += 1) {
           const at = { x: col * COLUMN, y }
 
-          if (cells.every(([, cell]) => inBand({ x: at.x + cell.col * COLUMN, y: at.y + cell.row * ROW }, band!) && free({ x: at.x + cell.col * COLUMN, y: at.y + cell.row * ROW }))) {
+          if (cells.every(([, cell]) => inBand({ x: at.x + cell.col * COLUMN, y: at.y + cell.row * ROW }, band) && free({ x: at.x + cell.col * COLUMN, y: at.y + cell.row * ROW }))) {
             spot = at
           }
         }
       }
+
+      if (spot) {
+        break
+      }
     }
 
     if (!spot) {
-      if (band) {
+      if (bands.length > 0) {
         spot = { x: 0, y: continueGroup(key) }
       } else {
         const label = { x: 0, y: bottom + GROUP_STEP }
@@ -328,17 +355,8 @@ export function mergeSubwayLayout(previous: ReadonlyMap<string, Point>, model: G
     }
   }
 
-  // Labels (continuations too) of groups that still have stations on the canvas.
-  const present = new Set(families.map(family => groupKey(family.projectId)))
-  const labels = [...positions.keys()]
-    .filter(id => id.startsWith(GROUP_PREFIX) && present.has(labelGroup(id)))
-    .map(id => {
-      const projectId = labelGroup(id).slice(GROUP_PREFIX.length)
-
-      return { id, projectId: projectId === NO_PROJECT_ID ? undefined : projectId }
-    })
-
-  return { positions, labels }
+  // The labels (continuations too) of bands that hold a shown station of their group.
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) }
 }
 
 export function layoutSubway(model: GraphModel, previous: ReadonlyMap<string, Point> | undefined, spec: LayoutSpec): LayoutResult {

@@ -19,7 +19,7 @@ import { applyOverrides } from '../model/actions.ts'
 import { viewportKey } from '../model/device-prefs.ts'
 import { ALL_PROFILES, ALL_PROJECTS, buildGraph, layoutKeysOf } from '../model/graph.ts'
 import type { GraphNode } from '../model/graph.ts'
-import { laidOutFamilies } from '../model/layout.ts'
+import { anyInView, laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
 import type { LayoutRef } from '../model/layout-sync.ts'
 import { visibleRows } from '../model/sessions.ts'
@@ -252,6 +252,30 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   const requestFit = useCallback(() => setFitRequest(count => count + 1), [setFitRequest])
 
+  // A remembered view that shows none of the map's blocks is framed instead of restored: the map
+  // was laid out again since (Show all, Re-arrange, another device's drops), or the view was
+  // panned or zoomed off it. A framed style (Swimlanes) frames itself.
+  const showsMap = useCallback(
+    (viewport: Viewport) => {
+      const { width, height } = flowStore.getState()
+
+      if (style.frame || width <= 0 || height <= 0) {
+        return true
+      }
+
+      const blocks = laidOutFamilies(model, spec).flatMap(family =>
+        family.nodeIds.flatMap(id => {
+          const point = layout.positions.get(id)
+
+          return point ? [{ x: point.x, y: point.y, ...style.nodeSize }] : []
+        })
+      )
+
+      return anyInView(blocks, viewport, width, height)
+    },
+    [flowStore, layout, model, spec, style]
+  )
+
   // R16: zoom and pan per style + profile + scope, on this device. A view seen before comes back
   // where it was left; a new one is framed.
   const vpKey = viewportKey(style.id, profile, scope)
@@ -273,6 +297,11 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       // The canvas just mounted with this key's viewport (or framed itself).
       appliedKey.current = vpKey
       appliedScope.current = scope
+      const saved = prefs.viewport(vpKey)
+
+      if (saved && !showsMap(saved)) {
+        fit()
+      }
 
       return
     }
@@ -286,13 +315,13 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       appliedScope.current = scope
       const saved = prefs.viewport(vpKey)
 
-      if (saved && !refit) {
+      if (saved && !refit && showsMap(saved)) {
         void flow.setViewport(saved, { duration: 0 })
       } else {
         fit()
       }
     }
-  }, [vpKey, canvasShown, prefs, flow, fit, scope, style])
+  }, [vpKey, canvasShown, prefs, flow, fit, scope, style, showsMap])
 
   const onViewport = useCallback((viewport: Viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs])
 
