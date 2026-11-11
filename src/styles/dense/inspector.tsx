@@ -272,16 +272,34 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }: StyleP
   )
 }
 
+/** Card 9: with 2 or more blocks selected, how many and their titles; a click selects just that one. */
+function SelectionList({ model, ids, onSelect, onOpen, nowMs }: { model: GraphModel; ids: readonly string[]; onSelect: StylePanelProps['onSelect']; onOpen: StylePanelProps['onOpen']; nowMs: number }) {
+  return (
+    <div className="st-multi" data-testid="session-tree-inspector-multi" data-count={ids.length}>
+      <div className="st-it" data-field="selected-count">
+        {ids.length} selected
+      </div>
+      <div className="st-sec">
+        {ids.map(id => (
+          <NodeLink key={id} model={model} id={id} relation="" onSelect={id => onSelect(id)} onOpen={onOpen} nowMs={nowMs} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DenseInspector(props: StylePanelProps) {
-  const { model, selectedId, statusOf, onSelect, onOpen, nowMs } = props
+  const { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs } = props
   const [singlesOpen, setSinglesOpen] = useState(true)
   const node = selectedId ? model.nodeById.get(selectedId) : undefined
   const singles = singlesInScope(model)
+  const several = selectedIds.length > 1
 
   return (
-    <aside className="st-insp" data-testid="session-tree-inspector" data-selected-id={node?.id ?? ''}>
+    <aside className="st-insp" data-testid="session-tree-inspector" data-selected-id={node?.id ?? ''} data-selected-count={selectedIds.length}>
       <div className="st-ib">
-        {!node && (
+        {several && <SelectionList model={model} ids={selectedIds} onSelect={onSelect} onOpen={onOpen} nowMs={nowMs} />}
+        {!node && !several && (
           <div className="st-empty" data-testid="session-tree-inspector-empty">
             Select a session to inspect it.
             <br />

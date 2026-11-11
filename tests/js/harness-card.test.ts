@@ -47,7 +47,7 @@ function launcherVia(command: string[], extra: Record<string, string> = {}): str
 
 describe('test harness: one card number (B1)', () => {
   it('scripts/e2e/CARD holds a card of the set', () => {
-    assert.ok(Number.isInteger(CARD_FILE) && CARD_FILE >= 1 && CARD_FILE <= 7, `CARD = ${CARD_FILE}`)
+    assert.ok(Number.isInteger(CARD_FILE) && CARD_FILE >= 1 && CARD_FILE <= 9, `CARD = ${CARD_FILE}`)
   })
 
   it('the harness default is the CARD file', async () => {
