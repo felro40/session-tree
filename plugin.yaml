@@ -1,0 +1,10 @@
+name: session-tree
+version: 0.1.0
+description: Your chat sessions as an interactive graph of how they branched (desktop + Webapp page, with a small read-mostly backend).
+manifest_version: 1
+author: david
+license: MIT
+capabilities: []
+kind: standalone
+requires_env: []
+python_dependencies: []
