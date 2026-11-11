@@ -283,7 +283,8 @@ ring (R11). Out-of-scope blocks and stand-ins never open.
 - Measured: wheel −240 at a block point zoomed 125 % → 174 % and the point under the cursor moved
   (0.20, 0.10) px; 12 more wheel-ups clamp at 250 %, 20 wheel-downs at 30 %. Middle-drag (140, 90)
   panned exactly (140, 90); Space + left-drag (−110, 60) panned (−110, 60); left-drag on empty
-  canvas kept the viewport and cleared the selection.
+  canvas kept the viewport and cleared the selection. (Card 9 replaced that rule: in Dense, Subway
+  and Rich cards a left-drag on empty canvas draws a selection box; see § Card 9 for the props.)
 - Space + left-drag also pans when it starts on a block (fix r1): while Space is held every block
   is rendered `draggable: false`, so it has no `nopan` class and d3-zoom takes the drag. Measured:
   Space + drag (100, 60) from `st-sys-tip` panned (100, 60), the block stayed put. A Space typed in
@@ -1902,3 +1903,107 @@ code of `scripts/e2e/common.ts`, `e2e-actions.ts`, `e2e-sync.ts`, `e2e-swimlanes
   `07b2fa8`, 01:27–01:47) **181/181, exit 0**: foundation 19 + core-dense 28 + actions 30 + sync 22
   + swimlanes 28 + rich **23** (F4, F1) + subway **17** (F2) + final 14; every suite's real-Hermes
   guard passed. After run 3: trash 3.3 GB, 7 entries (one per home) / e2e root 6.5 GB.
+
+## Card 9 — box selection and moving several blocks at once
+
+Branch `feature/session-tree-followups`, start commit `fa1da60` (card 8's reviewed head; `git
+status --short` empty). `scripts/e2e/CARD` = 9 (`afc334b`; the harness accepts cards 1..9): coder
+ports 19390–19394, homes `c9-coder*`. Code commit `6614475`; the docs commit after it changes only
+`README.md` and this file.
+
+### React Flow 12.12.1 props (`src/page/graph-canvas.tsx`)
+
+| Prop | Before | Card 9 | Why |
+|---|---|---|---|
+| `selectionOnDrag` | `false` | `style.draggable` (Dense, Subway, Rich `true`; Swimlanes `false`) | React Flow draws the box on a left-drag that starts on the pane itself (`Pane.onPointerDownCapture`: `selectionOnDrag && event.target === pane`), so a drag from a block still drags it. |
+| `selectionMode` | (default `Full`) | `SelectionMode.Full` | Only blocks fully inside count. The canvas decides the selected ids itself (below); React Flow's own `select` changes are ignored, the selection is controlled (`selected` per node). |
+| `onSelectionStart` / `onSelectionEnd` | — | the box's start corner in flow coordinates (`userSelectionRect.startX/Y` from the store at start, Shift held or not) and, at the end, the pointer's flow position (`screenToFlowPosition`); `fullyInside(rects, boxOf(start, end))` over the editable canvas blocks | the box survives React Flow's auto-pan during the drag (its start is in flow coordinates) and selects from the model's rectangles, also for blocks `onlyRenderVisibleElements` does not draw. |
+| `panOnDrag` | `[1]` | `[1]` (unchanged) | Middle-drag pans. |
+| `panActivationKeyCode` | `"Space"` | `"Space"` (unchanged) | While Space is held `FlowRenderer` sets `panOnDrag = true`, which turns `selectionOnDrag` off (`_selectionOnDrag = selectionOnDrag && panOnDrag !== true`): Space + left-drag pans, no box. |
+| `selectionKeyCode` / `multiSelectionKeyCode` / `deleteKeyCode` | `null` | `null` (unchanged) | Shift is handled by the canvas (`event.shiftKey` on the click and at the box start); no key ever deletes. |
+| `snapToGrid` | `snap` | `false` | React Flow snaps a multi-node drag by the first dragged node in its lookup (`calculateSnapOffset`), not the grabbed one. The canvas snaps instead (`groupPositions`: the grabbed block to `grid·round(p/grid)`, React Flow's `snapPosition`, the others by the same offset). One block lands exactly where React Flow's snap put it. `snapGrid` stays for the dot grid. |
+| multi-node drag | — | React Flow's own (`getDragItems`: every `selected` node moves with the grabbed one; an unselected grabbed node drags alone) | The canvas records the drag-start spots in `onNodeDragStart`, lays every dragged block out from the grabbed block's offset in `onNodesChange`, and sends the final spots as one `onMove` in `onNodeDragStop`. |
+
+- React Flow's frame around a finished selection (`.react-flow__nodesselection`) is hidden (CSS): it
+  would catch clicks and drags on the empty canvas between selected blocks. The box itself is
+  `--xy-selection-background-color: var(--ui-selection-background)` with a 1 px dashed
+  `--ui-accent` border.
+- A plain press on empty canvas still clears (capture-phase `pointerdown`, as before), except with
+  Shift in the box styles (Shift + a box adds). Esc and Ctrl/⌘+A are a window `keydown` listener
+  (`ctx.addEventListener`) that acts only on keys aimed at the page (or the body), never in a text
+  field (`isTextField`: inputs that take text, textareas, contenteditable; a toolbar `<select>` or a
+  button that kept the focus is not one) or an open menu / dialog. Ctrl/⌘+A calls
+  `preventDefault` (no page text gets selected; e2e).
+- A right-click inside the selection keeps it (the menu acts on that block only, S3); outside it
+  selects just the right-clicked block, as before.
+- The canvas exposes `data-selected` (ids), `data-selected-count`, `data-box-select` and
+  `data-route-passes` (the routing chain's `routed` counter) for the e2e.
+
+### Numbers
+
+- **Drop of a group of 3** (e2e-select, default fixture, each of Dense / Subway / Rich): every
+  selected block moved by the same offset (0 px apart; e.g. Dense (46.4, 36) for a (61, 47) px drag
+  at 125 %: React Flow starts the drag after its 1 px threshold, so the first mouse step is not in
+  the offset); no unselected block moved; **1 routing pass** (`data-route-passes` before/after the
+  drop); **1 request** `PATCH /state/positions` with the **3 entries**; the stored spots equal the
+  drawn ones; the second browser context shows all three moved without a reload (push, or the
+  5 s poll); after a
+  reload the three come back (± 0.6 px). Unit: `tests/js/selection.test.ts` — a drop of 4 blocks is
+  1 `routeLinks` pass and 1 `patch:set:4`.
+- **Snap** (each style, after a single snapped drop of each block): the group lands on the grid
+  (Dense 16, Subway 25, Rich 20) with the spacing unchanged (`0,0 0,-32 0,48` in Dense).
+- **Project scope `mdesign`:** 11 dimmed blocks shown; a box over the whole pane covered 8 / 6 / 5
+  of them and selected none; Ctrl+A selected the 5 editable blocks.
+- **500-session fixture** (`scale`, Show all, 1440 × 900, at Fit; full e2e run on `6614475`):
+
+  | | blocks moved | fps while dragging (group / one block) | release → 2nd frame (group / one) | longest task on drop (group / one) |
+  |---|---|---|---|---|
+  | Dense | 118 (one box) | 62.5 / 62.0 | 39 / 58 ms | none ≥ 50 ms / none |
+  | Subway | 108 (one box) | 61.8 / 62.5 | 58 / 43 ms | none ≥ 50 ms / none |
+  | Rich cards | 89 (a box of 61, then pan and Shift + a box: +28) | 62.7 / 62.0 | 43 / 30 ms | none ≥ 50 ms / none |
+
+  Bars: Dense and Subway ≥ 45, Rich ≥ 30 fps. "Longest task" is a `PerformanceObserver`
+  (`longtask`) over the 2 s after the release; it reports only tasks of 50 ms or more, and saw none.
+  Rich cards at the 30 % zoom floor draw about 74 cards at once in a 1440 × 900 window, so one box
+  cannot hold 100 there; the suite adds a second box after a middle-drag pan. Earlier standalone
+  runs gave the same picture (62–63 fps in every style, group and single; no long task).
+- Bundle: **`desktop/plugin.js` 716 270 bytes** (was 706 600), sha256 `c271fb22…1764128d`,
+  byte-identical over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no
+  `eval(` / `new Function` (guard tests).
+
+### Changed earlier checks
+
+- `scripts/e2e-core-dense.ts`: **old** "R3: left-drag on empty canvas does not pan and clears the
+  selection" (asserted: viewport unchanged, inspector `data-selected-id` `''`). **New** "R3 + card
+  9: a left-drag on empty canvas does not pan; it draws a selection box, and a box around no block
+  leaves nothing selected" (asserted: viewport unchanged, a `.react-flow__selection` wider than 2 px
+  during the drag, inspector `data-selected-id` `''` and canvas `data-selected-count` `0`).
+- `tests/js/harness-card.test.ts`: "scripts/e2e/CARD holds a card of the set" `CARD_FILE <= 8` →
+  `<= 9` (with `scripts/e2e/harness.ts` 1..8 → 1..9).
+
+### Simulated
+
+Nothing new. Unchanged: needs input via the test-only hook (rich, subway); running via the real
+`is_active` heuristic.
+
+### Scope sweep (`git diff fa1da60..HEAD`)
+
+Card 9 surface: `src/model/selection.ts` (new), `src/page/graph-canvas.tsx`,
+`src/page/session-tree-page.tsx`, `src/styles/dense/inspector.tsx`, `src/styles/types.ts`
+(`StylePanelProps.selectedIds`), `src/styles.css` (the box border, the hidden selection frame),
+`tests/js/selection.test.ts` (new), `scripts/e2e-select.ts` (new), `scripts/run-e2e.sh` (the new
+suite), `scripts/e2e-core-dense.ts` (the changed R3 check above), `desktop/plugin.js` (rebuilt).
+Card number: `scripts/e2e/CARD`, `scripts/e2e/harness.ts`, `tests/js/harness-card.test.ts`. Docs:
+`README.md`, this file. Nothing else.
+
+### Gates (code `6614475`)
+
+- lint 0; build 0 (716 270 B); `npm test` **340/340** (was 323: selection +17); `npm run test:py`
+  **259 passed**.
+- `npm run test:e2e` (03:56–04:20) **216/216, exit 0**: foundation 19 + core-dense 28 + actions 30 +
+  sync 22 + swimlanes 28 + rich 23 + subway 17 + final 14 + **select 35**; every suite's real-Hermes
+  guard passed; the swimlanes B1-r3 flake did not show.
+- Baseline at the start (`afc334b`, run from an exported copy so the working tree's edits could not
+  leak into the test builds): lint 0, build 706 600 B, `npm test` 323, `test:py` 259, `test:e2e`
+  181/181 exit 0. (A first baseline run in the worktree was stopped: its later suites build the
+  test package from `src/` at start, and `src/` was being edited.)

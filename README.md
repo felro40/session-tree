@@ -19,11 +19,23 @@ user (below).
   a faded "Parent not loaded" stand-in. Delegate children and cron / kanban / tool sessions are
   hidden, like in the sidebar. The session open in the app is highlighted.
 - **Navigate.** The plain wheel zooms toward the cursor (30–250 %); drag with the middle button (or
-  Space + left-drag) to pan; a left-drag on empty canvas clears the selection. The toolbar has −,
-  zoom %, + and Fit.
-- **Arrange.** Drag blocks (every style but Swimlanes); dragging never re-parents. Links follow the
-  dragged block and re-route around other blocks on drop. **Snap** shows a dot grid and snaps
-  dragged blocks to it. **Re-arrange** resets the current style + scope layout, with Undo.
+  Space + left-drag) to pan. The toolbar has −, zoom %, + and Fit.
+- **Select.** A click selects one block and a click on empty canvas clears the selection. In Dense,
+  Subway and Rich cards a left-drag on empty canvas draws a selection box: on release the blocks
+  **fully** inside it are selected (one it only partly covers is not). **Shift**+click adds or
+  removes one block, **Shift** + a box adds to the selection, **Esc** clears it, and **Ctrl/⌘+A**
+  selects every editable block shown (in a text field such as Rename it selects the text instead).
+  Dimmed blocks outside the scope, "Parent not loaded" stand-ins and the sessions in a style's
+  singles list or drawer are never added by a box, Shift or Ctrl/⌘+A. Swimlanes has no box. With 2
+  or more selected the Dense inspector lists them ("N selected"); a click on a title selects just
+  that one. Right-click acts on the right-clicked block only, and Delete / Backspace never delete a
+  session. The selection is per page: a new scope, profile or style clears it.
+- **Arrange.** Drag blocks (every style but Swimlanes); dragging never re-parents. Dragging a
+  selected block moves every selected block by the same offset (with Snap, by the grabbed block's
+  snapped spot); dragging an unselected block selects and moves just that one. Links follow the
+  dragged blocks and re-route around other blocks on drop, and the whole group is saved in one
+  request. A group move has no Undo. **Snap** shows a dot grid and snaps dragged blocks to it.
+  **Re-arrange** resets the current style + scope layout, with Undo.
 - **Open** a session in a new tab with a double-click.
 - **Act** on a session with a right-click (or its ⋯): Appearance ▸, Pin / Unpin, Rename…, Move to
   project ▸, Copy ID, Branch, Export, Mark as read / unread, Archive / Unarchive, Delete — the
@@ -91,7 +103,11 @@ Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.m
   its group, which can be far from its parent. It never lands in another group's segment, and no
   saved position moves.
 - **No sidebar highlighting from the graph** (R19: no SDK verb); highlighting works the other way.
-- Multi-select, bulk actions and keyboard navigation between blocks are not part of this set.
+- **Selection:** bulk actions on a selection, Undo for a group move, box selection in Swimlanes and
+  keyboard navigation between blocks are not part of this set. With Snap on, a group moves by the
+  grabbed block's snapped offset, so its spacing is kept: blocks that already sit on the grid stay
+  on it, while blocks placed off the grid (the auto-layout's spacing, or drops with Snap off) keep
+  their offset from the grabbed block and land on the grid only after a drop of their own.
 
 ## Source map
 
@@ -104,6 +120,7 @@ Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.m
 | `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense, Rich cards: `curveRouter`; Swimlanes: `orthogonalRouter`, elbows with rounded corners; Subway: `octilinearRouter`, straight while dragging, 45°-chamfered on drop); on-drop detours on a sparse orthogonal grid (A*, on a 0.01 px lattice obstacles included), drawn rounded or chamfered. |
 | `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
 | `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
+| `src/model/selection.ts` | Card 9: the selection (a set with one primary block) and its rules — click, Shift toggle, box (full containment), Shift + box, Esc, Ctrl/⌘+A, the never-selectable blocks, what a refresh keeps — and the group offset of a multi-block drag (with Snap, by the grabbed block's snapped spot). |
 | `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`), the Subway map style (`subway/`: the track plan `plan.ts`, metro layout `layout.ts`, label placement `labels.ts`, geometry `spec.ts`, stations/tracks `subway-flow.tsx`, label driver + map key + depot `layer.tsx`, `subway.css`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
 | `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`, with a framed style's layers), toolbar (with the style switcher), the block menu (`session-menu.tsx`, SDK ContextMenu), the actions controller with its dialogs (`session-actions.tsx`) and the shared services (`services.ts`: layout store, device prefs, push + poll). |
 
@@ -188,7 +205,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook) and `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style). The actions, sync, swimlanes, rich, subway and final suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook), `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style) and `scripts/e2e-select.ts` (card 9: box selection and group moves in Dense, Subway and Rich cards, two contexts, the 500-session group drag; `SESSION_TREE_SELECT_ONLY=scale` runs only that last check). The actions, sync, swimlanes, rich, subway, final and select suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` / `-select` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `npm run clean:e2e` | `scripts/e2e/clean.ts`: frees the disk the test homes take (a full `test:e2e` makes 7 homes of about 460 MB). Removes the e2e trash and this role's stopped test homes of the current card (`c<card>-<role>`, `c<card>-<role>-<variant>`; `SESSION_TREE_ROLE`); `npm run clean:e2e -- --all` does every card's and role's. Keeps `pytest-venv` and everything that is not a test home (logs, screenshot folders), refuses (and removes nothing) while a test gateway runs, and prints each removed path with its size. All deleting goes through one guarded helper (`deleteTrashEntry`): only a direct child of the real `<e2e root>/trash`, never following a symlink (test homes link this checkout into `plugins/session-tree`), never a home whose gateway is alive. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
@@ -209,12 +226,12 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
 - The trash keeps only the newest moved-aside copy of each home name (the last run's evidence);
   `npm run clean:e2e` empties it (see Development).
 - Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
-  current card from `scripts/e2e/CARD`, 8 — the one place the number lives; `npm run test:py` and
+  current card from `scripts/e2e/CARD`, 9 — the one place the number lives; `npm run test:py` and
   `scripts/test-hermes` take their root from the harness): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
-  (+0..+4 coder, +5..+9 reviewer). Card 8: coder home `c8-coder/home`, ports 19380–19384 (the
-  Webapp on 19380); reviewer `c8-reviewer`, ports 19385–19389. The actions, sync, swimlanes, rich,
-  subway and final suites' own homes are `c8-<role>-actions`, `-sync`, `-swim`, `-rich`, `-subway`
-  and `-final` (same ports, never running at the same time as
+  (+0..+4 coder, +5..+9 reviewer). Card 9: coder home `c9-coder/home`, ports 19390–19394 (the
+  Webapp on 19390); reviewer `c9-reviewer`, ports 19395–19399. The actions, sync, swimlanes, rich,
+  subway, final and select suites' own homes are `c9-<role>-actions`, `-sync`, `-swim`, `-rich`,
+  `-subway`, `-final` and `-select` (same ports, never running at the same time as
   the other suites). Setup moves the shared home's layout store aside first
   (`<root>/layout-store-old/`), so synced positions and Snap from an earlier run do not carry over.
 - Setup writes the test config with `hermes config set` (`webapp.enabled true`, `webapp.host
