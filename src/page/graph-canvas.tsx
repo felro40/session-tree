@@ -1,11 +1,11 @@
 /**
  * The canvas shell shared by every style: React Flow with the R3 navigation (plain wheel zooms
- * toward the cursor, middle-drag pans, Space + left-drag pans), card 9's selection (a left-drag on
- * empty canvas draws a selection box in the draggable styles, Shift+click, Esc, Ctrl/⌘+A, and
- * dragging a selected block moves every selected block), R4 snap grid, live link redraw while
- * dragging, on-drop routing (R13), double-click to open in a tab (R2), read-only blocks outside
- * the scope (R5), the hover tooltip and the block menu. What a block looks like comes from the
- * style.
+ * toward the cursor, middle-drag pans, Space or Alt + left-drag pans: Alt for a laptop touchpad,
+ * which has no middle button), card 9's selection (a left-drag on empty canvas draws a selection
+ * box in the draggable styles, Shift+click, Esc, Ctrl/⌘+A, and dragging a selected block moves
+ * every selected block), R4 snap grid, live link redraw while dragging, on-drop routing (R13),
+ * double-click to open in a tab (R2), read-only blocks outside the scope (R5), the hover tooltip
+ * and the block menu. What a block looks like comes from the style.
  */
 import {
   Background,
@@ -43,6 +43,8 @@ const VISIBLE_ONLY_ABOVE = 150
 export const OUT_OF_SCOPE_TIP = 'Outside this project — switch to All projects to edit'
 const STANDIN_TIP = 'Parent not loaded — deleted, hidden or outside the loaded sessions'
 const TOOLTIP_DELAY_MS = 350
+/** Held, they turn a left-drag into a pan (React Flow's pan activation keys; `event.key` "Alt"). */
+const PAN_KEYS = ['Space', 'Alt']
 
 type FlowNode = Node<BlockData | GroupLabelData>
 type FlowEdge = Edge<LinkData>
@@ -139,8 +141,10 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const actions = useSessionActions()
   const [tooltip, setTooltip] = useState<Tooltip>()
   const spaceDown = useRef(false)
-  // R3: while Space is held a left-drag pans from anywhere, also from a block (not a block drag).
-  const [spaceHeld, setSpaceHeld] = useState(false)
+  const altDown = useRef(false)
+  // R3: while Space (or Alt) is held a left-drag pans from anywhere, also from a block (not a
+  // block drag).
+  const [panKeyHeld, setPanKeyHeld] = useState(false)
   const tooltipTimer = useRef<() => void>(undefined)
   const frame = style.frame && frameLayout ? style.frame : undefined
   // Card 9 (S1/S2): the selection box in the styles with dragging (Dense, Subway, Rich cards);
@@ -260,9 +264,9 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const nodes = useMemo(() => {
     const moved = drag ? baseNodes.map(node => (drag.has(node.id) ? { ...node, position: drag.get(node.id)!, dragging: true } : node)) : baseNodes
 
-    // A non-draggable block has no `nopan` class, so React Flow's Space pan starts on it too.
-    return spaceHeld ? moved.map(node => (node.draggable ? { ...node, draggable: false } : node)) : moved
-  }, [baseNodes, drag, spaceHeld])
+    // A non-draggable block has no `nopan` class, so React Flow's Space / Alt pan starts on it too.
+    return panKeyHeld ? moved.map(node => (node.draggable ? { ...node, draggable: false } : node)) : moved
+  }, [baseNodes, drag, panKeyHeld])
 
   const edges = useMemo<FlowEdge[]>(
     () =>
@@ -598,7 +602,8 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
           releaseSelect()
 
-          if (pointer.button !== 0 || spaceDown.current || !target) {
+          // A pan (Space or Alt held) keeps the selection.
+          if (pointer.button !== 0 || spaceDown.current || altDown.current || pointer.altKey || !target) {
             return
           }
 
@@ -633,6 +638,13 @@ export function GraphCanvas(props: GraphCanvasProps) {
         window,
         'keydown',
         event => {
+          if ((event as KeyboardEvent).key === 'Alt') {
+            altDown.current = true
+            setPanKeyHeld(true)
+
+            return
+          }
+
           if ((event as KeyboardEvent).code !== 'Space') {
             return
           }
@@ -651,19 +663,27 @@ export function GraphCanvas(props: GraphCanvasProps) {
           }
 
           spaceDown.current = true
-          setSpaceHeld(true)
+          setPanKeyHeld(true)
         },
         true
       ),
       ctx.addEventListener(window, 'keyup', event => {
-        if ((event as KeyboardEvent).code === 'Space') {
+        const key = event as KeyboardEvent
+
+        if (key.code === 'Space') {
           spaceDown.current = false
-          setSpaceHeld(false)
+        } else if (key.key === 'Alt') {
+          altDown.current = false
+        } else {
+          return
         }
+
+        setPanKeyHeld(spaceDown.current || altDown.current)
       }),
       ctx.addEventListener(window, 'blur', () => {
         spaceDown.current = false
-        setSpaceHeld(false)
+        altDown.current = false
+        setPanKeyHeld(false)
       })
     ]
 
@@ -714,7 +734,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
             onSelectionEnd={onSelectionEnd}
             nodesDraggable={style.draggable}
             panOnDrag={[1]}
-            panActivationKeyCode="Space"
+            panActivationKeyCode={PAN_KEYS}
             zoomOnScroll
             panOnScroll={false}
             zoomOnDoubleClick={false}

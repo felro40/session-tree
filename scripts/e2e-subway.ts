@@ -19,6 +19,7 @@ import { join } from 'node:path'
 import type { Page } from 'playwright-core'
 
 import { ALL_PROJECTS, buildGraph } from '../src/model/graph.ts'
+import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import { LABEL_WIDTH } from '../src/model/layout.ts'
 import type { SessionRow } from '../src/model/sessions.ts'
 import { labelRect, segmentCrosses } from '../src/styles/subway/labels.ts'
@@ -26,12 +27,15 @@ import { GROUP_LABEL_H } from '../src/styles/subway/spec.ts'
 import type { LabelSpot } from '../src/styles/subway/spec.ts'
 import { addContext, close, enableDesktopHalf, launch, signIn } from './e2e/browser.ts'
 import {
+  api,
   assert,
   backendLog,
   backToTree,
   BLOCK,
   box,
   clickToolbar,
+  drag,
+  emptySpot,
   fit,
   flowPos,
   focusedStored,
@@ -47,6 +51,7 @@ import {
   positionWrites,
   reloadTree,
   rowsOf,
+  setProfile,
   sleep,
   stored,
   suite,
@@ -55,7 +60,7 @@ import {
   viewport,
   waitFor
 } from './e2e/common.ts'
-import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, testHermes, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'subway' })
@@ -255,9 +260,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'final']) {
-    stopGateway(testHermes(undefined, variant ? { variant } : {}))
-  }
+  stopRoleHomes(t)
 
   freshHome(t)
   console.log(`e2e subway — role ${t.role}, home ${t.home}`)
@@ -827,6 +830,96 @@ async function main(): Promise<void> {
       assert(light.actual === light.expected && dark.actual === dark.expected && dark.actual !== light.actual, `theme ${JSON.stringify({ light, dark })}`)
 
       return { light: light.actual, dark: dark.actual }
+    })
+
+    // The user's empty map (a laptop): the view remembered on that device showed only labels.
+    const stationsInView = () =>
+      page.evaluate(() => {
+        const pane = document.querySelector('.react-flow__pane')!.getBoundingClientRect()
+
+        return [...document.querySelectorAll('[data-testid="session-tree-block"]')].filter(el => {
+          const r = el.getBoundingClientRect()
+
+          return r.right > pane.left && r.left < pane.right && r.bottom > pane.top && r.top < pane.bottom
+        }).length
+      })
+
+    /** Middle-drags the map off the canvas to the right, until no station is in view. */
+    const panOffTheMap = async () => {
+      await fit(page)
+      const start = await emptySpot(page)
+
+      for (let i = 0; i < 3 && (await stationsInView()) > 0; i += 1) {
+        await drag(page, start, { x: 1000, y: 0 }, 'middle')
+      }
+
+      assert((await stationsInView()) === 0, `${await stationsInView()} stations still in view after panning off the map`)
+      // The view is remembered on the move's end.
+      await sleep(600)
+
+      return viewport(page)
+    }
+
+    await check('a remembered view that shows none of the map opens framed: panned off the map, then a reload; a switch to Dense and back', async () => {
+      const away = await panOffTheMap()
+
+      await reloadTree(t, s)
+      const reloaded = { view: await viewport(page), stations: await stationsInView() }
+
+      await panOffTheMap()
+      await switchStyle(page, 'dense')
+      await switchStyle(page, 'subway')
+      const switched = { view: await viewport(page), stations: await stationsInView() }
+
+      assert(reloaded.stations > 0 && !near(reloaded.view, away, 1), `after a reload: ${JSON.stringify(reloaded)} (panned: ${JSON.stringify(away)})`)
+      assert(switched.stations > 0, `after Dense and back: ${JSON.stringify(switched)}`)
+      facts.emptyView = { away, reloaded, switched }
+
+      return facts.emptyView
+    })
+
+    await check('the 500-session profile: Show all on, then off again — no label is left over an empty band (each drawn label has a station of its group under it); all 100 stations drawn', async () => {
+      const scaleState = () => api<StateSnapshot>(s, '/api/plugins/session-tree/state?session_profile=scale')
+
+      await setProfile(page, 'scale')
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
+      await sleep(1000)
+      await clickToolbar(page, 'session-tree-show-all')
+      await waitFor('Show all: every single placed and stored', scaleState, value => Object.keys(layoutOf(value, 'subway')).filter(id => !id.startsWith('group:')).length >= 500, 60_000)
+      const storedLabels = Object.keys(layoutOf(await scaleState(), 'subway')).filter(id => id.startsWith('group:')).length
+
+      await clickToolbar(page, 'session-tree-show-all')
+      await sleep(1500)
+      const map = await page.evaluate(() => {
+        const at = (el: Element) => {
+          const m = /translate\(\s*([-\d.e]+)px,\s*([-\d.e]+)px\)/.exec((el as HTMLElement).style.transform)
+
+          return { x: Number(m?.[1]), y: Number(m?.[2]) }
+        }
+
+        return {
+          labels: [...document.querySelectorAll('.react-flow__node[data-id^="group:"]')].map(el => ({ id: el.getAttribute('data-id')!, ...at(el) })),
+          stations: [...document.querySelectorAll('.react-flow__node')]
+            .filter(el => el.querySelector('[data-testid="session-tree-block"]'))
+            .map(el => ({ project: el.querySelector('[data-testid="session-tree-block"]')!.getAttribute('data-project-id') || '__no_project__', ...at(el) }))
+        }
+      })
+      const tops = map.labels.map(label => label.y)
+      const empty = map.labels.filter(label => {
+        const group = label.id.split('\u001f')[0].slice('group:'.length)
+        const bottom = Math.min(Infinity, ...tops.filter(y => y > label.y))
+
+        return !map.stations.some(station => station.project === group && station.y >= label.y && station.y < bottom)
+      })
+
+      await page.screenshot({ path: join(shots, 'subway-scale-show-all-off.png') })
+      await setProfile(page, 'default')
+      await page.locator('[data-testid="session-tree-block"][data-session-id^="st-sys-"]').first().waitFor({ timeout: 30_000 })
+      assert(empty.length === 0, `${empty.length} of ${map.labels.length} drawn labels are over an empty band: ${empty.slice(0, 5).map(label => JSON.stringify(label)).join(', ')}`)
+      assert(map.stations.length === 100, `${map.stations.length} stations drawn (100 on the canvas)`)
+      facts.scaleLabels = { stored: storedLabels, drawn: map.labels.length, stations: map.stations.length }
+
+      return facts.scaleLabels
     })
 
     await check('no page errors from the plugin; the only Subway writes are position saves', () => {

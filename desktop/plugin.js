@@ -66,10 +66,10 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect4 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect5 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
       var value2 = getSnapshot(), _useState = useState9({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
-      return useLayoutEffect4(
+      return useLayoutEffect5(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
@@ -119,9 +119,9 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef8 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef9 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef8(null);
+      var instRef = useRef9(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
@@ -7362,7 +7362,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef7, useState as useState8 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef8, useState as useState8 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -8100,27 +8100,53 @@ function rectOf(id2, point, spec) {
 function overlaps(a, b) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
+function anyInView(rects, viewport, width, height) {
+  let view = { x: -viewport.x / viewport.zoom, y: -viewport.y / viewport.zoom, width: width / viewport.zoom, height: height / viewport.zoom };
+  for (let rect of rects)
+    if (overlaps(rect, view))
+      return !0;
+  return !1;
+}
 var CONTINUATION = "";
 function labelGroup(id2) {
   let cut = id2.indexOf(CONTINUATION);
   return cut === -1 ? id2 : id2.slice(0, cut);
 }
+function drawnLabels(positions, shown) {
+  let labels = [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)), tops = labels.map(([, point]) => point.y), blocks = [...shown].flatMap(([id2, key]) => {
+    let point = positions.get(id2);
+    return point ? [{ key, y: point.y }] : [];
+  });
+  return labels.filter(([id2, point]) => {
+    let key = labelGroup(id2), bottom = Math.min(1 / 0, ...tops.filter((y) => y > point.y));
+    return blocks.some((block) => block.key === key && block.y >= point.y && block.y < bottom);
+  }).map(([id2]) => {
+    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
+    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
+  });
+}
+function blockGroups(families) {
+  return new Map(families.flatMap((family) => family.nodeIds.map((id2) => [id2, groupKey(family.projectId)])));
+}
 function mergeLayout(previous, model, spec) {
   if (!previous || previous.size === 0)
     return layoutGraph(model, spec);
-  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels2) => {
-    let next = labels2.find(([, point]) => point.y > labelY);
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels) => {
+    let next = labels.find(([, point]) => point.y > labelY);
     return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : 1 / 0 };
   }, bandOf = (key, anchorY) => {
-    let labels2 = labelEntries(), own = labels2.filter(([id2]) => labelGroup(id2) === key);
+    let labels = labelEntries(), own = labels.filter(([id2]) => labelGroup(id2) === key);
     if (own.length === 0) {
       if (anchorY === void 0)
         return;
-      let above = labels2.filter(([, point]) => point.y <= anchorY).pop();
-      return above ? bandUnder(above[1].y, labels2) : { top: -1 / 0, bottom: labels2[0] ? labels2[0][1].y - spec.rowGap : 1 / 0 };
+      let above = labels.filter(([, point]) => point.y <= anchorY).pop();
+      return above ? bandUnder(above[1].y, labels) : { top: -1 / 0, bottom: labels[0] ? labels[0][1].y - spec.rowGap : 1 / 0 };
     }
     let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0];
-    return bandUnder(pick2[1].y, labels2);
+    return bandUnder(pick2[1].y, labels);
+  }, bandsOf = (key) => {
+    let labels = labelEntries();
+    return labels.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => bandUnder(point.y, labels));
   }, findSpot = (shape, height, band, x0, rowsFor) => {
     let all = occupied(), lowest = band.bottom === 1 / 0 ? Math.max(band.top, bottomOf(all)) + step + height : band.bottom, top = band.top === -1 / 0 ? Math.min(0, ...all.map((rect) => rect.y)) : band.top, maxTop = lowest - height;
     if (maxTop < top)
@@ -8181,18 +8207,15 @@ function mergeLayout(previous, model, spec) {
   }
   let unlabelled = [];
   for (let family of newFamilies) {
-    let key = groupKey(family.projectId), band = bandOf(key);
-    if (!band) {
+    let key = groupKey(family.projectId), bands = bandsOf(key);
+    if (bands.length === 0) {
       unlabelled.push(family);
       continue;
     }
-    let local2 = family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }, ids = [...local2.positions.keys()], spot = findSpot(
-      ids.map((id2) => local2.positions.get(id2)),
-      local2.height,
-      band,
-      0,
-      rowsDown
-    );
+    let local2 = family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }, ids = [...local2.positions.keys()], shape = ids.map((id2) => local2.positions.get(id2)), spot;
+    for (let band of bands)
+      if (spot = findSpot(shape, local2.height, band, 0, rowsDown), spot)
+        break;
     if (spot)
       for (let id2 of ids) {
         let point = local2.positions.get(id2);
@@ -8216,11 +8239,7 @@ function mergeLayout(previous, model, spec) {
       [...positions].filter(([id2]) => shown.has(id2) || id2.startsWith(GROUP_PREFIX)).some(([id2, point]) => overlaps(rectOf(id2, point, spec), label)) || positions.set(key, spot);
     }
   }
-  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => {
-    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
-    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
-  });
-  return { positions, labels };
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 
 // src/model/selection.ts
@@ -10178,6 +10197,12 @@ function mergeSubwayLayout(previous, model, spec) {
       return;
     let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0], next = all.find(([, point]) => point.y > pick2[1].y);
     return { top: pick2[1].y + 26, bottom: next ? next[1].y : 1 / 0 };
+  }, bandsOf = (key) => {
+    let all = labelsSorted();
+    return all.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => {
+      let next = all.find(([, other]) => other.y > point.y);
+      return { top: point.y + 26, bottom: next ? next[1].y : 1 / 0 };
+    });
   }, inBand = (point, band) => footprint(point).y >= band.top && point.y + 20 + 4 <= band.bottom, free = (point) => index2.hits(footprint(point)).length === 0, place = (id2, point) => {
     positions.set(id2, point);
     let rect = footprint(point);
@@ -10219,9 +10244,11 @@ function mergeSubwayLayout(previous, model, spec) {
       place(id2, spot ?? { x: 0, y: continueGroup(key) });
     }
   }
+  let order = groupOrder(model, families).map((projectId) => projectId ?? NO_PROJECT_ID), rank = (family) => order.indexOf(family.projectId ?? NO_PROJECT_ID);
+  newFamilies.sort((a, b) => rank(a) - rank(b));
   for (let family of newFamilies) {
-    let key = groupKey(family.projectId), cells = [...familyGrid(model, family).cells], band = bandOf(key), spot;
-    if (band) {
+    let key = groupKey(family.projectId), cells = [...familyGrid(model, family).cells], bands = bandsOf(key), spot;
+    for (let band of bands) {
       let first = band.top - 26 + 100;
       for (let row = 0; row < 400 && !spot; row += 1) {
         let y = first + row * 100;
@@ -10232,9 +10259,11 @@ function mergeSubwayLayout(previous, model, spec) {
           cells.every(([, cell]) => inBand({ x: at.x + cell.col * 250, y: at.y + cell.row * 100 }, band) && free({ x: at.x + cell.col * 250, y: at.y + cell.row * 100 })) && (spot = at);
         }
       }
+      if (spot)
+        break;
     }
     if (!spot)
-      if (band)
+      if (bands.length > 0)
         spot = { x: 0, y: continueGroup(key) };
       else {
         let label = { x: 0, y: bottom + 75 };
@@ -10243,11 +10272,7 @@ function mergeSubwayLayout(previous, model, spec) {
     for (let [id2, cell] of cells)
       place(id2, { x: spot.x + cell.col * 250, y: spot.y + cell.row * 100 });
   }
-  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => {
-    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
-    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
-  });
-  return { positions, labels };
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 function layoutSubway(model, previous, spec) {
   return previous && previous.size > 0 ? mergeSubwayLayout(previous, model, spec) : freshSubwayLayout(model, spec);
@@ -11606,7 +11631,7 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) 
 
 // src/page/graph-canvas.tsx
 import { jsx as jsx14, jsxs as jsxs12 } from "react/jsx-runtime";
-var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350;
+var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350, PAN_KEYS = ["Space", "Alt"];
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
@@ -11622,7 +11647,7 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
     let out = /* @__PURE__ */ new Map();
     for (let [id2, rect] of rects)
       canvasSelectable(model, shown, id2) && out.set(id2, rect);
@@ -11681,8 +11706,8 @@ function GraphCanvas(props) {
     return frame2 && frameLayout && nodes2.push(...frame2.extraNodes(frameLayout)), nodes2;
   }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, selectedIds, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
-    return spaceHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
-  }, [baseNodes, drag2, spaceHeld]), edges = useMemo7(
+    return panKeyHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
+  }, [baseNodes, drag2, panKeyHeld]), edges = useMemo7(
     () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
       let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
       return {
@@ -11836,7 +11861,7 @@ function GraphCanvas(props) {
         "pointerdown",
         (event) => {
           let pointer2 = event, target = pointer2.target;
-          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && !(boxSelectRef.current && pointer2.shiftKey) && onSelection({ type: "clear" });
+          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || altDown.current || pointer2.altKey || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && !(boxSelectRef.current && pointer2.shiftKey) && onSelection({ type: "clear" });
         },
         !0
       ),
@@ -11852,22 +11877,33 @@ function GraphCanvas(props) {
         window,
         "keydown",
         (event) => {
+          if (event.key === "Alt") {
+            altDown.current = !0, setPanKeyHeld(!0);
+            return;
+          }
           if (event.code === "Space") {
             if (releaseSelect(event.target)) {
               event.preventDefault(), event.stopPropagation(), document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: !0 }));
               return;
             } else if (isTypingTarget(event.target))
               return;
-            spaceDown.current = !0, setSpaceHeld(!0);
+            spaceDown.current = !0, setPanKeyHeld(!0);
           }
         },
         !0
       ),
       ctx.addEventListener(window, "keyup", (event) => {
-        event.code === "Space" && (spaceDown.current = !1, setSpaceHeld(!1));
+        let key = event;
+        if (key.code === "Space")
+          spaceDown.current = !1;
+        else if (key.key === "Alt")
+          altDown.current = !1;
+        else
+          return;
+        setPanKeyHeld(spaceDown.current || altDown.current);
       }),
       ctx.addEventListener(window, "blur", () => {
-        spaceDown.current = !1, setSpaceHeld(!1);
+        spaceDown.current = !1, altDown.current = !1, setPanKeyHeld(!1);
       })
     ];
     return () => offs.forEach((off) => off());
@@ -11912,7 +11948,7 @@ function GraphCanvas(props) {
               onSelectionEnd,
               nodesDraggable: style2.draggable,
               panOnDrag: [1],
-              panActivationKeyCode: "Space",
+              panActivationKeyCode: PAN_KEYS,
               zoomOnScroll: !0,
               panOnScroll: !1,
               zoomOnDoubleClick: !1,
@@ -12760,8 +12796,91 @@ function usePrefsVersion(prefs) {
 // src/page/toolbar.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon10 } from "@hermes/plugin-sdk";
+import { useLayoutEffect as useLayoutEffect4, useRef as useRef6 } from "react";
+
+// src/page/toolbar-layout.ts
+init_define_import_meta_env();
+function barLayout({ room, gap, brand, pickers, tools, scope }) {
+  let fits = (width) => width + 0.05 <= room, left = (brandWidth) => brandWidth + pickers.reduce((sum, each) => sum + each + gap, 0);
+  return fits(left(brand.full) + gap + scope + gap + tools.full) ? { lines: "row", brandText: !0, toolText: !0 } : fits(left(brand.full) + gap + tools.full) ? { lines: "stacked", brandText: !0, toolText: !0 } : fits(left(brand.icon) + gap + tools.full) ? { lines: "stacked", brandText: !1, toolText: !0 } : fits(left(brand.icon) + gap + tools.icon) ? { lines: "stacked", brandText: !1, toolText: !1 } : { lines: "wrapped", brandText: fits(left(brand.full)), toolText: fits(tools.full) };
+}
+function fadeEdges(scrollLeft, clientWidth, scrollWidth) {
+  let left = scrollLeft > 0.5, right = scrollLeft + clientWidth < scrollWidth - 0.5;
+  return left && right ? "both" : left ? "left" : right ? "right" : void 0;
+}
+function revealBy(view, target, pad) {
+  return target.left < view.left + pad ? target.left - (view.left + pad) : target.right > view.right - pad ? Math.min(target.right - (view.right - pad), target.left - (view.left + pad)) : 0;
+}
+var LINE_PX = 16;
+function wheelScroll(deltaX, deltaY, deltaMode, pageWidth, shiftKey = !1) {
+  return shiftKey || Math.abs(deltaX) >= Math.abs(deltaY) ? 0 : deltaY * (deltaMode === 1 ? LINE_PX : deltaMode === 2 ? pageWidth : 1);
+}
+function cssScale(rectWidth, layoutWidth, cssZoom) {
+  if (!(rectWidth > 0) || !(layoutWidth > 0))
+    return 1;
+  let measured = rectWidth / layoutWidth, tolerance = 1 / layoutWidth + 2e-3;
+  return cssZoom !== void 0 && cssZoom > 0 && Math.abs(measured - cssZoom) <= tolerance * Math.max(1, cssZoom) ? cssZoom : Math.abs(measured - 1) <= tolerance ? 1 : measured;
+}
+
+// src/page/toolbar.tsx
 import { Fragment as Fragment11, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
-var noFocus = (event) => event.preventDefault();
+var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx16("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0;
+function zoomOf(element) {
+  let own = element.currentCSSZoom;
+  if (typeof own == "number" && own > 0)
+    return own;
+  let zoom3 = 1;
+  for (let node = element; node; node = node.parentElement) {
+    let value2 = Number.parseFloat(getComputedStyle(node).zoom);
+    value2 > 0 && (zoom3 *= value2);
+  }
+  return zoom3;
+}
+var rectScaleOf = (element) => cssScale(element.getBoundingClientRect().width, element.offsetWidth, zoomOf(element));
+function contentWidth(group, width) {
+  let items = [...group.children], gaps = Math.max(0, items.length - 1) * px(getComputedStyle(group).columnGap);
+  return items.reduce((sum, item) => {
+    let style2 = getComputedStyle(item);
+    return sum + width(item) + px(style2.marginLeft) + px(style2.marginRight);
+  }, gaps);
+}
+function sized(item, shown, textShown, width) {
+  let text = [...item.querySelectorAll(".st-label")].reduce(
+    (sum, label) => sum + width(label) + px(getComputedStyle(label.parentElement).columnGap),
+    0
+  );
+  return textShown ? { full: shown, icon: shown - text } : { full: shown + text, icon: shown };
+}
+function measureBar({ bar, brand, pickers, tools, strip }) {
+  let scale = rectScaleOf(bar), width = (element) => element.getBoundingClientRect().width / scale, style2 = getComputedStyle(bar), stripStyle = getComputedStyle(strip), chips = [...strip.children], scope = chips.reduce((sum, chip) => sum + width(chip), 0) + Math.max(0, chips.length - 1) * px(stripStyle.columnGap) + px(stripStyle.paddingLeft) + px(stripStyle.paddingRight) + px(stripStyle.borderLeftWidth) + px(stripStyle.borderRightWidth);
+  return {
+    room: width(bar) - px(style2.borderLeftWidth) - px(style2.borderRightWidth) - px(style2.paddingLeft) - px(style2.paddingRight),
+    gap: px(style2.columnGap),
+    brand: sized(brand, width(brand), bar.dataset.brand !== "icon", width),
+    pickers: pickers.map(width),
+    tools: sized(tools, contentWidth(tools, width), bar.dataset.tools !== "icons", width),
+    scope
+  };
+}
+function applyFade(strip) {
+  let fade = fadeEdges(strip.scrollLeft, strip.clientWidth, strip.scrollWidth);
+  fade ? strip.dataset.fade = fade : delete strip.dataset.fade;
+}
+function revealSelected(strip) {
+  let chip = strip.querySelector('[aria-checked="true"]');
+  if (chip && strip.scrollWidth > strip.clientWidth) {
+    let scale = rectScaleOf(strip), by = revealBy(strip.getBoundingClientRect(), chip.getBoundingClientRect(), REVEAL_PAD * scale) / scale;
+    by !== 0 && (strip.scrollLeft += by);
+  }
+  applyFade(strip);
+}
+var setFlag = (element, key, value2) => {
+  value2 === void 0 ? delete element.dataset[key] : element.dataset[key] = value2;
+};
+function layoutBar(parts, resized) {
+  let { bar, strip } = parts, layout = barLayout(measureBar(parts)), before = `${bar.dataset.layout}|${bar.dataset.brand}|${bar.dataset.tools}`;
+  bar.dataset.layout = layout.lines, setFlag(bar, "brand", layout.brandText ? void 0 : "icon"), setFlag(bar, "tools", layout.toolText ? void 0 : "icons"), resized || before !== `${bar.dataset.layout}|${bar.dataset.brand}|${bar.dataset.tools}` ? revealSelected(strip) : applyFade(strip);
+}
 function ToolButton({
   testId,
   title,
@@ -12787,46 +12906,88 @@ function ToolButton({
 }
 var ZOOM_STEP = 1.2;
 function Toolbar(props) {
-  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope);
-  return /* @__PURE__ */ jsxs14("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
-    /* @__PURE__ */ jsxs14("span", { className: "st-brand", children: [
+  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope), barRef = useRef6(null), stripRef = useRef6(null), contents = [
+    scoped.map((project) => `${project.id}\0${project.label}`).join(""),
+    props.profiles.join(""),
+    props.styles.map((style2) => style2.label).join(""),
+    props.canRearrange !== !1,
+    props.hasPanel,
+    !!props.snapUnavailable
+  ].join("");
+  return useLayoutEffect4(() => {
+    let bar = barRef.current, strip = stripRef.current, brand = bar?.querySelector(":scope > .st-brand"), tools = bar?.querySelector(":scope > .st-tools");
+    if (!bar || !strip || !brand || !tools)
+      return;
+    let parts = { bar, brand, pickers: [...bar.querySelectorAll(":scope > .st-profile")], tools, strip }, width = bar.clientWidth, live = !0;
+    layoutBar(parts, !0);
+    let observer = new ResizeObserver(() => {
+      let now2 = bar.clientWidth;
+      layoutBar(parts, now2 !== width), width = now2;
+    });
+    observer.observe(bar.parentElement ?? bar);
+    for (let element of bar.querySelectorAll('.st-label, .st-profile, .codicon, .st-scope > button, [data-testid="session-tree-zoom"]'))
+      observer.observe(element);
+    return document.fonts?.ready.then(() => {
+      live && layoutBar(parts, !1);
+    }), () => {
+      live = !1, observer.disconnect();
+    };
+  }, [contents]), useLayoutEffect4(() => {
+    stripRef.current && revealSelected(stripRef.current);
+  }, [props.scope]), /* @__PURE__ */ jsxs14("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
+    /* @__PURE__ */ jsxs14("span", { className: "st-brand", title: "Session tree", children: [
       /* @__PURE__ */ jsx16(Codicon10, { name: "type-hierarchy", size: 14 }),
-      "Session tree"
+      /* @__PURE__ */ jsx16(Label, { children: "Session tree" })
     ] }),
-    /* @__PURE__ */ jsxs14("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
-      /* @__PURE__ */ jsx16(
-        "button",
-        {
-          type: "button",
-          role: "radio",
-          "aria-checked": props.scope === ALL_PROJECTS,
-          className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
-          "data-scope": ALL_PROJECTS,
-          title: "All projects",
-          onMouseDown: noFocus,
-          onClick: () => props.onScope(ALL_PROJECTS),
-          children: "All"
-        }
-      ),
-      scoped.map((project) => /* @__PURE__ */ jsxs14(
-        "button",
-        {
-          type: "button",
-          role: "radio",
-          "aria-checked": props.scope === project.id,
-          className: props.scope === project.id ? "is-on" : void 0,
-          "data-scope": project.id,
-          title: `Project: ${project.label}`,
-          onMouseDown: noFocus,
-          onClick: () => props.onScope(project.id),
-          children: [
-            /* @__PURE__ */ jsx16(ProjectGlyph, { project, size: 11 }),
-            project.label
-          ]
+    /* @__PURE__ */ jsx16("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs14(
+      "div",
+      {
+        className: "st-scope",
+        role: "radiogroup",
+        "aria-label": "Project scope",
+        "data-testid": "session-tree-scope",
+        ref: stripRef,
+        onWheel: (event) => {
+          let strip = event.currentTarget, by = wheelScroll(event.deltaX, event.deltaY, event.deltaMode, strip.clientWidth, event.shiftKey);
+          by !== 0 && strip.scrollWidth > strip.clientWidth && (strip.scrollLeft += by);
         },
-        project.id
-      ))
-    ] }),
+        onScroll: (event) => applyFade(event.currentTarget),
+        children: [
+          /* @__PURE__ */ jsx16(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": props.scope === ALL_PROJECTS,
+              className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
+              "data-scope": ALL_PROJECTS,
+              title: "All projects",
+              onMouseDown: noFocus,
+              onClick: () => props.onScope(ALL_PROJECTS),
+              children: "All"
+            }
+          ),
+          scoped.map((project) => /* @__PURE__ */ jsxs14(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": props.scope === project.id,
+              className: props.scope === project.id ? "is-on" : void 0,
+              "data-scope": project.id,
+              title: `Project: ${project.label}`,
+              onMouseDown: noFocus,
+              onClick: () => props.onScope(project.id),
+              children: [
+                /* @__PURE__ */ jsx16(ProjectGlyph, { project, size: 11 }),
+                project.label
+              ]
+            },
+            project.id
+          ))
+        ]
+      }
+    ) }),
     /* @__PURE__ */ jsxs14("label", { className: "st-profile", title: "Profile", children: [
       /* @__PURE__ */ jsx16(Codicon10, { name: "account", size: 12 }),
       /* @__PURE__ */ jsxs14(
@@ -12874,106 +13035,111 @@ function Toolbar(props) {
         ]
       }
     ),
-    /* @__PURE__ */ jsx16("span", { className: "st-spacer" }),
-    /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-show-all",
-        title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
-        pressed: props.showAll,
-        onClick: () => props.onShowAll(!props.showAll),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "list-flat", size: 13 }),
-          "Show all"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-show-archived",
-        title: "Show archived",
-        pressed: props.showArchived,
-        onClick: () => props.onShowArchived(!props.showArchived),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "archive", size: 13 }),
-          "Archived"
-        ]
-      }
-    ),
-    props.canRearrange !== !1 && /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx16(Codicon10, { name: "refresh", size: 13 }) }),
-    /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-    props.snapUnavailable ? (
-      // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
-      /* @__PURE__ */ jsx16("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs14(
-        "button",
-        {
-          type: "button",
-          className: "st-tb is-disabled",
-          "data-testid": "session-tree-snap",
-          title: props.snapUnavailable,
-          "aria-label": `Snap to grid — ${props.snapUnavailable}`,
-          "aria-disabled": "true",
-          disabled: !0,
-          onMouseDown: noFocus,
-          children: [
-            /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-            "Snap"
-          ]
-        }
-      ) })
-    ) : /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-snap",
-        title: `Snap to grid (${props.snap ? "on" : "off"})`,
-        pressed: props.snap,
-        onClick: () => props.onSnap(!props.snap),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-          "Snap"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
-      zoomTo(clamp2(getZoom() / ZOOM_STEP));
-    }, children: "−" }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
-      zoomTo(1);
-    }, className: "st-zoom", children: /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-zoom", children: [
-      Math.round(zoom3 * 100),
-      "%"
-    ] }) }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
-      zoomTo(clamp2(getZoom() * ZOOM_STEP));
-    }, children: "+" }),
-    /* @__PURE__ */ jsxs14(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "screen-full", size: 13 }),
-      "Fit"
-    ] }),
-    props.hasPanel && /* @__PURE__ */ jsxs14(Fragment11, { children: [
+    /* @__PURE__ */ jsxs14("div", { className: "st-tools", children: [
+      /* @__PURE__ */ jsxs14("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsxs14(
+          ToolButton,
+          {
+            testId: "session-tree-show-all",
+            title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
+            pressed: props.showAll,
+            onClick: () => props.onShowAll(!props.showAll),
+            children: [
+              /* @__PURE__ */ jsx16(Codicon10, { name: "list-flat", size: 13 }),
+              /* @__PURE__ */ jsx16(Label, { children: "Show all" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs14(
+          ToolButton,
+          {
+            testId: "session-tree-show-archived",
+            title: "Show archived",
+            pressed: props.showArchived,
+            onClick: () => props.onShowArchived(!props.showArchived),
+            children: [
+              /* @__PURE__ */ jsx16(Codicon10, { name: "archive", size: 13 }),
+              /* @__PURE__ */ jsx16(Label, { children: "Archived" })
+            ]
+          }
+        ),
+        props.canRearrange !== !1 && /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx16(Codicon10, { name: "refresh", size: 13 }) })
+      ] }),
       /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-      /* @__PURE__ */ jsx16(
+      props.snapUnavailable ? (
+        // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
+        /* @__PURE__ */ jsx16("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs14(
+          "button",
+          {
+            type: "button",
+            className: "st-tb is-disabled",
+            "data-testid": "session-tree-snap",
+            title: props.snapUnavailable,
+            "aria-label": `Snap to grid — ${props.snapUnavailable}`,
+            "aria-disabled": "true",
+            disabled: !0,
+            onMouseDown: noFocus,
+            children: [
+              /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
+              /* @__PURE__ */ jsx16(Label, { children: "Snap" })
+            ]
+          }
+        ) })
+      ) : /* @__PURE__ */ jsxs14(
         ToolButton,
         {
-          testId: "session-tree-panel",
-          title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
-          pressed: props.panelOpen,
-          onClick: () => props.onPanel(!props.panelOpen),
-          children: /* @__PURE__ */ jsx16(Codicon10, { name: "layout-sidebar-right", size: 13 })
+          testId: "session-tree-snap",
+          title: `Snap to grid (${props.snap ? "on" : "off"})`,
+          pressed: props.snap,
+          onClick: () => props.onSnap(!props.snap),
+          children: [
+            /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
+            /* @__PURE__ */ jsx16(Label, { children: "Snap" })
+          ]
         }
-      )
+      ),
+      /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsxs14("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+          zoomTo(clamp2(getZoom() / ZOOM_STEP));
+        }, children: "−" }),
+        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+          zoomTo(1);
+        }, className: "st-zoom", children: /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-zoom", children: [
+          Math.round(zoom3 * 100),
+          "%"
+        ] }) }),
+        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+          zoomTo(clamp2(getZoom() * ZOOM_STEP));
+        }, children: "+" }),
+        /* @__PURE__ */ jsxs14(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+          /* @__PURE__ */ jsx16(Codicon10, { name: "screen-full", size: 13 }),
+          /* @__PURE__ */ jsx16(Label, { children: "Fit" })
+        ] })
+      ] }),
+      props.hasPanel && /* @__PURE__ */ jsxs14(Fragment11, { children: [
+        /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
+        /* @__PURE__ */ jsx16(
+          ToolButton,
+          {
+            testId: "session-tree-panel",
+            title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
+            pressed: props.panelOpen,
+            onClick: () => props.onPanel(!props.panelOpen),
+            children: /* @__PURE__ */ jsx16(Codicon10, { name: "layout-sidebar-right", size: 13 })
+          }
+        )
+      ] })
     ] })
   ] });
 }
 
 // src/page/use-live-refresh.ts
 init_define_import_meta_env();
-import { useEffect as useEffect7, useRef as useRef6 } from "react";
+import { useEffect as useEffect7, useRef as useRef7 } from "react";
 var POLL_MS2 = 1e4;
 function useLiveRefresh(ctx, refresh) {
-  let latest = useRef6(refresh);
+  let latest = useRef7(refresh);
   useEffect7(() => {
     latest.current = refresh;
   }), useEffect7(() => {
@@ -13080,7 +13246,21 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   useEffect8(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef7(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef7(null), appliedScope = useRef7(scope);
+  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), showsMap = useCallback6(
+    (viewport) => {
+      let { width, height } = flowStore.getState();
+      if (style2.frame || width <= 0 || height <= 0)
+        return !0;
+      let blocks = laidOutFamilies(model, spec).flatMap(
+        (family) => family.nodeIds.flatMap((id2) => {
+          let point = layout.positions.get(id2);
+          return point ? [{ x: point.x, y: point.y, ...style2.nodeSize }] : [];
+        })
+      );
+      return anyInView(blocks, viewport, width, height);
+    },
+    [flowStore, layout, model, spec, style2]
+  ), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
   useEffect8(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
       appliedKey.current = null;
@@ -13088,15 +13268,17 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     }
     if (appliedKey.current === null) {
       appliedKey.current = vpKey, appliedScope.current = scope;
+      let saved = prefs.viewport(vpKey);
+      saved && !showsMap(saved) && fit();
       return;
     }
     if (appliedKey.current !== vpKey) {
       let refit = !!style2.frame && appliedScope.current !== scope;
       appliedKey.current = vpKey, appliedScope.current = scope;
       let saved = prefs.viewport(vpKey);
-      saved && !refit ? flow.setViewport(saved, { duration: 0 }) : fit();
+      saved && !refit && showsMap(saved) ? flow.setViewport(saved, { duration: 0 }) : fit();
     }
-  }, [vpKey, canvasShown, prefs, flow, fit, scope, style2]);
+  }, [vpKey, canvasShown, prefs, flow, fit, scope, style2, showsMap]);
   let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback6(
     (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;
@@ -13456,6 +13638,74 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   overflow: hidden;
 }
 
+/* No item ever shrinks below its content (a button's min-width would let it): when the bar is
+   too narrow, the layout changes instead (toolbar-layout.ts: data-layout, data-brand,
+   data-tools on the bar). */
+.st-bar > * {
+  flex: none;
+}
+
+.st-bar > .st-scope-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The tools sit at the right end of their line. */
+.st-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.st-tool-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* stacked: the scope strip on its own line below the controls. wrapped: the tools on a line of
+   their own between the two (and wrapping by group if even that is too narrow). */
+.st-bar[data-layout='stacked'],
+.st-bar[data-layout='wrapped'] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 34px;
+  padding: 5px 6px;
+  row-gap: 5px;
+}
+
+.st-bar[data-layout='stacked'] > .st-scope-slot,
+.st-bar[data-layout='wrapped'] > .st-scope-slot {
+  order: 1;
+  flex: 0 0 100%;
+}
+
+.st-bar[data-layout='wrapped'] > .st-tools {
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  row-gap: 5px;
+  margin-left: 0;
+}
+
+.st-brand,
+.st-tools .st-tb {
+  position: relative;
+}
+
+/* Text given up for room: out of the flow but still laid out (the layout measures it), anchored
+   at the right edge so it adds no scrollable overflow. The tooltip keeps the name. */
+.st-bar[data-brand='icon'] .st-brand .st-label,
+.st-bar[data-tools='icons'] .st-tools .st-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .st-brand {
   display: inline-flex;
   align-items: center;
@@ -13532,8 +13782,22 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
 }
 
 .st-scope button {
+  flex: none;
   height: 20px;
   border-radius: 4px;
+}
+
+/* A scrolling strip fades out at the end(s) that hide chips. */
+.st-scope[data-fade='right'] {
+  mask-image: linear-gradient(to left, transparent, #000 18px);
+}
+
+.st-scope[data-fade='left'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px);
+}
+
+.st-scope[data-fade='both'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 18px), transparent);
 }
 
 .st-profile {

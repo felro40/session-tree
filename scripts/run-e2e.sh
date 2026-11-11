@@ -12,7 +12,7 @@ status=0
 # (stop, then move the root to <e2e root>/trash/) so every full run starts from a fresh seed.
 echo "== reset the shared test home"
 "$NODE" "$repo/scripts/e2e/test-hermes-cli.ts" reset || exit 1
-for suite in e2e-foundation e2e-core-dense e2e-actions e2e-sync e2e-swimlanes e2e-rich e2e-subway e2e-final e2e-select; do
+for suite in e2e-foundation e2e-core-dense e2e-actions e2e-sync e2e-swimlanes e2e-rich e2e-subway e2e-toolbar e2e-final e2e-select; do
   echo "== $suite"
   "$NODE" "$repo/scripts/$suite.ts" || status=1
 done

@@ -23,7 +23,7 @@ import type { Page, Request } from 'playwright-core'
 import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { moveAside } from './e2e/trash.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
@@ -306,8 +306,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  stopGateway(testHermes())
-  stopGateway(testHermes(undefined, { variant: 'actions' }))
+  stopRoleHomes(t)
   freshHome()
   mkdirSync(shots, { recursive: true })
   console.log(`e2e sync — role ${t.role}, home ${t.home}`)

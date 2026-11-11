@@ -35,7 +35,9 @@ message pair to ID through ``append_message`` (a chat turn; card-5 review r2 B1-
 session and stamps its last activity now (fixture-only direct SQL on timestamps, like the backdating),
 so the core list's 300 s ``is_active`` heuristic reports it. ``--rich`` (card 6) adds the Rich cards
 family ``st-rich-*`` whose last messages hold Markdown, a code block, HTML-looking text, a very long
-message, a tool call and a long tool run (``seed_rich``). Prints a JSON manifest of what it created.
+message, a tool call and a long tool run (``seed_rich``). ``--more-projects`` adds a ``/branch`` pair
+in each of six more repos (``seed_more_projects``: the toolbar e2e's long scope strip). Prints a JSON
+manifest of what it created.
 
 Every row carries the owner stamp a signed-in Webapp tab gives the rows it creates (``user_id`` = the
 host owner's subject, see ``OWNER``), so the core accepts that login's sidebar edits of them.
@@ -348,6 +350,28 @@ def seed_rich(db: SessionDB, *, age_h: float = 30) -> dict:
     return out
 
 
+#: ``--more-projects``: extra repos, so the toolbar's scope strip is as long as a real one.
+MORE_PROJECTS = ("momentless-dynamics", "session-tree", "sandbox", "mdesign-element", "control-loops",
+                 "lumen-notes")
+
+
+def seed_more_projects(db: SessionDB) -> dict:
+    """``--more-projects``: one ``/branch`` pair in each of ``MORE_PROJECTS`` (real git repos, so
+    ``projects.tree`` lists them), the toolbar e2e's long scope strip."""
+    s = Seeder(db, "default")
+    out: dict = {}
+    for i, name in enumerate(MORE_PROJECTS):
+        path = PROJECTS_DIR / name
+        path.mkdir(parents=True, exist_ok=True)
+        if not (path / ".git").exists():
+            subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)
+        (path / "README.md").write_text(f"# {name}\n", encoding="utf-8")
+        root = s.session(f"st-more-{i}", f"Work in {name}", project=name, age_h=10 + i)
+        s.branch(f"st-more-{i}-b", f"Branch of {name}", root, project=name, age_h=9 + i)
+        out[name] = [root, f"st-more-{i}-b"]
+    return out
+
+
 def seed_profile(name: str, count: int, *, families: int = 0) -> dict:
     home = HOME / "profiles" / name
     if not home.is_dir():
@@ -474,6 +498,16 @@ def main() -> None:
                 print(json.dumps({"rich": "st-rich-root", "created": False}))
                 return
             print(json.dumps({**seed_rich(db), "created": True}))
+        finally:
+            db.close()
+        return
+    if "--more-projects" in sys.argv:
+        db = SessionDB(db_path=HOME / "state.db")
+        try:
+            if db.get_session("st-more-0") is not None:
+                print(json.dumps({"more_projects": list(MORE_PROJECTS), "created": False}))
+                return
+            print(json.dumps({"more_projects": seed_more_projects(db), "created": True}))
         finally:
             db.close()
         return
