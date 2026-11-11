@@ -66,10 +66,10 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect4 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect5 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
       var value2 = getSnapshot(), _useState = useState9({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
-      return useLayoutEffect4(
+      return useLayoutEffect5(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
@@ -119,9 +119,9 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef8 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef9 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef8(null);
+      var instRef = useRef9(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
@@ -3258,7 +3258,7 @@ var oppositePosition = {
   [Position.Bottom]: Position.Top
 }, isEdgeBase = (element) => !!element && typeof element == "object" && "id" in element && "source" in element && "target" in element, isNodeBase = (element) => !!element && typeof element == "object" && "id" in element && "position" in element && !("source" in element) && !("target" in element), isInternalNodeBase = (element) => !!element && typeof element == "object" && "id" in element && "internals" in element && !("source" in element) && !("target" in element);
 var getNodePositionWithOrigin = (node, nodeOrigin = [0, 0]) => {
-  let { width, height } = getNodeDimensions(node), origin = node.origin ?? nodeOrigin, offsetX = width * origin[0], offsetY = height * origin[1];
+  let { width: width2, height } = getNodeDimensions(node), origin = node.origin ?? nodeOrigin, offsetX = width2 * origin[0], offsetY = height * origin[1];
   return {
     x: node.position.x - offsetX,
     y: node.position.y - offsetY
@@ -3282,7 +3282,7 @@ var getNodePositionWithOrigin = (node, nodeOrigin = [0, 0]) => {
     let { measured, selectable = !0, hidden = !1 } = node;
     if (excludeNonSelectableNodes && !selectable || hidden)
       continue;
-    let width = measured.width ?? node.width ?? node.initialWidth ?? 0, height = measured.height ?? node.height ?? node.initialHeight ?? 0, { x, y } = node.internals.positionAbsolute, overlappingArea = getRectsOverlappingArea(paneX, paneY, paneWidth, paneHeight, x, y, width, height), area2 = width * height, partiallyVisible = partially && overlappingArea > 0;
+    let width2 = measured.width ?? node.width ?? node.initialWidth ?? 0, height = measured.height ?? node.height ?? node.initialHeight ?? 0, { x, y } = node.internals.positionAbsolute, overlappingArea = getRectsOverlappingArea(paneX, paneY, paneWidth, paneHeight, x, y, width2, height), area2 = width2 * height, partiallyVisible = partially && overlappingArea > 0;
     (!node.internals.handleBounds || partiallyVisible || overlappingArea >= area2 || node.dragging) && visibleNodes.push(node);
   }
   return visibleNodes;
@@ -3297,17 +3297,17 @@ function getFitViewNodes(nodeLookup, options) {
   return nodeLookup.forEach((n) => {
     let isVisible;
     if (options?.includeHiddenNodes) {
-      let { width, height } = getNodeDimensions(n);
-      isVisible = width > 0 && height > 0;
+      let { width: width2, height } = getNodeDimensions(n);
+      isVisible = width2 > 0 && height > 0;
     } else
       isVisible = !!(n.measured.width && n.measured.height && !n.hidden);
     isVisible && (!optionNodeIds || optionNodeIds.has(n.id)) && fitViewNodes.set(n.id, n);
   }), fitViewNodes;
 }
-async function fitViewport({ nodes, width, height, panZoom, minZoom, maxZoom }, options) {
+async function fitViewport({ nodes, width: width2, height, panZoom, minZoom, maxZoom }, options) {
   if (nodes.size === 0)
     return !0;
-  let nodesToFit = getFitViewNodes(nodes, options), bounds = getInternalNodesBounds(nodesToFit), viewport = getViewportForBounds(bounds, width, height, options?.minZoom ?? minZoom, options?.maxZoom ?? maxZoom, options?.padding ?? 0.1);
+  let nodesToFit = getFitViewNodes(nodes, options), bounds = getInternalNodesBounds(nodesToFit), viewport = getViewportForBounds(bounds, width2, height, options?.minZoom ?? minZoom, options?.maxZoom ?? maxZoom, options?.padding ?? 0.1);
   return await panZoom.setViewport(viewport, {
     duration: options?.duration,
     ease: options?.ease,
@@ -3380,10 +3380,10 @@ var calcAutoPanVelocity = (value2, min, max) => value2 < min ? clamp(Math.abs(va
   y: Math.min(box1.y, box2.y),
   x2: Math.max(box1.x2, box2.x2),
   y2: Math.max(box1.y2, box2.y2)
-}), rectToBox = ({ x, y, width, height }) => ({
+}), rectToBox = ({ x, y, width: width2, height }) => ({
   x,
   y,
-  x2: x + width,
+  x2: x + width2,
   y2: y + height
 }), boxToRect = ({ x, y, x2, y2 }) => ({
   x,
@@ -3438,9 +3438,9 @@ function parsePadding(padding, viewport) {
   }
   return console.error(`The padding value "${padding}" is invalid. Please provide a number or a string with a valid unit (px or %).`), 0;
 }
-function parsePaddings(padding, width, height) {
+function parsePaddings(padding, width2, height) {
   if (typeof padding == "string" || typeof padding == "number") {
-    let paddingY = parsePadding(padding, height), paddingX = parsePadding(padding, width);
+    let paddingY = parsePadding(padding, height), paddingX = parsePadding(padding, width2);
     return {
       top: paddingY,
       right: paddingX,
@@ -3451,13 +3451,13 @@ function parsePaddings(padding, width, height) {
     };
   }
   if (typeof padding == "object") {
-    let top = parsePadding(padding.top ?? padding.y ?? 0, height), bottom = parsePadding(padding.bottom ?? padding.y ?? 0, height), left = parsePadding(padding.left ?? padding.x ?? 0, width), right = parsePadding(padding.right ?? padding.x ?? 0, width);
+    let top = parsePadding(padding.top ?? padding.y ?? 0, height), bottom = parsePadding(padding.bottom ?? padding.y ?? 0, height), left = parsePadding(padding.left ?? padding.x ?? 0, width2), right = parsePadding(padding.right ?? padding.x ?? 0, width2);
     return { top, right, bottom, left, x: left + right, y: top + bottom };
   }
   return { top: 0, right: 0, bottom: 0, left: 0, x: 0, y: 0 };
 }
-function calculateAppliedPaddings(bounds, x, y, zoom3, width, height) {
-  let { x: left, y: top } = rendererPointToPoint(bounds, [x, y, zoom3]), { x: boundRight, y: boundBottom } = rendererPointToPoint({ x: bounds.x + bounds.width, y: bounds.y + bounds.height }, [x, y, zoom3]), right = width - boundRight, bottom = height - boundBottom;
+function calculateAppliedPaddings(bounds, x, y, zoom3, width2, height) {
+  let { x: left, y: top } = rendererPointToPoint(bounds, [x, y, zoom3]), { x: boundRight, y: boundBottom } = rendererPointToPoint({ x: bounds.x + bounds.width, y: bounds.y + bounds.height }, [x, y, zoom3]), right = width2 - boundRight, bottom = height - boundBottom;
   return {
     left: Math.floor(left),
     top: Math.floor(top),
@@ -3465,8 +3465,8 @@ function calculateAppliedPaddings(bounds, x, y, zoom3, width, height) {
     bottom: Math.floor(bottom)
   };
 }
-var getViewportForBounds = (bounds, width, height, minZoom, maxZoom, padding) => {
-  let p = parsePaddings(padding, width, height), xZoom = (width - p.x) / bounds.width, yZoom = (height - p.y) / bounds.height, zoom3 = Math.min(xZoom, yZoom), clampedZoom = clamp(zoom3, minZoom, maxZoom), boundsCenterX = bounds.x + bounds.width / 2, boundsCenterY = bounds.y + bounds.height / 2, x = width / 2 - boundsCenterX * clampedZoom, y = height / 2 - boundsCenterY * clampedZoom, newPadding = calculateAppliedPaddings(bounds, x, y, clampedZoom, width, height), offset = {
+var getViewportForBounds = (bounds, width2, height, minZoom, maxZoom, padding) => {
+  let p = parsePaddings(padding, width2, height), xZoom = (width2 - p.x) / bounds.width, yZoom = (height - p.y) / bounds.height, zoom3 = Math.min(xZoom, yZoom), clampedZoom = clamp(zoom3, minZoom, maxZoom), boundsCenterX = bounds.x + bounds.width / 2, boundsCenterY = bounds.y + bounds.height / 2, x = width2 / 2 - boundsCenterX * clampedZoom, y = height / 2 - boundsCenterY * clampedZoom, newPadding = calculateAppliedPaddings(bounds, x, y, clampedZoom, width2, height), offset = {
     left: Math.min(newPadding.left - p.left, 0),
     top: Math.min(newPadding.top - p.top, 0),
     right: Math.min(newPadding.right - p.right, 0),
@@ -3617,13 +3617,13 @@ function getElevatedEdgeZIndex({ sourceNode, targetNode, selected: selected2 = !
   let edgeZ = elevateOnSelect && selected2 ? zIndex + 1e3 : zIndex, nodeZ = Math.max(sourceNode.parentId || elevateOnSelect && sourceNode.selected ? sourceNode.internals.z : 0, targetNode.parentId || elevateOnSelect && targetNode.selected ? targetNode.internals.z : 0);
   return edgeZ + nodeZ;
 }
-function isEdgeVisible({ sourceNode, targetNode, width, height, transform: transform2 }) {
+function isEdgeVisible({ sourceNode, targetNode, width: width2, height, transform: transform2 }) {
   let edgeBox = getBoundsOfBoxes(nodeToBox(sourceNode), nodeToBox(targetNode));
   edgeBox.x === edgeBox.x2 && (edgeBox.x2 += 1), edgeBox.y === edgeBox.y2 && (edgeBox.y2 += 1);
   let viewRect = {
     x: -transform2[0] / transform2[2],
     y: -transform2[1] / transform2[2],
-    width: width / transform2[2],
+    width: width2 / transform2[2],
     height: height / transform2[2]
   };
   return getOverlappingArea(viewRect, boxToRect(edgeBox)) > 0;
@@ -3761,16 +3761,16 @@ function toHandleBounds(handles) {
   };
 }
 function getHandlePosition(node, handle, fallbackPosition = Position.Left, center = !1) {
-  let x = (handle?.x ?? 0) + node.internals.positionAbsolute.x, y = (handle?.y ?? 0) + node.internals.positionAbsolute.y, { width, height } = handle ?? getNodeDimensions(node);
+  let x = (handle?.x ?? 0) + node.internals.positionAbsolute.x, y = (handle?.y ?? 0) + node.internals.positionAbsolute.y, { width: width2, height } = handle ?? getNodeDimensions(node);
   if (center)
-    return { x: x + width / 2, y: y + height / 2 };
+    return { x: x + width2 / 2, y: y + height / 2 };
   switch (handle?.position ?? fallbackPosition) {
     case Position.Top:
-      return { x: x + width / 2, y };
+      return { x: x + width2 / 2, y };
     case Position.Right:
-      return { x: x + width, y: y + height / 2 };
+      return { x: x + width2, y: y + height / 2 };
     case Position.Bottom:
-      return { x: x + width / 2, y: y + height };
+      return { x: x + width2 / 2, y: y + height };
     case Position.Left:
       return { x, y: y + height / 2 };
   }
@@ -4000,7 +4000,7 @@ function updateNodeInternals(updates, nodeLookup, parentLookup, domNode, nodeOri
   }
   return { changes, updatedInternals };
 }
-async function panBy({ delta, panZoom, transform: transform2, translateExtent, width, height }) {
+async function panBy({ delta, panZoom, transform: transform2, translateExtent, width: width2, height }) {
   if (!panZoom || !delta.x && !delta.y)
     return !1;
   let nextViewport = await panZoom.setViewportConstrained({
@@ -4009,7 +4009,7 @@ async function panBy({ delta, panZoom, transform: transform2, translateExtent, w
     zoom: transform2[2]
   }, [
     [0, 0],
-    [width, height]
+    [width2, height]
   ], translateExtent);
   return !!nextViewport && (nextViewport.x !== transform2[0] || nextViewport.y !== transform2[1] || nextViewport.k !== transform2[2]);
 }
@@ -4391,7 +4391,7 @@ var XYHandle = {
 };
 function XYMinimap({ domNode, panZoom, getTransform, getViewScale }) {
   let selection2 = select(domNode);
-  function update({ translateExtent, width, height, zoomStep = 1, pannable = !0, zoomable = !0, inversePan = !1 }) {
+  function update({ translateExtent, width: width2, height, zoomStep = 1, pannable = !0, zoomable = !0, inversePan = !1 }) {
     let zoomHandler = (event) => {
       if (event.sourceEvent.type !== "wheel" || !panZoom)
         return;
@@ -4416,7 +4416,7 @@ function XYMinimap({ domNode, panZoom, getTransform, getViewScale }) {
         y: transform2[1] - panDelta[1] * moveScale
       }, extent = [
         [0, 0],
-        [width, height]
+        [width2, height]
       ];
       panZoom.setViewportConstrained({
         x: position.x,
@@ -4677,8 +4677,8 @@ var ResizeControlVariant;
 (function(ResizeControlVariant2) {
   ResizeControlVariant2.Line = "line", ResizeControlVariant2.Handle = "handle";
 })(ResizeControlVariant || (ResizeControlVariant = {}));
-function getResizeDirection({ width, prevWidth, height, prevHeight, affectsX, affectsY }) {
-  let deltaWidth = width - prevWidth, deltaHeight = height - prevHeight, direction = [deltaWidth > 0 ? 1 : deltaWidth < 0 ? -1 : 0, deltaHeight > 0 ? 1 : deltaHeight < 0 ? -1 : 0];
+function getResizeDirection({ width: width2, prevWidth, height, prevHeight, affectsX, affectsY }) {
+  let deltaWidth = width2 - prevWidth, deltaHeight = height - prevHeight, direction = [deltaWidth > 0 ? 1 : deltaWidth < 0 ? -1 : 0, deltaHeight > 0 ? 1 : deltaHeight < 0 ? -1 : 0];
   return deltaWidth && affectsX && (direction[0] = direction[0] * -1), deltaHeight && affectsY && (direction[1] = direction[1] * -1), direction;
 }
 function getControlDirection(controlPosition) {
@@ -4752,10 +4752,10 @@ var initPrevValues = { width: 0, height: 0, x: 0, y: 0 }, initStartValues = {
   aspectRatio: 1
 };
 function nodeToChildExtent(child, parent, nodeOrigin) {
-  let x = parent.position.x + child.position.x, y = parent.position.y + child.position.y, width = child.measured.width ?? 0, height = child.measured.height ?? 0, originOffsetX = nodeOrigin[0] * width, originOffsetY = nodeOrigin[1] * height;
+  let x = parent.position.x + child.position.x, y = parent.position.y + child.position.y, width2 = child.measured.width ?? 0, height = child.measured.height ?? 0, originOffsetX = nodeOrigin[0] * width2, originOffsetY = nodeOrigin[1] * height;
   return [
     [x - originOffsetX, y - originOffsetY],
-    [x + width - originOffsetX, y + height - originOffsetY]
+    [x + width2 - originOffsetX, y + height - originOffsetY]
   ];
 }
 function XYResizer({ domNode, nodeId, getStoreItems, onChange, onEnd }) {
@@ -4825,7 +4825,7 @@ function XYResizer({ domNode, nodeId, getStoreItems, onChange, onEnd }) {
       }), childChanges = [];
       if (!node)
         return;
-      let { x: prevX, y: prevY, width: prevWidth, height: prevHeight } = prevValues, change = {}, nodeOrigin = node.origin ?? storeNodeOrigin, { width, height, x, y } = getDimensionsAfterResize(startValues, params.controlDirection, pointerPosition, params.boundaries, params.keepAspectRatio, nodeOrigin, nodeExtent, childExtent), isWidthChange = width !== prevWidth, isHeightChange = height !== prevHeight, isXPosChange = x !== prevX && isWidthChange, isYPosChange = y !== prevY && isHeightChange;
+      let { x: prevX, y: prevY, width: prevWidth, height: prevHeight } = prevValues, change = {}, nodeOrigin = node.origin ?? storeNodeOrigin, { width: width2, height, x, y } = getDimensionsAfterResize(startValues, params.controlDirection, pointerPosition, params.boundaries, params.keepAspectRatio, nodeOrigin, nodeExtent, childExtent), isWidthChange = width2 !== prevWidth, isHeightChange = height !== prevHeight, isXPosChange = x !== prevX && isWidthChange, isYPosChange = y !== prevY && isHeightChange;
       if (!isXPosChange && !isYPosChange && !isWidthChange && !isHeightChange)
         return;
       let lastValid = {
@@ -4841,11 +4841,11 @@ function XYResizer({ domNode, nodeId, getStoreItems, onChange, onEnd }) {
         let xChange = x - prevX, yChange = y - prevY;
         for (let childNode of childNodes)
           childNode.position = {
-            x: childNode.position.x - xChange + nodeOrigin[0] * (width - prevWidth),
+            x: childNode.position.x - xChange + nodeOrigin[0] * (width2 - prevWidth),
             y: childNode.position.y - yChange + nodeOrigin[1] * (height - prevHeight)
           }, childChanges.push(childNode);
       }
-      if ((isWidthChange || isHeightChange) && (change.width = isWidthChange && (!params.resizeDirection || params.resizeDirection === "horizontal") ? width : prevValues.width, change.height = isHeightChange && (!params.resizeDirection || params.resizeDirection === "vertical") ? height : prevValues.height, prevValues.width = change.width, prevValues.height = change.height), parentNode && node.expandParent) {
+      if ((isWidthChange || isHeightChange) && (change.width = isWidthChange && (!params.resizeDirection || params.resizeDirection === "horizontal") ? width2 : prevValues.width, change.height = isHeightChange && (!params.resizeDirection || params.resizeDirection === "vertical") ? height : prevValues.height, prevValues.width = change.width, prevValues.height = change.height), parentNode && node.expandParent) {
         let xLimit = nodeOrigin[0] * (change.width ?? 0);
         change.x && change.x < xLimit && (prevValues.x = xLimit, startValues.x = startValues.x - (change.x - xLimit));
         let yLimit = nodeOrigin[1] * (change.height ?? 0);
@@ -5223,7 +5223,7 @@ var useViewportHelper = () => {
     },
     setCenter: async (x, y, options) => store.getState().setCenter(x, y, options),
     fitBounds: async (bounds, options) => {
-      let { width, height, minZoom, maxZoom, panZoom } = store.getState(), viewport = getViewportForBounds(bounds, width, height, minZoom, maxZoom, options?.padding ?? 0.1);
+      let { width: width2, height, minZoom, maxZoom, panZoom } = store.getState(), viewport = getViewportForBounds(bounds, width2, height, minZoom, maxZoom, options?.padding ?? 0.1);
       return panZoom ? (await panZoom.setViewport(viewport, {
         duration: options?.duration,
         ease: options?.ease,
@@ -6048,24 +6048,24 @@ function getNodeInlineStyleDimensions(node) {
   };
 }
 var selector$e = (s) => {
-  let { width, height, x, y } = getInternalNodesBounds(s.nodeLookup, {
+  let { width: width2, height, x, y } = getInternalNodesBounds(s.nodeLookup, {
     filter: (node) => !!node.selected
   });
   return {
-    width: isNumeric(width) ? width : null,
+    width: isNumeric(width2) ? width2 : null,
     height: isNumeric(height) ? height : null,
     userSelectionActive: s.userSelectionActive,
     transformString: `translate(${s.transform[0]}px,${s.transform[1]}px) scale(${s.transform[2]}) translate(${x}px,${y}px)`
   };
 };
 function NodesSelection({ onSelectionContextMenu, noPanClassName, disableKeyboardA11y }) {
-  let store = useStoreApi(), { width, height, transformString, userSelectionActive } = useStore(selector$e, shallow$1), moveSelectedNodes = useMoveSelectedNodes(), nodeRef = useRef(null);
+  let store = useStoreApi(), { width: width2, height, transformString, userSelectionActive } = useStore(selector$e, shallow$1), moveSelectedNodes = useMoveSelectedNodes(), nodeRef = useRef(null);
   useEffect(() => {
     disableKeyboardA11y || nodeRef.current?.focus({
       preventScroll: !0
     });
   }, [disableKeyboardA11y]);
-  let shouldRender = !userSelectionActive && width !== null && height !== null;
+  let shouldRender = !userSelectionActive && width2 !== null && height !== null;
   if (useDrag({
     nodeRef,
     disabled: !shouldRender
@@ -6083,7 +6083,7 @@ function NodesSelection({ onSelectionContextMenu, noPanClassName, disableKeyboar
   return jsx("div", { className: cc(["react-flow__nodesselection", "react-flow__container", noPanClassName]), style: {
     transform: transformString
   }, children: jsx("div", { ref: nodeRef, className: "react-flow__nodesselection-rect", onContextMenu, tabIndex: disableKeyboardA11y ? void 0 : -1, onKeyDown: disableKeyboardA11y ? void 0 : onKeyDown, style: {
-    width,
+    width: width2,
     height
   } }) });
 }
@@ -6183,10 +6183,10 @@ function NodeWrapper({ id: id2, onClick, onMouseEnter, onMouseMove, onMouseLeave
   }, onFocus = () => {
     if (disableKeyboardA11y || !nodeRef.current?.matches(":focus-visible"))
       return;
-    let { transform: transform2, width, height, autoPanOnNodeFocus, setCenter } = store.getState();
+    let { transform: transform2, width: width2, height, autoPanOnNodeFocus, setCenter } = store.getState();
     if (!autoPanOnNodeFocus)
       return;
-    getNodesInside(/* @__PURE__ */ new Map([[id2, node]]), { x: 0, y: 0, width, height }, transform2, !0).length > 0 || setCenter(node.position.x + nodeDimensions.width / 2, node.position.y + nodeDimensions.height / 2, {
+    getNodesInside(/* @__PURE__ */ new Map([[id2, node]]), { x: 0, y: 0, width: width2, height }, transform2, !0).length > 0 || setCenter(node.position.x + nodeDimensions.width / 2, node.position.y + nodeDimensions.height / 2, {
       zoom: transform2[2]
     });
   };
@@ -6292,9 +6292,9 @@ function useMarkerSymbol(type) {
   let store = useStoreApi();
   return useMemo(() => Object.prototype.hasOwnProperty.call(MarkerSymbols, type) ? MarkerSymbols[type] : (store.getState().onError?.("009", errorMessages.error009(type)), null), [type]);
 }
-var Marker = ({ id: id2, type, color: color2, width = 12.5, height = 12.5, markerUnits = "strokeWidth", strokeWidth, orient = "auto-start-reverse" }) => {
+var Marker = ({ id: id2, type, color: color2, width: width2 = 12.5, height = 12.5, markerUnits = "strokeWidth", strokeWidth, orient = "auto-start-reverse" }) => {
   let Symbol2 = useMarkerSymbol(type);
-  return Symbol2 ? jsx("marker", { className: "react-flow__arrowhead", id: id2, markerWidth: `${width}`, markerHeight: `${height}`, viewBox: "-10 -10 20 20", markerUnits, orient, refX: "0", refY: "0", children: jsx(Symbol2, { color: color2, strokeWidth }) }) : null;
+  return Symbol2 ? jsx("marker", { className: "react-flow__arrowhead", id: id2, markerWidth: `${width2}`, markerHeight: `${height}`, viewBox: "-10 -10 20 20", markerUnits, orient, refX: "0", refY: "0", children: jsx(Symbol2, { color: color2, strokeWidth }) }) : null;
 }, MarkerDefinitions = ({ defaultColor, rfId }) => {
   let edges = useStore((s) => s.edges), defaultEdgeOptions = useStore((s) => s.defaultEdgeOptions), markers = useMemo(() => createMarkerIds(edges, {
     id: rfId,
@@ -6606,8 +6606,8 @@ var selector$7 = (s) => ({
   height: s.height
 });
 function ConnectionLineWrapper({ containerStyle: containerStyle2, style: style2, type, component }) {
-  let { nodesConnectable, width, height, isValid, inProgress } = useStore(selector$7, shallow$1);
-  return !(width && nodesConnectable && inProgress) ? null : jsx("svg", { style: containerStyle2, width, height, className: "react-flow__connectionline react-flow__container", children: jsx("g", { className: cc(["react-flow__connection", getConnectionStatus(isValid)]), children: jsx(ConnectionLine, { style: style2, type, CustomComponent: component, isValid }) }) });
+  let { nodesConnectable, width: width2, height, isValid, inProgress } = useStore(selector$7, shallow$1);
+  return !(width2 && nodesConnectable && inProgress) ? null : jsx("svg", { style: containerStyle2, width: width2, height, className: "react-flow__connectionline react-flow__container", children: jsx("g", { className: cc(["react-flow__connection", getConnectionStatus(isValid)]), children: jsx(ConnectionLine, { style: style2, type, CustomComponent: component, isValid }) }) });
 }
 var ConnectionLine = ({ style: style2, type = ConnectionLineType.Bezier, CustomComponent, isValid }) => {
   let { inProgress, from, fromNode, fromHandle, fromPosition, to, toNode, toHandle, toPosition, pointer: pointer2 } = useConnection();
@@ -6660,7 +6660,7 @@ function GraphViewComponent({ nodeTypes, edgeTypes, onInit, onNodeClick, onEdgeC
   return useNodeOrEdgeTypesWarning(nodeTypes), useNodeOrEdgeTypesWarning(edgeTypes), useStylesLoadedWarning(), useOnInitHandler(onInit), useViewportSync(viewport), jsx(FlowRenderer, { onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneContextMenu, onPaneScroll, paneClickDistance, deleteKeyCode, selectionKeyCode, selectionOnDrag, selectionMode, onSelectionStart, onSelectionEnd, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, elementsSelectable, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, defaultViewport: defaultViewport2, translateExtent, minZoom, maxZoom, onSelectionContextMenu, preventScrolling, noDragClassName, noWheelClassName, noPanClassName, disableKeyboardA11y, onViewportChange, isControlledViewport: !!viewport, children: jsxs(Viewport, { children: [jsx(EdgeRenderer, { edgeTypes, onEdgeClick, onEdgeDoubleClick, onReconnect, onReconnectStart, onReconnectEnd, onlyRenderVisibleElements, onEdgeContextMenu, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noPanClassName, disableKeyboardA11y, rfId }), jsx(ConnectionLineWrapper, { style: connectionLineStyle, type: connectionLineType, component: connectionLineComponent, containerStyle: connectionLineContainerStyle }), jsx("div", { className: "react-flow__edgelabel-renderer" }), jsx(NodeRenderer, { nodeTypes, onNodeClick, onNodeDoubleClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, nodeClickDistance, onlyRenderVisibleElements, noPanClassName, noDragClassName, disableKeyboardA11y, nodeExtent, rfId, nodesDraggable }), jsx("div", { className: "react-flow__viewport-portal" })] }) });
 }
 GraphViewComponent.displayName = "GraphView";
-var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", "https://reactflow.dev/"), getInitialState = ({ nodes, edges, defaultNodes, defaultEdges, width, height, fitView, fitViewOptions, minZoom = 0.5, maxZoom = 2, nodeOrigin, nodeExtent, zIndexMode = "basic" } = {}) => {
+var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", "https://reactflow.dev/"), getInitialState = ({ nodes, edges, defaultNodes, defaultEdges, width: width2, height, fitView, fitViewOptions, minZoom = 0.5, maxZoom = 2, nodeOrigin, nodeExtent, zIndexMode = "basic" } = {}) => {
   let nodeLookup = /* @__PURE__ */ new Map(), parentLookup = /* @__PURE__ */ new Map(), connectionLookup = /* @__PURE__ */ new Map(), edgeLookup = /* @__PURE__ */ new Map(), storeEdges = defaultEdges ?? edges ?? [], storeNodes = defaultNodes ?? nodes ?? [], storeNodeOrigin = nodeOrigin ?? [0, 0], storeNodeExtent = nodeExtent ?? infiniteExtent;
   updateConnectionLookup(connectionLookup, edgeLookup, storeEdges);
   let { nodesInitialized } = adoptUserNodes(storeNodes, nodeLookup, parentLookup, {
@@ -6668,15 +6668,15 @@ var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", 
     nodeExtent: storeNodeExtent,
     zIndexMode
   }), transform2 = [0, 0, 1];
-  if (fitView && width && height) {
+  if (fitView && width2 && height) {
     let bounds = getInternalNodesBounds(nodeLookup, {
       filter: (node) => !!((node.width || node.initialWidth) && (node.height || node.initialHeight))
-    }), { x, y, zoom: zoom3 } = getViewportForBounds(bounds, width, height, minZoom, maxZoom, fitViewOptions?.padding ?? 0.1);
+    }), { x, y, zoom: zoom3 } = getViewportForBounds(bounds, width2, height, minZoom, maxZoom, fitViewOptions?.padding ?? 0.1);
     transform2 = [x, y, zoom3];
   }
   return {
     rfId: "1",
-    width: width ?? 0,
+    width: width2 ?? 0,
     height: height ?? 0,
     transform: transform2,
     nodes: storeNodes,
@@ -6761,12 +6761,12 @@ var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", 
     onClickConnectStart: void 0,
     onClickConnectEnd: void 0
   };
-}, createStore2 = ({ nodes, edges, defaultNodes, defaultEdges, width, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode }) => createWithEqualityFn((set3, get3) => {
+}, createStore2 = ({ nodes, edges, defaultNodes, defaultEdges, width: width2, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode }) => createWithEqualityFn((set3, get3) => {
   async function resolveFitView() {
-    let { nodeLookup, panZoom, fitViewOptions: fitViewOptions2, fitViewResolver, width: width2, height: height2, minZoom: minZoom2, maxZoom: maxZoom2 } = get3();
+    let { nodeLookup, panZoom, fitViewOptions: fitViewOptions2, fitViewResolver, width: width3, height: height2, minZoom: minZoom2, maxZoom: maxZoom2 } = get3();
     panZoom && (await fitViewport({
       nodes: nodeLookup,
-      width: width2,
+      width: width3,
       height: height2,
       panZoom,
       minZoom: minZoom2,
@@ -6777,7 +6777,7 @@ var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", 
     ...getInitialState({
       nodes,
       edges,
-      width,
+      width: width2,
       height,
       fitView,
       fitViewOptions,
@@ -6938,16 +6938,16 @@ var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", 
       }), set3({ nodeExtent: nextNodeExtent }));
     },
     panBy: (delta) => {
-      let { transform: transform2, width: width2, height: height2, panZoom, translateExtent } = get3();
-      return panBy({ delta, panZoom, transform: transform2, translateExtent, width: width2, height: height2 });
+      let { transform: transform2, width: width3, height: height2, panZoom, translateExtent } = get3();
+      return panBy({ delta, panZoom, transform: transform2, translateExtent, width: width3, height: height2 });
     },
     setCenter: async (x, y, options) => {
-      let { width: width2, height: height2, maxZoom: maxZoom2, panZoom } = get3();
+      let { width: width3, height: height2, maxZoom: maxZoom2, panZoom } = get3();
       if (!panZoom)
         return !1;
       let nextZoom = typeof options?.zoom < "u" ? options.zoom : maxZoom2;
       return await panZoom.setViewport({
-        x: width2 / 2 - x * nextZoom,
+        x: width3 / 2 - x * nextZoom,
         y: height2 / 2 - y * nextZoom,
         zoom: nextZoom
       }, { duration: options?.duration, ease: options?.ease, interpolate: options?.interpolate }), !0;
@@ -6963,13 +6963,13 @@ var GraphView = memo(GraphViewComponent), devWarn = createDevWarn("React Flow", 
     reset: () => set3({ ...getInitialState() })
   };
 }, Object.is);
-function ReactFlowProvider({ initialNodes: nodes, initialEdges: edges, defaultNodes, defaultEdges, initialWidth: width, initialHeight: height, initialMinZoom: minZoom, initialMaxZoom: maxZoom, initialFitViewOptions: fitViewOptions, fitView, nodeOrigin, nodeExtent, zIndexMode, children: children2 }) {
+function ReactFlowProvider({ initialNodes: nodes, initialEdges: edges, defaultNodes, defaultEdges, initialWidth: width2, initialHeight: height, initialMinZoom: minZoom, initialMaxZoom: maxZoom, initialFitViewOptions: fitViewOptions, fitView, nodeOrigin, nodeExtent, zIndexMode, children: children2 }) {
   let [store] = useState(() => createStore2({
     nodes,
     edges,
     defaultNodes,
     defaultEdges,
-    width,
+    width: width2,
     height,
     fitView,
     minZoom,
@@ -6981,8 +6981,8 @@ function ReactFlowProvider({ initialNodes: nodes, initialEdges: edges, defaultNo
   }));
   return jsx(Provider$1, { value: store, children: jsx(BatchProvider, { children: jsx(HandleConfigProvider, { children: children2 }) }) });
 }
-function Wrapper({ children: children2, nodes, edges, defaultNodes, defaultEdges, width, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode }) {
-  return useContext(StoreContext) ? jsx(Fragment, { children: children2 }) : jsx(ReactFlowProvider, { initialNodes: nodes, initialEdges: edges, defaultNodes, defaultEdges, initialWidth: width, initialHeight: height, fitView, initialFitViewOptions: fitViewOptions, initialMinZoom: minZoom, initialMaxZoom: maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: children2 });
+function Wrapper({ children: children2, nodes, edges, defaultNodes, defaultEdges, width: width2, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode }) {
+  return useContext(StoreContext) ? jsx(Fragment, { children: children2 }) : jsx(ReactFlowProvider, { initialNodes: nodes, initialEdges: edges, defaultNodes, defaultEdges, initialWidth: width2, initialHeight: height, fitView, initialFitViewOptions: fitViewOptions, initialMinZoom: minZoom, initialMaxZoom: maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: children2 });
 }
 var wrapperStyle = {
   width: "100%",
@@ -6991,11 +6991,11 @@ var wrapperStyle = {
   position: "relative",
   zIndex: 0
 };
-function ReactFlow({ nodes, edges, defaultNodes, defaultEdges, className, nodeTypes, edgeTypes, onNodeClick, onEdgeClick, onInit, onMove, onMoveStart, onMoveEnd, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, onNodeDragStart, onNodeDrag, onNodeDragStop, onNodesDelete, onEdgesDelete, onDelete, onSelectionChange, onSelectionDragStart, onSelectionDrag, onSelectionDragStop, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onBeforeDelete, connectionMode, connectionLineType = ConnectionLineType.Bezier, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, deleteKeyCode = "Backspace", selectionKeyCode = "Shift", selectionOnDrag = !1, selectionMode = SelectionMode.Full, panActivationKeyCode = "Space", multiSelectionKeyCode = isMacOs() ? "Meta" : "Control", zoomActivationKeyCode = isMacOs() ? "Meta" : "Control", snapToGrid, snapGrid, onlyRenderVisibleElements = !1, selectNodesOnDrag, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, nodeOrigin = defaultNodeOrigin, edgesFocusable, edgesReconnectable, elementsSelectable = !0, defaultViewport: defaultViewport$1 = defaultViewport, minZoom = 0.5, maxZoom = 2, translateExtent = infiniteExtent, preventScrolling = !0, nodeExtent, defaultMarkerColor = "#b1b1b7", zoomOnScroll = !0, zoomOnPinch = !0, panOnScroll = !1, panOnScrollSpeed = 0.5, panOnScrollMode = PanOnScrollMode.Free, zoomOnDoubleClick = !0, panOnDrag = !0, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance = 1, nodeClickDistance = 0, children: children2, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius = 10, onNodesChange, onEdgesChange, noDragClassName = "nodrag", noWheelClassName = "nowheel", noPanClassName = "nopan", fitView, fitViewOptions, connectOnClick, attributionPosition, proOptions, defaultEdgeOptions, elevateNodesOnSelect = !0, elevateEdgesOnSelect = !1, disableKeyboardA11y = !1, autoPanOnConnect, autoPanOnNodeDrag, autoPanOnSelection = !0, autoPanSpeed, connectionRadius, isValidConnection, onError, style: style2, id: id2, nodeDragThreshold, connectionDragThreshold, viewport, onViewportChange, width, height, colorMode = "light", debug, onScroll, ariaLabelConfig, zIndexMode = "basic", ...rest }, ref) {
+function ReactFlow({ nodes, edges, defaultNodes, defaultEdges, className, nodeTypes, edgeTypes, onNodeClick, onEdgeClick, onInit, onMove, onMoveStart, onMoveEnd, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, onNodeDragStart, onNodeDrag, onNodeDragStop, onNodesDelete, onEdgesDelete, onDelete, onSelectionChange, onSelectionDragStart, onSelectionDrag, onSelectionDragStop, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onBeforeDelete, connectionMode, connectionLineType = ConnectionLineType.Bezier, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, deleteKeyCode = "Backspace", selectionKeyCode = "Shift", selectionOnDrag = !1, selectionMode = SelectionMode.Full, panActivationKeyCode = "Space", multiSelectionKeyCode = isMacOs() ? "Meta" : "Control", zoomActivationKeyCode = isMacOs() ? "Meta" : "Control", snapToGrid, snapGrid, onlyRenderVisibleElements = !1, selectNodesOnDrag, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, nodeOrigin = defaultNodeOrigin, edgesFocusable, edgesReconnectable, elementsSelectable = !0, defaultViewport: defaultViewport$1 = defaultViewport, minZoom = 0.5, maxZoom = 2, translateExtent = infiniteExtent, preventScrolling = !0, nodeExtent, defaultMarkerColor = "#b1b1b7", zoomOnScroll = !0, zoomOnPinch = !0, panOnScroll = !1, panOnScrollSpeed = 0.5, panOnScrollMode = PanOnScrollMode.Free, zoomOnDoubleClick = !0, panOnDrag = !0, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance = 1, nodeClickDistance = 0, children: children2, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius = 10, onNodesChange, onEdgesChange, noDragClassName = "nodrag", noWheelClassName = "nowheel", noPanClassName = "nopan", fitView, fitViewOptions, connectOnClick, attributionPosition, proOptions, defaultEdgeOptions, elevateNodesOnSelect = !0, elevateEdgesOnSelect = !1, disableKeyboardA11y = !1, autoPanOnConnect, autoPanOnNodeDrag, autoPanOnSelection = !0, autoPanSpeed, connectionRadius, isValidConnection, onError, style: style2, id: id2, nodeDragThreshold, connectionDragThreshold, viewport, onViewportChange, width: width2, height, colorMode = "light", debug, onScroll, ariaLabelConfig, zIndexMode = "basic", ...rest }, ref) {
   let rfId = id2 || "1", colorModeClassName = useColorModeClass(colorMode), wrapperOnScroll = useCallback((e) => {
     e.currentTarget.scrollTo({ top: 0, left: 0, behavior: "instant" }), onScroll?.(e);
   }, [onScroll]);
-  return jsx("div", { "data-testid": "rf__wrapper", ...rest, onScroll: wrapperOnScroll, style: { ...style2, ...wrapperStyle }, ref, className: cc(["react-flow", className, colorModeClassName]), id: id2, role: "application", children: jsxs(Wrapper, { nodes, edges, width, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: [jsx(StoreUpdater, { nodes, edges, defaultNodes, defaultEdges, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, edgesFocusable, edgesReconnectable, elementsSelectable, elevateNodesOnSelect, elevateEdgesOnSelect, minZoom, maxZoom, nodeExtent, onNodesChange, onEdgesChange, snapToGrid, snapGrid, connectionMode, translateExtent, connectOnClick, defaultEdgeOptions, fitView, fitViewOptions, onNodesDelete, onEdgesDelete, onDelete, onNodeDragStart, onNodeDrag, onNodeDragStop, onSelectionDrag, onSelectionDragStart, onSelectionDragStop, onMove, onMoveStart, onMoveEnd, noPanClassName, nodeOrigin, rfId, autoPanOnConnect, autoPanOnNodeDrag, autoPanSpeed, onError, connectionRadius, isValidConnection, selectNodesOnDrag, nodeDragThreshold, connectionDragThreshold, onBeforeDelete, debug, ariaLabelConfig, zIndexMode }), jsx(GraphView, { onInit, onNodeClick, onEdgeClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, nodeTypes, edgeTypes, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, deleteKeyCode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, onlyRenderVisibleElements, defaultViewport: defaultViewport$1, translateExtent, minZoom, maxZoom, preventScrolling, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noDragClassName, noWheelClassName, noPanClassName, rfId, disableKeyboardA11y, nodeExtent, viewport, onViewportChange, nodesDraggable }), jsx(SelectionListener, { onSelectionChange }), children2, jsx(Attribution, { proOptions, position: attributionPosition }), jsx(A11yDescriptions, { rfId, disableKeyboardA11y })] }) });
+  return jsx("div", { "data-testid": "rf__wrapper", ...rest, onScroll: wrapperOnScroll, style: { ...style2, ...wrapperStyle }, ref, className: cc(["react-flow", className, colorModeClassName]), id: id2, role: "application", children: jsxs(Wrapper, { nodes, edges, width: width2, height, fitView, fitViewOptions, minZoom, maxZoom, nodeOrigin, nodeExtent, zIndexMode, children: [jsx(StoreUpdater, { nodes, edges, defaultNodes, defaultEdges, onConnect, onConnectStart, onConnectEnd, onClickConnectStart, onClickConnectEnd, nodesDraggable, autoPanOnNodeFocus, nodesConnectable, nodesFocusable, edgesFocusable, edgesReconnectable, elementsSelectable, elevateNodesOnSelect, elevateEdgesOnSelect, minZoom, maxZoom, nodeExtent, onNodesChange, onEdgesChange, snapToGrid, snapGrid, connectionMode, translateExtent, connectOnClick, defaultEdgeOptions, fitView, fitViewOptions, onNodesDelete, onEdgesDelete, onDelete, onNodeDragStart, onNodeDrag, onNodeDragStop, onSelectionDrag, onSelectionDragStart, onSelectionDragStop, onMove, onMoveStart, onMoveEnd, noPanClassName, nodeOrigin, rfId, autoPanOnConnect, autoPanOnNodeDrag, autoPanSpeed, onError, connectionRadius, isValidConnection, selectNodesOnDrag, nodeDragThreshold, connectionDragThreshold, onBeforeDelete, debug, ariaLabelConfig, zIndexMode }), jsx(GraphView, { onInit, onNodeClick, onEdgeClick, onNodeMouseEnter, onNodeMouseMove, onNodeMouseLeave, onNodeContextMenu, onNodeDoubleClick, nodeTypes, edgeTypes, connectionLineType, connectionLineStyle, connectionLineComponent, connectionLineContainerStyle, selectionKeyCode, selectionOnDrag, selectionMode, deleteKeyCode, multiSelectionKeyCode, panActivationKeyCode, zoomActivationKeyCode, onlyRenderVisibleElements, defaultViewport: defaultViewport$1, translateExtent, minZoom, maxZoom, preventScrolling, zoomOnScroll, zoomOnPinch, zoomOnDoubleClick, panOnScroll, panOnScrollSpeed, panOnScrollMode, panOnDrag, autoPanOnSelection, onPaneClick, onPaneMouseEnter, onPaneMouseMove, onPaneMouseLeave, onPaneScroll, onPaneContextMenu, paneClickDistance, nodeClickDistance, onSelectionContextMenu, onSelectionStart, onSelectionEnd, onReconnect, onReconnectStart, onReconnectEnd, onEdgeContextMenu, onEdgeDoubleClick, onEdgeMouseEnter, onEdgeMouseMove, onEdgeMouseLeave, reconnectRadius, defaultMarkerColor, noDragClassName, noWheelClassName, noPanClassName, rfId, disableKeyboardA11y, nodeExtent, viewport, onViewportChange, nodesDraggable }), jsx(SelectionListener, { onSelectionChange }), children2, jsx(Attribution, { proOptions, position: attributionPosition }), jsx(A11yDescriptions, { rfId, disableKeyboardA11y })] }) });
 }
 var index = fixedForwardRef(ReactFlow), selector$6 = (s) => s.domNode?.querySelector(".react-flow__edgelabel-renderer");
 function EdgeLabelRenderer({ children: children2 }) {
@@ -7099,9 +7099,9 @@ function ControlsComponent({ style: style2, showZoom = !0, showFitView = !0, sho
 }
 ControlsComponent.displayName = "Controls";
 var Controls = memo(ControlsComponent);
-function MiniMapNodeComponent({ id: id2, x, y, width, height, style: style2, color: color2, strokeColor, strokeWidth, className, borderRadius, shapeRendering, selected: selected2, onClick }) {
+function MiniMapNodeComponent({ id: id2, x, y, width: width2, height, style: style2, color: color2, strokeColor, strokeWidth, className, borderRadius, shapeRendering, selected: selected2, onClick }) {
   let { background, backgroundColor } = style2 || {}, fill = color2 || background || backgroundColor;
-  return jsx("rect", { className: cc(["react-flow__minimap-node", { selected: selected2 }, className]), x, y, rx: borderRadius, ry: borderRadius, width, height, style: {
+  return jsx("rect", { className: cc(["react-flow__minimap-node", { selected: selected2 }, className]), x, y, rx: borderRadius, ry: borderRadius, width: width2, height, style: {
     fill,
     stroke: strokeColor,
     strokeWidth
@@ -7134,20 +7134,20 @@ function MiniMapNodes({
   )) });
 }
 function NodeComponentWrapperInner({ id: id2, nodeColorFunc, nodeStrokeColorFunc, nodeClassNameFunc, nodeBorderRadius, nodeStrokeWidth, shapeRendering, NodeComponent, onClick }) {
-  let { node, x, y, width, height } = useStore((s) => {
+  let { node, x, y, width: width2, height } = useStore((s) => {
     let node2 = s.nodeLookup.get(id2);
     if (!node2)
       return { node: void 0, x: 0, y: 0, width: 0, height: 0 };
-    let userNode = node2.internals.userNode, { x: x2, y: y2 } = node2.internals.positionAbsolute, { width: width2, height: height2 } = getNodeDimensions(userNode);
+    let userNode = node2.internals.userNode, { x: x2, y: y2 } = node2.internals.positionAbsolute, { width: width3, height: height2 } = getNodeDimensions(userNode);
     return {
       node: userNode,
       x: x2,
       y: y2,
-      width: width2,
+      width: width3,
       height: height2
     };
   }, shallow$1);
-  return !node || node.hidden || !nodeHasDimensions(node) ? null : jsx(NodeComponent, { x, y, width, height, style: node.style, selected: !!node.selected, className: nodeClassNameFunc(node), color: nodeColorFunc(node), borderRadius: nodeBorderRadius, strokeColor: nodeStrokeColorFunc(node), strokeWidth: nodeStrokeWidth, shapeRendering, onClick, id: node.id });
+  return !node || node.hidden || !nodeHasDimensions(node) ? null : jsx(NodeComponent, { x, y, width: width2, height, style: node.style, selected: !!node.selected, className: nodeClassNameFunc(node), color: nodeColorFunc(node), borderRadius: nodeBorderRadius, strokeColor: nodeStrokeColorFunc(node), strokeWidth: nodeStrokeWidth, shapeRendering, onClick, id: node.id });
 }
 var NodeComponentWrapper = memo(NodeComponentWrapperInner), MiniMapNodes$1 = memo(MiniMapNodes), defaultWidth = 200, defaultHeight = 150, filterHidden = (node) => !node.hidden, selector$1 = (s) => {
   let viewBB = {
@@ -7199,7 +7199,7 @@ function MiniMapComponent({
   zoomStep = 1,
   offsetScale = 5
 }) {
-  let store = useStoreApi(), svg = useRef(null), { boundingRect, panZoom, viewBB, rfId, translateExtent, flowWidth, flowHeight, ariaLabelConfig } = useStore(selector$1, areEqual), elementWidth = style2?.width ?? defaultWidth, elementHeight = style2?.height ?? defaultHeight, scaledWidth = boundingRect.width / elementWidth, scaledHeight = boundingRect.height / elementHeight, viewScale = Math.max(scaledWidth, scaledHeight), viewWidth = viewScale * elementWidth, viewHeight = viewScale * elementHeight, offset = offsetScale * viewScale, x = boundingRect.x - (viewWidth - boundingRect.width) / 2 - offset, y = boundingRect.y - (viewHeight - boundingRect.height) / 2 - offset, width = viewWidth + offset * 2, height = viewHeight + offset * 2, labelledBy = `${ARIA_LABEL_KEY}-${rfId}`, viewScaleRef = useRef(0), minimapInstance = useRef();
+  let store = useStoreApi(), svg = useRef(null), { boundingRect, panZoom, viewBB, rfId, translateExtent, flowWidth, flowHeight, ariaLabelConfig } = useStore(selector$1, areEqual), elementWidth = style2?.width ?? defaultWidth, elementHeight = style2?.height ?? defaultHeight, scaledWidth = boundingRect.width / elementWidth, scaledHeight = boundingRect.height / elementHeight, viewScale = Math.max(scaledWidth, scaledHeight), viewWidth = viewScale * elementWidth, viewHeight = viewScale * elementHeight, offset = offsetScale * viewScale, x = boundingRect.x - (viewWidth - boundingRect.width) / 2 - offset, y = boundingRect.y - (viewHeight - boundingRect.height) / 2 - offset, width2 = viewWidth + offset * 2, height = viewHeight + offset * 2, labelledBy = `${ARIA_LABEL_KEY}-${rfId}`, viewScaleRef = useRef(0), minimapInstance = useRef();
   viewScaleRef.current = viewScale, useEffect(() => {
     let currentPanZoom = store.getState().panZoom;
     if (svg.current && currentPanZoom)
@@ -7238,7 +7238,7 @@ function MiniMapComponent({
     "--xy-minimap-node-background-color-props": typeof nodeColor == "string" ? nodeColor : void 0,
     "--xy-minimap-node-stroke-color-props": typeof nodeStrokeColor == "string" ? nodeStrokeColor : void 0,
     "--xy-minimap-node-stroke-width-props": typeof nodeStrokeWidth == "number" ? nodeStrokeWidth : void 0
-  }, className: cc(["react-flow__minimap", className]), "data-testid": "rf__minimap", children: jsxs("svg", { width: elementWidth, height: elementHeight, viewBox: `${x} ${y} ${width} ${height}`, className: "react-flow__minimap-svg", role: "img", "aria-labelledby": labelledBy, ref: svg, onClick: onSvgClick, children: [_ariaLabel && jsx("title", { id: labelledBy, children: _ariaLabel }), jsx(MiniMapNodes$1, { onClick: onSvgNodeClick, nodeColor, nodeStrokeColor, nodeBorderRadius, nodeClassName, nodeStrokeWidth, nodeComponent }), jsx("path", { className: "react-flow__minimap-mask", d: `M${x - offset},${y - offset}h${width + offset * 2}v${height + offset * 2}h${-width - offset * 2}z
+  }, className: cc(["react-flow__minimap", className]), "data-testid": "rf__minimap", children: jsxs("svg", { width: elementWidth, height: elementHeight, viewBox: `${x} ${y} ${width2} ${height}`, className: "react-flow__minimap-svg", role: "img", "aria-labelledby": labelledBy, ref: svg, onClick: onSvgClick, children: [_ariaLabel && jsx("title", { id: labelledBy, children: _ariaLabel }), jsx(MiniMapNodes$1, { onClick: onSvgNodeClick, nodeColor, nodeStrokeColor, nodeBorderRadius, nodeClassName, nodeStrokeWidth, nodeComponent }), jsx("path", { className: "react-flow__minimap-mask", d: `M${x - offset},${y - offset}h${width2 + offset * 2}v${height + offset * 2}h${-width2 - offset * 2}z
         M${viewBB.x},${viewBB.y}h${viewBB.width}v${viewBB.height}h${-viewBB.width}z`, fillRule: "evenodd", pointerEvents: "none" })] }) });
 }
 MiniMapComponent.displayName = "MiniMap";
@@ -7267,19 +7267,19 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
         onChange: (change, childChanges) => {
           let { triggerNodeChanges, nodeLookup, parentLookup, nodeOrigin } = store.getState(), changes = [], nextPosition = { x: change.x, y: change.y }, node = nodeLookup.get(id2);
           if (node && node.expandParent && node.parentId) {
-            let origin = node.origin ?? nodeOrigin, width = change.width ?? node.measured.width ?? 0, height = change.height ?? node.measured.height ?? 0, child = {
+            let origin = node.origin ?? nodeOrigin, width2 = change.width ?? node.measured.width ?? 0, height = change.height ?? node.measured.height ?? 0, child = {
               id: node.id,
               parentId: node.parentId,
               rect: {
-                width,
+                width: width2,
                 height,
                 ...evaluateAbsolutePosition({
                   x: change.x ?? node.position.x,
                   y: change.y ?? node.position.y
-                }, { width, height }, node.parentId, nodeLookup, origin)
+                }, { width: width2, height }, node.parentId, nodeLookup, origin)
               }
             }, parentExpandChanges = handleExpandParent([child], nodeLookup, parentLookup, nodeOrigin);
-            changes.push(...parentExpandChanges), nextPosition.x = change.x ? Math.max(origin[0] * width, change.x) : void 0, nextPosition.y = change.y ? Math.max(origin[1] * height, change.y) : void 0;
+            changes.push(...parentExpandChanges), nextPosition.x = change.x ? Math.max(origin[0] * width2, change.x) : void 0, nextPosition.y = change.y ? Math.max(origin[1] * height, change.y) : void 0;
           }
           if (nextPosition.x !== void 0 && nextPosition.y !== void 0) {
             let positionChange = {
@@ -7311,13 +7311,13 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
           }
           triggerNodeChanges(changes);
         },
-        onEnd: ({ width, height }) => {
+        onEnd: ({ width: width2, height }) => {
           let dimensionChange = {
             id: id2,
             type: "dimensions",
             resizing: !1,
             dimensions: {
-              width,
+              width: width2,
               height
             }
           };
@@ -7362,7 +7362,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef7, useState as useState8 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef8, useState as useState8 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -8575,11 +8575,11 @@ function BlockHandles({ resetX }) {
     )
   ] });
 }
-function blockHandles(width, height, resetX) {
+function blockHandles(width2, height, resetX) {
   return [
     { type: "target", position: Position.Left, x: 0, y: height / 2, width: 1, height: 1 },
     { id: "up", type: "target", position: Position.Top, x: resetX, y: 0, width: 1, height: 1 },
-    { type: "source", position: Position.Right, x: width - 1, y: height / 2, width: 1, height: 1 },
+    { type: "source", position: Position.Right, x: width2 - 1, y: height / 2, width: 1, height: 1 },
     { id: "down", type: "source", position: Position.Bottom, x: resetX, y: height - 1, width: 1, height: 1 }
   ];
 }
@@ -9234,10 +9234,10 @@ var DetailsStore = class {
       this.inflight.get(item.key) === item.sig && (this.inflight.delete(item.key), this.failedAt.set(item.key, now2));
   }
 };
-function nearIds(rects, view, width, height, margin = 0.5) {
-  if (!(view.zoom > 0) || !(width > 0) || !(height > 0))
+function nearIds(rects, view, width2, height, margin = 0.5) {
+  if (!(view.zoom > 0) || !(width2 > 0) || !(height > 0))
     return [];
-  let w = width / view.zoom, h = height / view.zoom, left = -view.x / view.zoom - w * margin, top = -view.y / view.zoom - h * margin, right = left + w * (1 + 2 * margin), bottom = top + h * (1 + 2 * margin), out = [];
+  let w = width2 / view.zoom, h = height / view.zoom, left = -view.x / view.zoom - w * margin, top = -view.y / view.zoom - h * margin, right = left + w * (1 + 2 * margin), bottom = top + h * (1 + 2 * margin), out = [];
   for (let [id2, rect] of rects)
     rect.x < right && rect.x + rect.width > left && rect.y < bottom && rect.y + rect.height > top && out.push(id2);
   return out;
@@ -9281,9 +9281,9 @@ function tokenBarWidth(tokens, max) {
 function shortModel(model) {
   return ((model ?? "").trim().split("/").pop() ?? "").replace(/^claude-/, "") || "—";
 }
-function sparkPoints(values, width = 50, height = 18) {
+function sparkPoints(values, width2 = 50, height = 18) {
   let max = Math.max(1, ...values), n = Math.max(1, values.length - 1);
-  return values.map((value2, index2) => ({ x: 2 + index2 * (width - 4) / n, y: height - 2 - value2 / max * (height - 5) }));
+  return values.map((value2, index2) => ({ x: 2 + index2 * (width2 - 4) / n, y: height - 2 - value2 / max * (height - 5) }));
 }
 var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 function activityTooltip(values, days) {
@@ -9591,12 +9591,12 @@ function useViewportDetails({ model, positions, shown, nodeSize, nowMs }) {
   let env = useRichEnv(), ctx = usePluginCtx(), flow = useStoreApi(), latest = useRef2({ model, positions, shown, nodeSize, nowMs }), timer2 = useRef2(void 0), run = useCallback2(() => {
     if (timer2.current = void 0, !env)
       return;
-    let { model: model2, positions: positions2, shown: shown2, nodeSize: nodeSize2, nowMs: nowMs2 } = latest.current, { transform: transform2, width, height } = flow.getState(), rects = [];
+    let { model: model2, positions: positions2, shown: shown2, nodeSize: nodeSize2, nowMs: nowMs2 } = latest.current, { transform: transform2, width: width2, height } = flow.getState(), rects = [];
     for (let id2 of shown2) {
       let point = positions2.get(id2), node = model2.nodeById.get(id2);
       point && node?.kind === "session" && node.row && rects.push([id2, { x: point.x, y: point.y, width: nodeSize2.width, height: nodeSize2.height }]);
     }
-    let items = nearIds(rects, { x: transform2[0], y: transform2[1], zoom: transform2[2] }, width, height).map((id2) => wanted(model2.nodeById.get(id2), nowMs2)).filter((item) => !!item);
+    let items = nearIds(rects, { x: transform2[0], y: transform2[1], zoom: transform2[2] }, width2, height).map((id2) => wanted(model2.nodeById.get(id2), nowMs2)).filter((item) => !!item);
     env.store.want(items);
   }, [env, flow]), schedule2 = useCallback2(
     (ms) => {
@@ -9721,12 +9721,12 @@ function transposedSpec(spec) {
 function familyLocal(model, family, spec) {
   if (family.nodeIds.length === 1)
     return { family, positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), width: spec.nodeWidth, height: spec.nodeHeight };
-  let local2 = layoutFamily(model, family, transposedSpec(spec)), positions = /* @__PURE__ */ new Map(), width = 0, height = 0;
+  let local2 = layoutFamily(model, family, transposedSpec(spec)), positions = /* @__PURE__ */ new Map(), width2 = 0, height = 0;
   for (let [id2, point] of local2.positions) {
     let canvas = { x: point.y, y: point.x };
-    positions.set(id2, canvas), width = Math.max(width, canvas.x + spec.nodeWidth), height = Math.max(height, canvas.y + spec.nodeHeight);
+    positions.set(id2, canvas), width2 = Math.max(width2, canvas.x + spec.nodeWidth), height = Math.max(height, canvas.y + spec.nodeHeight);
   }
-  return { family, positions, width, height };
+  return { family, positions, width: width2, height };
 }
 var groupOf = (family) => family.projectId ?? NO_PROJECT_ID, labelOf = (projectId) => ({ id: groupKey(projectId === NO_PROJECT_ID ? void 0 : projectId), projectId: projectId === NO_PROJECT_ID ? void 0 : projectId }), CONTINUATION2 = "";
 function freshRichLayout(model, spec) {
@@ -10776,8 +10776,8 @@ function swimNowX(layout, nowMs) {
   let { firstDay, today, todayStart, todayEnd } = layout.window, fraction = Math.min(Math.max((nowMs / 1e3 - todayStart) / Math.max(1, todayEnd - todayStart), 0), 1);
   return (today - firstDay) * 140 + fraction * 140;
 }
-function fitSwimlanes(layout, width, height, minZoom) {
-  let { minX, maxX, height: contentHeight } = layout.bounds, availableWidth = Math.max(60, width - 168 - 16), availableHeight = Math.max(60, height - 26 - 12), zoom3 = Math.min(1.15, Math.max(minZoom, Math.min(availableWidth / Math.max(1, maxX - minX), availableHeight / Math.max(1, contentHeight))));
+function fitSwimlanes(layout, width2, height, minZoom) {
+  let { minX, maxX, height: contentHeight } = layout.bounds, availableWidth = Math.max(60, width2 - 168 - 16), availableHeight = Math.max(60, height - 26 - 12), zoom3 = Math.min(1.15, Math.max(minZoom, Math.min(availableWidth / Math.max(1, maxX - minX), availableHeight / Math.max(1, contentHeight))));
   return { x: 176 - minX * zoom3, y: 32, zoom: zoom3 };
 }
 
@@ -11070,11 +11070,11 @@ function SinglesPopover({
     return () => offs.forEach((off) => off());
   }, [ctx, onClose]), !lane || lane.collapsed || !lane.chip)
     return null;
-  let width = 260, placement = popoverPlacement(active.box, paneHeight, lane.singleIds.length), style2 = {
-    left: Math.max(174, active.box.x + active.box.width - width),
+  let width2 = 260, placement = popoverPlacement(active.box, paneHeight, lane.singleIds.length), style2 = {
+    left: Math.max(174, active.box.x + active.box.width - width2),
     ...placement.above ? { bottom: paneHeight - placement.edge } : { top: placement.edge },
     maxHeight: placement.maxHeight,
-    width
+    width: width2
   };
   return /* @__PURE__ */ jsxs10(
     "div",
@@ -11205,7 +11205,7 @@ function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLane, act
 var swimFrame = {
   compute(input) {
     let layout = layoutSwimlanes(input);
-    return Object.assign(layout, { fit: (width, height, minZoom) => fitSwimlanes(layout, width, height, minZoom) });
+    return Object.assign(layout, { fit: (width2, height, minZoom) => fitSwimlanes(layout, width2, height, minZoom) });
   },
   extraNodes(frameLayout) {
     return frameLayout.lanes.filter((lane) => lane.chip).map((lane) => ({
@@ -11497,7 +11497,7 @@ function StyleProviders({ model, children: children2 }) {
 }
 function GraphCanvas(props) {
   let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
-    let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
+    let { width: width2, height } = style2.nodeSize, handles = blockHandles(width2, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
       point && nodes2.push({
@@ -11537,9 +11537,9 @@ function GraphCanvas(props) {
         selectable: !node.readOnly,
         connectable: !1,
         selected: node.id === selectedId && !node.readOnly,
-        width,
+        width: width2,
         height,
-        measured: { width, height },
+        measured: { width: width2, height },
         handles
       });
     }
@@ -12577,8 +12577,73 @@ function usePrefsVersion(prefs) {
 // src/page/toolbar.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon10 } from "@hermes/plugin-sdk";
+import { useLayoutEffect as useLayoutEffect4, useRef as useRef6 } from "react";
+
+// src/page/toolbar-layout.ts
+init_define_import_meta_env();
+function barLayout({ room, gap, brand, pickers, tools, scope }) {
+  let fits = (width2) => width2 <= room + 0.5, left = (brandWidth) => brandWidth + pickers.reduce((sum, each) => sum + each + gap, 0);
+  return fits(left(brand.full) + gap + scope + gap + tools.full) ? { lines: "row", brandText: !0, toolText: !0 } : fits(left(brand.full) + gap + tools.full) ? { lines: "stacked", brandText: !0, toolText: !0 } : fits(left(brand.icon) + gap + tools.full) ? { lines: "stacked", brandText: !1, toolText: !0 } : fits(left(brand.icon) + gap + tools.icon) ? { lines: "stacked", brandText: !1, toolText: !1 } : { lines: "wrapped", brandText: fits(left(brand.full)), toolText: fits(tools.full) };
+}
+function fadeEdges(scrollLeft, clientWidth, scrollWidth) {
+  let left = scrollLeft > 0.5, right = scrollLeft + clientWidth < scrollWidth - 0.5;
+  return left && right ? "both" : left ? "left" : right ? "right" : void 0;
+}
+function revealBy(view, target, pad) {
+  return target.left < view.left + pad ? target.left - (view.left + pad) : target.right > view.right - pad ? Math.min(target.right - (view.right - pad), target.left - (view.left + pad)) : 0;
+}
+var LINE_PX = 16;
+function wheelScroll(deltaX, deltaY, deltaMode, pageWidth) {
+  return Math.abs(deltaX) >= Math.abs(deltaY) ? 0 : deltaY * (deltaMode === 1 ? LINE_PX : deltaMode === 2 ? pageWidth : 1);
+}
+
+// src/page/toolbar.tsx
 import { Fragment as Fragment11, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
-var noFocus = (event) => event.preventDefault();
+var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx16("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0, width = (element) => element.getBoundingClientRect().width;
+function contentWidth(group) {
+  let items = [...group.children], gaps = Math.max(0, items.length - 1) * px(getComputedStyle(group).columnGap);
+  return items.reduce((sum, item) => {
+    let style2 = getComputedStyle(item);
+    return sum + width(item) + px(style2.marginLeft) + px(style2.marginRight);
+  }, gaps);
+}
+function sized(item, shown, textShown) {
+  let text = [...item.querySelectorAll(".st-label")].reduce(
+    (sum, label) => sum + width(label) + px(getComputedStyle(label.parentElement).columnGap),
+    0
+  );
+  return textShown ? { full: shown, icon: shown - text } : { full: shown + text, icon: shown };
+}
+function measureBar({ bar, brand, pickers, tools, strip }) {
+  let style2 = getComputedStyle(bar), stripStyle = getComputedStyle(strip), chips = [...strip.children], scope = chips.reduce((sum, chip) => sum + width(chip), 0) + Math.max(0, chips.length - 1) * px(stripStyle.columnGap) + px(stripStyle.paddingLeft) + px(stripStyle.paddingRight) + px(stripStyle.borderLeftWidth) + px(stripStyle.borderRightWidth);
+  return {
+    room: bar.clientWidth - px(style2.paddingLeft) - px(style2.paddingRight),
+    gap: px(style2.columnGap),
+    brand: sized(brand, width(brand), bar.dataset.brand !== "icon"),
+    pickers: pickers.map(width),
+    tools: sized(tools, contentWidth(tools), bar.dataset.tools !== "icons"),
+    scope
+  };
+}
+function applyFade(strip) {
+  let fade = fadeEdges(strip.scrollLeft, strip.clientWidth, strip.scrollWidth);
+  fade ? strip.dataset.fade = fade : delete strip.dataset.fade;
+}
+function revealSelected(strip) {
+  let chip = strip.querySelector('[aria-checked="true"]');
+  if (chip && strip.scrollWidth > strip.clientWidth) {
+    let by = revealBy(strip.getBoundingClientRect(), chip.getBoundingClientRect(), REVEAL_PAD);
+    by !== 0 && (strip.scrollLeft += by);
+  }
+  applyFade(strip);
+}
+var setFlag = (element, key, value2) => {
+  value2 === void 0 ? delete element.dataset[key] : element.dataset[key] = value2;
+};
+function layoutBar(parts, resized) {
+  let { bar, strip } = parts, layout = barLayout(measureBar(parts)), before = `${bar.dataset.layout}|${bar.dataset.brand}|${bar.dataset.tools}`;
+  bar.dataset.layout = layout.lines, setFlag(bar, "brand", layout.brandText ? void 0 : "icon"), setFlag(bar, "tools", layout.toolText ? void 0 : "icons"), resized || before !== `${bar.dataset.layout}|${bar.dataset.brand}|${bar.dataset.tools}` ? revealSelected(strip) : applyFade(strip);
+}
 function ToolButton({
   testId,
   title,
@@ -12604,46 +12669,88 @@ function ToolButton({
 }
 var ZOOM_STEP = 1.2;
 function Toolbar(props) {
-  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope);
-  return /* @__PURE__ */ jsxs14("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
-    /* @__PURE__ */ jsxs14("span", { className: "st-brand", children: [
+  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope), barRef = useRef6(null), stripRef = useRef6(null), contents = [
+    scoped.map((project) => `${project.id}\0${project.label}`).join(""),
+    props.profiles.join(""),
+    props.styles.map((style2) => style2.label).join(""),
+    props.canRearrange !== !1,
+    props.hasPanel,
+    !!props.snapUnavailable
+  ].join("");
+  return useLayoutEffect4(() => {
+    let bar = barRef.current, strip = stripRef.current, brand = bar?.querySelector(":scope > .st-brand"), tools = bar?.querySelector(":scope > .st-tools");
+    if (!bar || !strip || !brand || !tools)
+      return;
+    let parts = { bar, brand, pickers: [...bar.querySelectorAll(":scope > .st-profile")], tools, strip }, width2 = bar.clientWidth, live = !0;
+    layoutBar(parts, !0);
+    let observer = new ResizeObserver(() => {
+      let now2 = bar.clientWidth;
+      layoutBar(parts, now2 !== width2), width2 = now2;
+    });
+    observer.observe(bar.parentElement ?? bar);
+    for (let element of bar.querySelectorAll('.st-label, .st-profile, .codicon, .st-scope > button, [data-testid="session-tree-zoom"]'))
+      observer.observe(element);
+    return document.fonts?.ready.then(() => {
+      live && layoutBar(parts, !1);
+    }), () => {
+      live = !1, observer.disconnect();
+    };
+  }, [contents]), useLayoutEffect4(() => {
+    stripRef.current && revealSelected(stripRef.current);
+  }, [props.scope]), /* @__PURE__ */ jsxs14("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
+    /* @__PURE__ */ jsxs14("span", { className: "st-brand", title: "Session tree", children: [
       /* @__PURE__ */ jsx16(Codicon10, { name: "type-hierarchy", size: 14 }),
-      "Session tree"
+      /* @__PURE__ */ jsx16(Label, { children: "Session tree" })
     ] }),
-    /* @__PURE__ */ jsxs14("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
-      /* @__PURE__ */ jsx16(
-        "button",
-        {
-          type: "button",
-          role: "radio",
-          "aria-checked": props.scope === ALL_PROJECTS,
-          className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
-          "data-scope": ALL_PROJECTS,
-          title: "All projects",
-          onMouseDown: noFocus,
-          onClick: () => props.onScope(ALL_PROJECTS),
-          children: "All"
-        }
-      ),
-      scoped.map((project) => /* @__PURE__ */ jsxs14(
-        "button",
-        {
-          type: "button",
-          role: "radio",
-          "aria-checked": props.scope === project.id,
-          className: props.scope === project.id ? "is-on" : void 0,
-          "data-scope": project.id,
-          title: `Project: ${project.label}`,
-          onMouseDown: noFocus,
-          onClick: () => props.onScope(project.id),
-          children: [
-            /* @__PURE__ */ jsx16(ProjectGlyph, { project, size: 11 }),
-            project.label
-          ]
+    /* @__PURE__ */ jsx16("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs14(
+      "div",
+      {
+        className: "st-scope",
+        role: "radiogroup",
+        "aria-label": "Project scope",
+        "data-testid": "session-tree-scope",
+        ref: stripRef,
+        onWheel: (event) => {
+          let strip = event.currentTarget, by = wheelScroll(event.deltaX, event.deltaY, event.deltaMode, strip.clientWidth);
+          by !== 0 && strip.scrollWidth > strip.clientWidth && (strip.scrollLeft += by);
         },
-        project.id
-      ))
-    ] }),
+        onScroll: (event) => applyFade(event.currentTarget),
+        children: [
+          /* @__PURE__ */ jsx16(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": props.scope === ALL_PROJECTS,
+              className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
+              "data-scope": ALL_PROJECTS,
+              title: "All projects",
+              onMouseDown: noFocus,
+              onClick: () => props.onScope(ALL_PROJECTS),
+              children: "All"
+            }
+          ),
+          scoped.map((project) => /* @__PURE__ */ jsxs14(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": props.scope === project.id,
+              className: props.scope === project.id ? "is-on" : void 0,
+              "data-scope": project.id,
+              title: `Project: ${project.label}`,
+              onMouseDown: noFocus,
+              onClick: () => props.onScope(project.id),
+              children: [
+                /* @__PURE__ */ jsx16(ProjectGlyph, { project, size: 11 }),
+                project.label
+              ]
+            },
+            project.id
+          ))
+        ]
+      }
+    ) }),
     /* @__PURE__ */ jsxs14("label", { className: "st-profile", title: "Profile", children: [
       /* @__PURE__ */ jsx16(Codicon10, { name: "account", size: 12 }),
       /* @__PURE__ */ jsxs14(
@@ -12691,106 +12798,111 @@ function Toolbar(props) {
         ]
       }
     ),
-    /* @__PURE__ */ jsx16("span", { className: "st-spacer" }),
-    /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-show-all",
-        title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
-        pressed: props.showAll,
-        onClick: () => props.onShowAll(!props.showAll),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "list-flat", size: 13 }),
-          "Show all"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-show-archived",
-        title: "Show archived",
-        pressed: props.showArchived,
-        onClick: () => props.onShowArchived(!props.showArchived),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "archive", size: 13 }),
-          "Archived"
-        ]
-      }
-    ),
-    props.canRearrange !== !1 && /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx16(Codicon10, { name: "refresh", size: 13 }) }),
-    /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-    props.snapUnavailable ? (
-      // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
-      /* @__PURE__ */ jsx16("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs14(
-        "button",
-        {
-          type: "button",
-          className: "st-tb is-disabled",
-          "data-testid": "session-tree-snap",
-          title: props.snapUnavailable,
-          "aria-label": `Snap to grid — ${props.snapUnavailable}`,
-          "aria-disabled": "true",
-          disabled: !0,
-          onMouseDown: noFocus,
-          children: [
-            /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-            "Snap"
-          ]
-        }
-      ) })
-    ) : /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-snap",
-        title: `Snap to grid (${props.snap ? "on" : "off"})`,
-        pressed: props.snap,
-        onClick: () => props.onSnap(!props.snap),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-          "Snap"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
-      zoomTo(clamp2(getZoom() / ZOOM_STEP));
-    }, children: "−" }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
-      zoomTo(1);
-    }, className: "st-zoom", children: /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-zoom", children: [
-      Math.round(zoom3 * 100),
-      "%"
-    ] }) }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
-      zoomTo(clamp2(getZoom() * ZOOM_STEP));
-    }, children: "+" }),
-    /* @__PURE__ */ jsxs14(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "screen-full", size: 13 }),
-      "Fit"
-    ] }),
-    props.hasPanel && /* @__PURE__ */ jsxs14(Fragment11, { children: [
+    /* @__PURE__ */ jsxs14("div", { className: "st-tools", children: [
+      /* @__PURE__ */ jsxs14("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsxs14(
+          ToolButton,
+          {
+            testId: "session-tree-show-all",
+            title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
+            pressed: props.showAll,
+            onClick: () => props.onShowAll(!props.showAll),
+            children: [
+              /* @__PURE__ */ jsx16(Codicon10, { name: "list-flat", size: 13 }),
+              /* @__PURE__ */ jsx16(Label, { children: "Show all" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs14(
+          ToolButton,
+          {
+            testId: "session-tree-show-archived",
+            title: "Show archived",
+            pressed: props.showArchived,
+            onClick: () => props.onShowArchived(!props.showArchived),
+            children: [
+              /* @__PURE__ */ jsx16(Codicon10, { name: "archive", size: 13 }),
+              /* @__PURE__ */ jsx16(Label, { children: "Archived" })
+            ]
+          }
+        ),
+        props.canRearrange !== !1 && /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx16(Codicon10, { name: "refresh", size: 13 }) })
+      ] }),
       /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-      /* @__PURE__ */ jsx16(
+      props.snapUnavailable ? (
+        // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
+        /* @__PURE__ */ jsx16("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs14(
+          "button",
+          {
+            type: "button",
+            className: "st-tb is-disabled",
+            "data-testid": "session-tree-snap",
+            title: props.snapUnavailable,
+            "aria-label": `Snap to grid — ${props.snapUnavailable}`,
+            "aria-disabled": "true",
+            disabled: !0,
+            onMouseDown: noFocus,
+            children: [
+              /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
+              /* @__PURE__ */ jsx16(Label, { children: "Snap" })
+            ]
+          }
+        ) })
+      ) : /* @__PURE__ */ jsxs14(
         ToolButton,
         {
-          testId: "session-tree-panel",
-          title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
-          pressed: props.panelOpen,
-          onClick: () => props.onPanel(!props.panelOpen),
-          children: /* @__PURE__ */ jsx16(Codicon10, { name: "layout-sidebar-right", size: 13 })
+          testId: "session-tree-snap",
+          title: `Snap to grid (${props.snap ? "on" : "off"})`,
+          pressed: props.snap,
+          onClick: () => props.onSnap(!props.snap),
+          children: [
+            /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
+            /* @__PURE__ */ jsx16(Label, { children: "Snap" })
+          ]
         }
-      )
+      ),
+      /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsxs14("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+          zoomTo(clamp2(getZoom() / ZOOM_STEP));
+        }, children: "−" }),
+        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+          zoomTo(1);
+        }, className: "st-zoom", children: /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-zoom", children: [
+          Math.round(zoom3 * 100),
+          "%"
+        ] }) }),
+        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+          zoomTo(clamp2(getZoom() * ZOOM_STEP));
+        }, children: "+" }),
+        /* @__PURE__ */ jsxs14(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+          /* @__PURE__ */ jsx16(Codicon10, { name: "screen-full", size: 13 }),
+          /* @__PURE__ */ jsx16(Label, { children: "Fit" })
+        ] })
+      ] }),
+      props.hasPanel && /* @__PURE__ */ jsxs14(Fragment11, { children: [
+        /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
+        /* @__PURE__ */ jsx16(
+          ToolButton,
+          {
+            testId: "session-tree-panel",
+            title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
+            pressed: props.panelOpen,
+            onClick: () => props.onPanel(!props.panelOpen),
+            children: /* @__PURE__ */ jsx16(Codicon10, { name: "layout-sidebar-right", size: 13 })
+          }
+        )
+      ] })
     ] })
   ] });
 }
 
 // src/page/use-live-refresh.ts
 init_define_import_meta_env();
-import { useEffect as useEffect7, useRef as useRef6 } from "react";
+import { useEffect as useEffect7, useRef as useRef7 } from "react";
 var POLL_MS2 = 1e4;
 function useLiveRefresh(ctx, refresh) {
-  let latest = useRef6(refresh);
+  let latest = useRef7(refresh);
   useEffect7(() => {
     latest.current = refresh;
   }), useEffect7(() => {
@@ -12879,8 +12991,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     [busy, busyBySession, focusedSessionId, focusedStoredSessionId, needsInput]
   ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback6(() => {
     if (frameLayout) {
-      let { width, height } = flowStore.getState();
-      width > 0 && height > 0 && flow.setViewport(frameLayout.fit(width, height, MIN_ZOOM), { duration: 0 });
+      let { width: width2, height } = flowStore.getState();
+      width2 > 0 && height > 0 && flow.setViewport(frameLayout.fit(width2, height, MIN_ZOOM), { duration: 0 });
       return;
     }
     let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
@@ -12889,7 +13001,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   useEffect8(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef7(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef7(null), appliedScope = useRef7(scope);
+  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
   useEffect8(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
       appliedKey.current = null;
@@ -13253,6 +13365,74 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   overflow: hidden;
 }
 
+/* No item ever shrinks below its content (a button's min-width would let it): when the bar is
+   too narrow, the layout changes instead (toolbar-layout.ts: data-layout, data-brand,
+   data-tools on the bar). */
+.st-bar > * {
+  flex: none;
+}
+
+.st-bar > .st-scope-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The tools sit at the right end of their line. */
+.st-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.st-tool-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* stacked: the scope strip on its own line below the controls. wrapped: the tools on a line of
+   their own between the two (and wrapping by group if even that is too narrow). */
+.st-bar[data-layout='stacked'],
+.st-bar[data-layout='wrapped'] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 34px;
+  padding: 5px 6px;
+  row-gap: 5px;
+}
+
+.st-bar[data-layout='stacked'] > .st-scope-slot,
+.st-bar[data-layout='wrapped'] > .st-scope-slot {
+  order: 1;
+  flex: 0 0 100%;
+}
+
+.st-bar[data-layout='wrapped'] > .st-tools {
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  row-gap: 5px;
+  margin-left: 0;
+}
+
+.st-brand,
+.st-tools .st-tb {
+  position: relative;
+}
+
+/* Text given up for room: out of the flow but still laid out (the layout measures it), anchored
+   at the right edge so it adds no scrollable overflow. The tooltip keeps the name. */
+.st-bar[data-brand='icon'] .st-brand .st-label,
+.st-bar[data-tools='icons'] .st-tools .st-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .st-brand {
   display: inline-flex;
   align-items: center;
@@ -13329,8 +13509,22 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
 }
 
 .st-scope button {
+  flex: none;
   height: 20px;
   border-radius: 4px;
+}
+
+/* A scrolling strip fades out at the end(s) that hide chips. */
+.st-scope[data-fade='right'] {
+  mask-image: linear-gradient(to left, transparent, #000 18px);
+}
+
+.st-scope[data-fade='left'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px);
+}
+
+.st-scope[data-fade='both'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 18px), transparent);
 }
 
 .st-profile {

@@ -108,6 +108,74 @@
   overflow: hidden;
 }
 
+/* No item ever shrinks below its content (a button's min-width would let it): when the bar is
+   too narrow, the layout changes instead (toolbar-layout.ts: data-layout, data-brand,
+   data-tools on the bar). */
+.st-bar > * {
+  flex: none;
+}
+
+.st-bar > .st-scope-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The tools sit at the right end of their line. */
+.st-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.st-tool-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* stacked: the scope strip on its own line below the controls. wrapped: the tools on a line of
+   their own between the two (and wrapping by group if even that is too narrow). */
+.st-bar[data-layout='stacked'],
+.st-bar[data-layout='wrapped'] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 34px;
+  padding: 5px 6px;
+  row-gap: 5px;
+}
+
+.st-bar[data-layout='stacked'] > .st-scope-slot,
+.st-bar[data-layout='wrapped'] > .st-scope-slot {
+  order: 1;
+  flex: 0 0 100%;
+}
+
+.st-bar[data-layout='wrapped'] > .st-tools {
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  row-gap: 5px;
+  margin-left: 0;
+}
+
+.st-brand,
+.st-tools .st-tb {
+  position: relative;
+}
+
+/* Text given up for room: out of the flow but still laid out (the layout measures it), anchored
+   at the right edge so it adds no scrollable overflow. The tooltip keeps the name. */
+.st-bar[data-brand='icon'] .st-brand .st-label,
+.st-bar[data-tools='icons'] .st-tools .st-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .st-brand {
   display: inline-flex;
   align-items: center;
@@ -184,8 +252,22 @@
 }
 
 .st-scope button {
+  flex: none;
   height: 20px;
   border-radius: 4px;
+}
+
+/* A scrolling strip fades out at the end(s) that hide chips. */
+.st-scope[data-fade='right'] {
+  mask-image: linear-gradient(to left, transparent, #000 18px);
+}
+
+.st-scope[data-fade='left'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px);
+}
+
+.st-scope[data-fade='both'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 18px), transparent);
 }
 
 .st-profile {

@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'final']) {
+  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'final', 'toolbar']) {
     stopGateway(testHermes(undefined, variant ? { variant } : {}))
   }
 

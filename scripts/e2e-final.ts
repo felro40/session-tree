@@ -109,7 +109,7 @@ async function shot(page: Page, name: string): Promise<void> {
 async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
-  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'subway']) {
+  for (const variant of [undefined, 'actions', 'sync', 'swim', 'rich', 'subway', 'toolbar']) {
     stopGateway(testHermes(undefined, variant ? { variant } : {}))
   }
 
