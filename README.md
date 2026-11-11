@@ -63,9 +63,6 @@ Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.m
 - **Needs input** has no SDK source (no `host.state` atom; card 1 pre-check 10): the styles draw it,
   but nothing sets it in a real Hermes today. The e2e shows it through a test-only hook in its own
   build (`--test-styles`), which the committed bundle does not contain.
-- **Token bar track (Rich cards):** the track's contrast is 1.20:1 (light) / 1.27:1 (dark), and in
-  dark the fill against the track is 2.87:1; the value label next to the bar carries the number.
-  (Card 6 review r1 N3 / r2 NB4.)
 - **7-day activity (Rich cards):** `COUNT(DISTINCT role || ':' || timestamp)` counts two messages of
   the same role with the same timestamp as one. (Card 6 review r1 N4.)
 - **Excerpts (Rich cards):** some Markdown markers stay as text: emphasis across a soft line break,
@@ -80,9 +77,13 @@ Each style keeps its own positions. Details: `docs/swimlanes.md`, `docs/subway.m
     future-start clamp uses the `nowMs` captured at each recompute, and every refetch recomputes.
   - *N3:* the now pill's gap and clipping noted in review r2 (its NB2) were not taken.
 - **Subway map:** more than five splits from one station pack into the last slots (their drops
-  overlap visually); every split drops below its parent (no up-splits); labels avoid stations and
-  labels but not tracks after a drag; new sessions placed by the merge are not guaranteed
-  corridor-free (Re-arrange gives the corridor-free auto-layout again). See `docs/subway.md`.
+  overlap visually); every split drops below its parent (no up-splits); a label takes the first
+  spot free of stations, labels and tracks, a station's own tracks avoided first — where no spot is
+  free (crowded drops) it takes the least overlap and a track may still run under it; new
+  sessions placed by the merge are not guaranteed corridor-free; after a drop, two re-routed tracks
+  can share a corridor for a stretch (e.g. `st-md-tip → st-md-redline` and `→ st-md-katex` both on
+  y = 898 for about 209 px in the card 7 review's crossing probe). Re-arrange gives the
+  corridor-free auto-layout again. See `docs/subway.md` § Limits.
 - **Rich cards merge:** a new card is placed on its base row or the rows below inside its group's
   shelf segment, else at the free spot of its group's own segments nearest to its parent (for a
   parent on its group's last shelf row, typically beside it on its own row). Only when its group's
@@ -187,7 +188,8 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook) and `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style). The actions, sync, swimlanes, rich, subway and final suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` on the same ports, the previous one moved to the e2e trash. The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook) and `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style). The actions, sync, swimlanes, rich, subway and final suites mutate their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-final` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run clean:e2e` | `scripts/e2e/clean.ts`: frees the disk the test homes take (a full `test:e2e` makes 7 homes of about 460 MB). Removes the e2e trash and this role's stopped test homes of the current card (`c<card>-<role>`, `c<card>-<role>-<variant>`; `SESSION_TREE_ROLE`); `npm run clean:e2e -- --all` does every card's and role's. Keeps `pytest-venv` and everything that is not a test home (logs, screenshot folders), refuses (and removes nothing) while a test gateway runs, and prints each removed path with its size. All deleting goes through one guarded helper (`deleteTrashEntry`): only a direct child of the real `<e2e root>/trash`, never following a symlink (test homes link this checkout into `plugins/session-tree`), never a home whose gateway is alive. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
 ### The isolated test Hermes
@@ -201,15 +203,17 @@ scripts/test-hermes status    # gateway pids and TCP listeners
 scripts/test-hermes link      # a fresh sign-in link (valid 60 s)
 scripts/test-hermes backend off|on   # take session-tree out of / back into plugins.enabled, restart
 scripts/test-hermes stop
-scripts/test-hermes reset     # stop and move the role's root to ~/.cache/session-tree-e2e/trash/
+scripts/test-hermes reset     # stop and move the role's root to ~/.cache/session-tree-e2e/trash/ (then pruned)
 ```
 
+- The trash keeps only the newest moved-aside copy of each home name (the last run's evidence);
+  `npm run clean:e2e` empties it (see Development).
 - Role `SESSION_TREE_ROLE=coder` (default) or `reviewer`, card `SESSION_TREE_CARD` (default: the
-  current card from `scripts/e2e/CARD`, 7 — the one place the number lives; `npm run test:py` and
+  current card from `scripts/e2e/CARD`, 8 — the one place the number lives; `npm run test:py` and
   `scripts/test-hermes` take their root from the harness): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
-  (+0..+4 coder, +5..+9 reviewer). Card 7: coder home `c7-coder/home`, ports 19370–19374 (the
-  Webapp on 19370); reviewer `c7-reviewer`, ports 19375–19379. The actions, sync, swimlanes, rich,
-  subway and final suites' own homes are `c7-<role>-actions`, `-sync`, `-swim`, `-rich`, `-subway`
+  (+0..+4 coder, +5..+9 reviewer). Card 8: coder home `c8-coder/home`, ports 19380–19384 (the
+  Webapp on 19380); reviewer `c8-reviewer`, ports 19385–19389. The actions, sync, swimlanes, rich,
+  subway and final suites' own homes are `c8-<role>-actions`, `-sync`, `-swim`, `-rich`, `-subway`
   and `-final` (same ports, never running at the same time as
   the other suites). Setup moves the shared home's layout store aside first
   (`<root>/layout-store-old/`), so synced positions and Snap from an earlier run do not carry over.
@@ -267,23 +271,27 @@ eslint-plugin-react-hooks 7.1.1 (MIT), playwright-core 1.65.0 (Apache-2.0), es-m
 Not done by any worker: it happens after the whole set is reviewed, by the parent session, with the
 user's go-ahead (R21). The steps, for that session to run:
 
-1. **Merge** `feature/session-tree` into `main` in `/home/david/work_projects/session-tree` (the
-   user merges). The package needs no build: `desktop/plugin.js` is committed.
-2. **Check the gateway is not mid-turn** for anything you care about (step 5 restarts it).
+1. **Check out the reviewed branch** in `/home/david/work_projects/session-tree`: the user merges
+   the set into `dev` there. The symlinked checkout serves whatever branch is checked out, with no
+   build: `desktop/plugin.js` is committed.
+2. **Check the gateway is not mid-turn** for anything you care about (step 5 may restart it).
 3. **Link the package** into your Hermes:
    `ln -s /home/david/work_projects/session-tree ~/.hermes/plugins/session-tree`
-   (the merged main checkout; never the worktree).
-4. **Allow the backend half**, keeping the plugins already listed:
-   `hermes config get plugins.enabled`, then
-   `hermes config set plugins.enabled '[…the existing entries…, "session-tree"]'`.
-5. **Restart the gateway** so the backend mounts: `hermes gateway restart`. Check
-   `GET /api/plugins/session-tree/health?session_profile=default` answers `{"ok": true, …}` (in the
-   Webapp: the page no longer says "Session Tree's backend is off").
+   (the user's checkout; never a worktree).
+4. **Allow the backend half**: `hermes plugins enable session-tree`. It adds `session-tree` to
+   `plugins.enabled` and keeps the entries already there (it also takes it out of
+   `plugins.disabled`, which it writes as `[]` when absent); `plugin.yaml` declares
+   `capabilities: []`, so there is no consent prompt. With a gateway running it reloads its plugins
+   and prints what went live or that a restart is needed; with none it prints nothing more.
+5. **Restart the gateway** if step 4 said so (`hermes gateway restart`), so the backend mounts.
+   Check `GET /api/plugins/session-tree/health?session_profile=default` answers `{"ok": true, …}`
+   (in the Webapp: the page no longer says "Session Tree's backend is off").
 6. **Enable the desktop half**: Capabilities → Plugins → Installed → Session Tree → the **Desktop**
    switch (it ships disabled), in the desktop app and in each Webapp browser.
 7. Open **Session Tree** from the sidebar. The first view of each style lays itself out and saves its
    positions under `~/.hermes/session-tree/state.json` (the only file the plugin writes).
 
-To remove it: switch the desktop half off, take `session-tree` out of `plugins.enabled`, restart the
-gateway, delete the symlink; `~/.hermes/session-tree/` holds the saved layouts (delete it to forget
-them).
+To remove it: switch the desktop half off, run `hermes plugins disable session-tree` (it takes the
+entry out of `plugins.enabled`, keeps the others, lists it in `plugins.disabled`, and says whether
+the gateway still needs a restart), delete the symlink; `~/.hermes/session-tree/` holds the saved
+layouts (delete it to forget them).

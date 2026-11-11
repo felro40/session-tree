@@ -1788,3 +1788,113 @@ real `is_active` heuristic.
   core-dense ran on the home `run-e2e.sh` had just reset (B3).
 - 500 fixture (e2e-final, run 1): Dense 314 ms / 61.5 fps, Swimlanes 817 ms / 61.6 fps, Subway
   337 ms / 61.2 fps, Rich 338 ms / 61.2 fps.
+
+## Card 8 — follow-up fixes F1–F6
+
+Branch `feature/session-tree-followups` from `dev` at `033096c`; Hermes checkout `3b42157` (read
+only, `git status --short` empty before and after). `scripts/e2e/CARD` = 8 (the harness now accepts
+cards 1..8): coder ports 19380–19384, homes `c8-coder*`. Findings from card 6 review r2
+`t_099e37c7` (NB4), card 7 r1 `t_13edf7f7` and r2 `t_20c0ad8f` (findings 1–3); their evidence
+folders were gone, so each repro was rebuilt from the findings text.
+
+| | 033096c (before) | now (after) |
+|---|---|---|
+| **F1** Rich: refresh-failed note vs open drawer (e2e-rich, sessions poll refused by the browser) | note `{x 1185.0, y 76, w 245.0, h 22.3}` overlaps the drawer `{x 1140, w 300}` at 1440 × 900; `{x 745.0}` overlaps `{x 700}` at 1000 px; light and dark alike | open: note `{x 885.0, y 76}` (1440) / `{x 445.0, y 76}` (1000), 10 px clear of the drawer, inside the canvas `{x 260, w 1180 / 740}`; light and dark |
+| F1 note, drawer closed / other styles (1440 × 900) | Rich 1185.03 / 76, Rich 1000 px 745.03 / 76, Dense 921.03 / 76 (inspector open), Swimlanes 1185.03 / 76, Subway 1185.03 / 76 | identical (0 px): every box at top 8 / right 10 of the stage |
+| **F2** Subway fuzz (447 drops, seed 7): drops with a station's own track through its own label | 94 drops (167 tracks), 30 of them with a free spot, 65 with none | **48 drops (65 tracks), 0 with a free spot**, 48 with none |
+| F2 label/station, label/label overlaps (fuzz, summed) | 0 / 0 | 0 / 0 |
+| F2 auto-layout labels with the routed tracks vs without (default + 500 fixtures, Show all off/on) | — | byte-identical, all `above`; the subway tests' track pins unchanged |
+| F2 browser check (e2e-subway) | — | st-md-tip dropped under st-hp-root (4th candidate): `below` crossed by both splits, the only free spot `left` taken; 0 own-track points in the label (flow and screen) |
+| **F3** shared corridor after a drop | undocumented | `docs/subway.md` § Limits and README § Known limitations (repro: `st-md-tip → redline` / `→ katex` on y = 898 for ≈ 209 px; Re-arrange clears it) |
+| **F4** token bar: full extent vs card (light / dark) | 1.20 / 1.27 (10 % text track, no outline) | **3.53 / 5.17** (1 px `--ui-text-tertiary` outline) |
+| F4 fill vs track (light / dark) | 3.28 / **2.87** (accent 75 % over the track) | **5.64 / 5.08** (full `--ui-accent` over a clear track) |
+| F4 token-bar width check (± 2 px) | pass | pass (sample 480 000 tokens → 54.0 px) |
+| **F5** trash after two full runs | grows forever (289 homes, 127 GB seen by the user) | ≤ one copy per home name: after run 2, 7 entries (one run), 3.2 GB |
+| **F6** README install | merge into `main`; hand-edited `plugins.enabled` | `dev` checkout; `hermes plugins enable/disable session-tree` |
+
+- **F1.** `.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note { right: 310px;
+  max-width: calc(100% - 320px) }` — nothing else changes. Screenshots `rich-note-drawer-open-
+  {light,dark}-{1440,1000}.png` (before and after).
+- **F2.** `placeLabels(stations, blocked, tracks)`: a spot is free when it overlaps no station,
+  project label or earlier label and no routed track (exact segment test, 0.5 px inset, the
+  fuzz's own threshold); otherwise the least overlap of stations and labels as before, ties broken
+  by fewer own tracks, then fewer other tracks. The Subway layer gets the routing chain's `links` and
+  `routes` (new `StyleLayerProps` fields, passed by `graph-canvas.tsx`). The fuzz audit computes
+  "free" independently (its own order and overlap code). The 48 remaining drops all have no free
+  spot (every spot overlaps a station, a label or a track).
+- **F4** composited with `scripts/e2e/contrast.ts` on the card with the smallest filled share
+  (st-hp-mockup, 3.1 %, the empty part) and the largest (st-sys-tip, full).
+- **F5.** `scripts/e2e/trash.ts`: `moveAside` (rename into `trash/<name>-<ms>`, then `pruneTrash`:
+  the newest copy of each home name stays) and the one delete, `deleteTrashEntry`: a direct child
+  of the real `<root>/trash` only (`..`, nested paths, the root, the trash itself and a trash entry
+  that is a symlink are refused), never following a symlink while deleting (links are unlinked), and
+  refusing a home with a live gateway (`home/gateway.pid` or a profile's, or any process whose
+  `HERMES_HOME` or working directory is inside it; zombies do not count). Every suite's fresh home
+  and `test-hermes reset` use it. `npm run clean:e2e [-- --all]` (`scripts/e2e/clean.ts`) moves the
+  role's (or every card's and role's) stopped `c<card>-<role>[-variant]` homes (directories with a
+  `home/`) into the trash and deletes every trash entry, keeping `pytest-venv`, logs and screenshot
+  folders; it refuses and removes nothing while any of them has a live process; it prints each path
+  with its size (apparent bytes, a hard-linked file once: equal to `du --apparent-size -B1`, e.g.
+  456 707 653 B for a rich home). Unit tests `tests/js/e2e-trash.test.ts` (15).
+  - Two full runs back to back (`f149c39`), du measured after each: start trash 929 MB / root
+    1.5 GB; after run 1 trash 1.4 GB (3 entries: the homes run 1 replaced) / root 3.3 GB; after run
+    2 trash **3.2 GB, 7 entries — one per home, one run** / root **6.4 GB** (7 live homes + the
+    trash + `pytest-venv`; measured separately: `du` over both at once counts the shared inodes
+    once). Each later run replaces the trash's copies instead of adding to them.
+  - A home is 442–471 MB (`du`): `home/cache/uv` 309 MB, `home/installs` 130 MB.
+  - **Shared uv cache: not done.** Hermes takes it from `pm.packages.uv_cache_dir()` =
+    `get_default_hermes_root() / "cache" / "uv"` (the test's `HERMES_HOME`) and passes it to uv as
+    `UV_CACHE_DIR` explicitly (`pm/environment.py`), overriding any environment value; there is no
+    override to honour, so the per-home size stays 442–471 MB.
+- **F6** in the c8-coder test home (`HERMES_HOME=…/c8-coder/home`), `plugins.enabled` set to
+  `[st-dummy-plugin]` first:
+  - no gateway: `hermes plugins enable session-tree` → `✓ Plugin session-tree enabled.` (exit 0);
+    `plugins.enabled` `[st-dummy-plugin]` → `[session-tree, st-dummy-plugin]`. The config diff is
+    that line plus `disabled: []` (an empty list Hermes writes). `hermes plugins disable
+    session-tree` → `⊘ Plugin session-tree disabled. No running gateway answered. If one is
+    running, restart it for this to take effect: hermes gateway restart`; enabled back to
+    `[st-dummy-plugin]`, `disabled: [session-tree]`.
+  - test gateway running (Webapp on 19380): enable → `✓ Plugin session-tree enabled. Gateway
+    reloaded plugins; nothing of this plugin needs a session or restart.`; disable → `The running
+    gateway reloaded its plugins and unloaded session-tree; platform hooks it already wired up stay
+    until a gateway restart (hermes gateway restart).`
+  - No consent prompt (`capabilities: []`). README § Install says this.
+
+### Found on the way (not changed)
+
+- **e2e-swimlanes "B1-r3" depends on the time of day.** It asserts that `st-scale-0007` (seeded
+  4.5 h old) is drawn in the default Swimlanes view with Show all on. It passed at 23:4x
+  (run 1) and failed at 00:0x (run 2) and 00:2x (alone). Most likely cause: after midnight that
+  session falls into the previous day's column, which changes the lanes' packing, and the view no
+  longer shows it (screenshot `failure-1.png` of that run). Swimlanes is
+  untouched by this card; not fixed (outside F1–F6).
+- The real-Hermes guard of one before-run of e2e-rich (CSS of 033096c) failed on
+  `~/.hermes/desktop-plugins` at 23:15: the user checked out `main` → `dev` in their checkout, and
+  their Hermes re-copied the linked package's `plugin.js` (`.hermes-package.json` source mtime
+  23:15:18). Nothing of this card touches `~/.hermes`; every later guard passed.
+
+### Simulated
+
+Unchanged: needs input via the test-only hook (rich, subway); running via the real `is_active`
+heuristic. F1's failed refresh is the browser refusing the plugin's `/sessions` poll (the gateway
+stays up).
+
+### Scope sweep (`git diff 033096c..HEAD`)
+
+F1: `src/styles.css`, `scripts/e2e-rich.ts`. F2: `src/styles/subway/labels.ts`,
+`src/styles/subway/layer.tsx`, `src/styles/types.ts` and `src/page/graph-canvas.tsx` (the routes
+reach the layer), `tests/js/subway-fuzz.test.ts`, `tests/js/subway.test.ts`,
+`scripts/e2e-subway.ts`. F4: `src/styles.css`, `scripts/e2e-rich.ts`. F5: `scripts/e2e/trash.ts`,
+`scripts/e2e/clean.ts`, `tests/js/e2e-trash.test.ts`, `package.json` (`clean:e2e`), the fresh-home
+code of `scripts/e2e/common.ts`, `e2e-actions.ts`, `e2e-sync.ts`, `e2e-swimlanes.ts`,
+`e2e-rich.ts`, `scripts/e2e/test-hermes-cli.ts` (reset). Card number: `scripts/e2e/CARD`,
+`scripts/e2e/harness.ts`, `tests/js/harness-card.test.ts`. Docs: `README.md`, `docs/subway.md`,
+`docs/rich-cards.md`, this file. `desktop/plugin.js` rebuilt.
+
+### Gates, bundle and numbers
+
+- **`desktop/plugin.js`: 706 600 bytes** (was 703 954), sha256 `e5e3e90a…537b6b23f`,
+  byte-identical over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no
+  `eval(` / `new Function` (guard tests).
+- lint 0; build 0; `npm test` **323/323** (was 306: e2e-trash 15, subway +2); `npm run test:py`
+  **259 passed**.
