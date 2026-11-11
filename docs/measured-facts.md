@@ -1862,12 +1862,11 @@ folders were gone, so each repro was rebuilt from the findings text.
 
 ### Found on the way (not changed)
 
-- **e2e-swimlanes "B1-r3" depends on the time of day.** It asserts that `st-scale-0007` (seeded
-  4.5 h old) is drawn in the default Swimlanes view with Show all on. It passed at 23:4x
-  (run 1) and failed at 00:0x (run 2) and 00:2x (alone). Most likely cause: after midnight that
-  session falls into the previous day's column, which changes the lanes' packing, and the view no
-  longer shows it (screenshot `failure-1.png` of that run). Swimlanes is
-  untouched by this card; not fixed (outside F1–F6).
+- **e2e-swimlanes "B1-r3" is intermittent around midnight.** It asserts that `st-scale-0007`
+  (seeded 4.5 h old) is drawn in the default Swimlanes view with Show all on. It passed at 23:4x
+  (run 1), failed at 00:0x (run 2) and 00:2x (alone), and passed again at 01:2x (alone, 28/28) and
+  in the final run. The cause was not found (the view depends on the clock through the day columns
+  and the lanes' packing); Swimlanes is untouched by this card; not fixed (outside F1–F6).
 - The real-Hermes guard of one before-run of e2e-rich (CSS of 033096c) failed on
   `~/.hermes/desktop-plugins` at 23:15: the user checked out `main` → `dev` in their checkout, and
   their Hermes re-copied the linked package's `plugin.js` (`.hermes-package.json` source mtime
@@ -1898,3 +1897,8 @@ code of `scripts/e2e/common.ts`, `e2e-actions.ts`, `e2e-sync.ts`, `e2e-swimlanes
   `eval(` / `new Function` (guard tests).
 - lint 0; build 0; `npm test` **323/323** (was 306: e2e-trash 15, subway +2); `npm run test:py`
   **259 passed**.
+- `npm run test:e2e`: run 1 (`f149c39`, 23:32–23:53) **181/181, exit 0**; run 2 (`f149c39`,
+  23:53–00:13) 180/181, exit 1 (the swimlanes B1-r3 flake above); final run 3 on `1e51269` (code =
+  `07b2fa8`, 01:27–01:47) **181/181, exit 0**: foundation 19 + core-dense 28 + actions 30 + sync 22
+  + swimlanes 28 + rich **23** (F4, F1) + subway **17** (F2) + final 14; every suite's real-Hermes
+  guard passed. After run 3: trash 3.3 GB, 7 entries (one per home) / e2e root 6.5 GB.
