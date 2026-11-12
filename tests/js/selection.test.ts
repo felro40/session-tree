@@ -273,6 +273,9 @@ describe('the drop of N blocks (card 9)', () => {
       async putLayout() {
         return { rev: 1, changed: true }
       },
+      async putProjectBlocks() {
+        return { rev: 1, changed: true }
+      },
       async forgetBlocks() {
         return { rev: 1, changed: true }
       }

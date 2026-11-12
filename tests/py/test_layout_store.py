@@ -44,15 +44,15 @@ def test_empty_store_serves_a_valid_empty_state(store):
     assert not store.path.exists()  # a read writes nothing
 
 
-def test_upsert_then_snapshot_per_profile_style_scope(store):
+def test_upsert_then_snapshot_per_profile_and_style(store):
     result = store.upsert_positions("default", "dense", "all", pos([("a", 1, 2), ("b", 3.5, -4)]))
     assert result["applied"] == 2 and result["rev"] == 1
     store.upsert_positions("work", "dense", "all", pos([("a", 9, 9)]))
-    store.upsert_positions("default", "dense", "/projects/syscanvas", pos([("a", 5, 5)]))
+    store.upsert_positions("default", "rich", "all", pos([("a", 5, 5)]))
     snap = store.snapshot("default")
     layout = snap["layouts"]["dense"]["all"]
     assert {k: (v["x"], v["y"]) for k, v in layout.items()} == {"a": (1, 2), "b": (3.5, -4)}
-    assert snap["layouts"]["dense"]["/projects/syscanvas"]["a"]["x"] == 5
+    assert snap["layouts"]["rich"]["all"]["a"]["x"] == 5
     assert store.snapshot("work")["layouts"]["dense"]["all"]["a"]["x"] == 9
     assert all(isinstance(entry["updated_at"], float) for entry in layout.values())
     # The file on disk is the documented shape, with the schema version.
@@ -83,12 +83,12 @@ def test_settings_patch(store):
 
 def test_delete_then_restore_round_trip(store):
     store.upsert_positions("default", "dense", "all", pos([("a", 1, 2), ("b", 3, 4)]))
-    store.upsert_positions("default", "dense", "p1", pos([("a", 7, 7)]))
+    store.upsert_positions("default", "rich", "all", pos([("a", 7, 7)]))
     before = store.snapshot("default")["layouts"]["dense"]["all"]
     removed = store.delete_layout("default", "dense", "all")["removed"]
     assert removed == before
     snap = store.snapshot("default")
-    assert "all" not in snap["layouts"]["dense"] and snap["layouts"]["dense"]["p1"]["a"]["x"] == 7
+    assert "dense" not in snap["layouts"] and snap["layouts"]["rich"]["all"]["a"]["x"] == 7
     # Re-arrange then saves a fresh layout; Undo replaces it with what was removed.
     store.upsert_positions("default", "dense", "all", pos([("a", 100, 100), ("c", 5, 5)]))
     store.replace_layout("default", "dense", "all", [{"id": k, "x": v["x"], "y": v["y"]} for k, v in removed.items()])
@@ -112,10 +112,13 @@ def test_a_rearrange_keeps_a_backup_that_restores_the_layout(store):
     deleted = store.delete_layout("default", "dense", "all")
     assert deleted["backup_id"]
     listing = store.list_backups("default", "dense", "all")
-    assert [(each["id"], each["reason"], each["count"]) for each in listing["backups"]] == [(deleted["backup_id"], "rearrange", 2)]
+    assert [(each["id"], each["reason"], each["count"], each["project"]) for each in listing["backups"]] == [
+        (deleted["backup_id"], "rearrange", 2, None)]
     assert listing["read_only"] is False
-    # Another style, scope or profile has none.
-    assert store.list_backups("default", "dense", "p1")["backups"] == []
+    # Card 10 (A8): one history per profile + style; the scope an older page names is ignored.
+    assert store.list_backups("default", "dense", "p1")["backups"] == listing["backups"]
+    assert store.list_backups("default", "dense")["backups"] == listing["backups"]
+    # Another style or profile has none.
     assert store.list_backups("default", "rich", "all")["backups"] == []
     assert store.list_backups("work", "dense", "all")["backups"] == []
     backup = store.get_backup("default", deleted["backup_id"])
@@ -155,10 +158,10 @@ def test_backups_are_capped_per_layout_newest_kept(store, monkeypatch):
     for n in range(5):
         store.upsert_positions("default", "dense", "all", pos([("a", n, n)]))
         ids.append(store.delete_layout("default", "dense", "all")["backup_id"])
-    store.upsert_positions("default", "dense", "p1", pos([("a", 9, 9)]))
-    other = store.delete_layout("default", "dense", "p1")["backup_id"]
+    store.upsert_positions("default", "rich", "all", pos([("a", 9, 9)]))
+    other = store.delete_layout("default", "rich", "all")["backup_id"]
     assert [each["id"] for each in store.list_backups("default", "dense", "all")["backups"]] == ids[:1:-1]
-    assert [each["id"] for each in store.list_backups("default", "dense", "p1")["backups"]] == [other]
+    assert [each["id"] for each in store.list_backups("default", "rich", "all")["backups"]] == [other]
     with pytest.raises(StoreError) as error:
         store.get_backup("default", ids[0])
     assert error.value.status == 404
@@ -166,30 +169,31 @@ def test_backups_are_capped_per_layout_newest_kept(store, monkeypatch):
 
 def test_backups_are_capped_in_all_and_by_size(store, monkeypatch):
     monkeypatch.setattr(store_mod, "MAX_BACKUPS", 2)
-    for scope in ("s1", "s2", "s3"):
-        store.upsert_positions("default", "dense", scope, pos([("a", 1, 1)]))
-        store.delete_layout("default", "dense", scope)
-    assert [len(store.list_backups("default", "dense", scope)["backups"]) for scope in ("s1", "s2", "s3")] == [0, 1, 1]
+    for style in ("s1", "s2", "s3"):
+        store.upsert_positions("default", style, "all", pos([("a", 1, 1)]))
+        store.delete_layout("default", style, "all")
+    assert [len(store.list_backups("default", style, "all")["backups"]) for style in ("s1", "s2", "s3")] == [0, 1, 1]
     monkeypatch.setattr(store_mod, "MAX_BACKUPS", 200)
     size = store.backups_path.stat().st_size
     monkeypatch.setattr(store_mod, "MAX_BACKUP_FILE_BYTES", size + 10)
-    store.upsert_positions("default", "dense", "s4", pos([("a", 1, 1)]))
-    newest = store.delete_layout("default", "dense", "s4")["backup_id"]
+    store.upsert_positions("default", "s4", "all", pos([("a", 1, 1)]))
+    newest = store.delete_layout("default", "s4", "all")["backup_id"]
     assert store.backups_path.stat().st_size <= size + 10
-    assert [each["id"] for each in store.list_backups("default", "dense", "s4")["backups"]] == [newest]
-    assert store.list_backups("default", "dense", "s2")["backups"] == []
+    assert [each["id"] for each in store.list_backups("default", "s4", "all")["backups"]] == [newest]
+    assert store.list_backups("default", "s2", "all")["backups"] == []
 
 
 def test_the_global_caps_take_old_backups_of_busy_layouts_before_another_layouts_only_one(store, monkeypatch):
-    # Review t_c044054d N2: 21 scopes × 10 Re-arranges evicted the first scope's only backup.
+    # Review t_c044054d N2: 21 scopes × 10 Re-arranges evicted the first scope's only backup
+    # (card 10: per style now).
     monkeypatch.setattr(store_mod, "MAX_BACKUPS", 6)
-    store.upsert_positions("default", "dense", "quiet", pos([("a", 1, 1)]))
-    quiet = store.delete_layout("default", "dense", "quiet")["backup_id"]
+    store.upsert_positions("default", "quiet", "all", pos([("a", 1, 1)]))
+    quiet = store.delete_layout("default", "quiet", "all")["backup_id"]
     for n in range(8):
-        store.upsert_positions("default", "dense", "busy", pos([("a", n, n)]))
-        store.delete_layout("default", "dense", "busy")
-    assert [each["id"] for each in store.list_backups("default", "dense", "quiet")["backups"]] == [quiet]
-    assert len(store.list_backups("default", "dense", "busy")["backups"]) == 5
+        store.upsert_positions("default", "busy", "all", pos([("a", n, n)]))
+        store.delete_layout("default", "busy", "all")
+    assert [each["id"] for each in store.list_backups("default", "quiet", "all")["backups"]] == [quiet]
+    assert len(store.list_backups("default", "busy", "all")["backups"]) == 5
     assert len(json.loads(store.backups_path.read_text("utf-8"))["backups"]) == 6
 
 
@@ -221,8 +225,8 @@ def test_a_backup_of_another_profile_is_not_served(store):
 def test_forget_blocks_drops_them_from_the_backups_too(store):
     store.upsert_positions("default", "dense", "all", pos([("a", 1, 1), ("b", 2, 2)]))
     keep = store.delete_layout("default", "dense", "all")["backup_id"]
-    store.upsert_positions("default", "dense", "p1", pos([("a", 3, 3)]))
-    gone = store.delete_layout("default", "dense", "p1")["backup_id"]
+    store.upsert_positions("default", "rich", "all", pos([("a", 3, 3)]))
+    gone = store.delete_layout("default", "rich", "all")["backup_id"]
     store.upsert_positions("work", "dense", "all", pos([("a", 4, 4)]))
     other = store.delete_layout("work", "dense", "all")["backup_id"]
     store.forget_blocks("default", ["a"])
@@ -290,8 +294,8 @@ def test_the_backups_file_is_the_documented_shape(store):
     raw = json.loads(store.backups_path.read_text("utf-8"))
     assert raw["schema"] == store_mod.BACKUP_SCHEMA_VERSION and len(raw["backups"]) == 1
     entry = raw["backups"][0]
-    assert set(entry) == {"id", "profile", "style", "scope", "created_at", "reason", "positions"}
-    assert entry["positions"] == {"a": {"x": 1, "y": 2}}
+    assert set(entry) == {"id", "profile", "style", "scope", "project", "created_at", "reason", "positions"}
+    assert entry["positions"] == {"a": {"x": 1, "y": 2}} and entry["scope"] == "all" and entry["project"] is None
     # state.json is unchanged in shape: an older Session Tree reads it as before.
     assert set(json.loads(store.path.read_text("utf-8"))) == {"schema", "epoch", "rev", "settings", "layouts"}
 
@@ -352,10 +356,10 @@ def test_file_size_cap(store, monkeypatch):
 
 def test_layout_count_cap(store, monkeypatch):
     monkeypatch.setattr(store_mod, "MAX_LAYOUTS_PER_PROFILE", 3)
-    for scope in ("s1", "s2", "s3"):
-        store.upsert_positions("default", "dense", scope, pos([("a", 1, 1)]))
+    for style in ("s1", "s2", "s3"):
+        store.upsert_positions("default", style, "all", pos([("a", 1, 1)]))
     with pytest.raises(StoreError) as error:
-        store.upsert_positions("default", "dense", "s4", pos([("a", 1, 1)]))
+        store.upsert_positions("default", "s4", "all", pos([("a", 1, 1)]))
     assert error.value.status == 413
 
 
@@ -406,12 +410,12 @@ def test_a_stale_temp_file_from_a_dead_writer_is_ignored_and_cleaned(store):
 
 def test_forget_blocks_drops_them_from_every_layout_of_the_profile_only(store):
     store.upsert_positions("default", "dense", "all", pos([("a", 1, 1), ("b", 2, 2)]))
-    store.upsert_positions("default", "dense", "p1", pos([("a", 3, 3)]))
+    store.upsert_positions("default", "rich", "all", pos([("a", 3, 3)]))
     store.upsert_positions("work", "dense", "all", pos([("a", 4, 4)]))
     result = store.forget_blocks("default", ["a"])
     assert result["removed"] == 2 and result["changed"] is True
-    layouts = store.snapshot("default")["layouts"]["dense"]
-    assert set(layouts) == {"all"} and set(layouts["all"]) == {"b"}
+    layouts = store.snapshot("default")["layouts"]
+    assert set(layouts) == {"dense"} and set(layouts["dense"]["all"]) == {"b"}
     assert "a" in store.snapshot("work")["layouts"]["dense"]["all"]
     assert store.forget_blocks("default", ["a"])["changed"] is False
     for bad in ([], "a", ["x" * 601], ["a"] * (store_mod.MAX_FORGET + 1)):
@@ -423,7 +427,7 @@ def test_prune_drops_sessions_that_no_longer_exist_and_keeps_labels_and_standins
         ("alive", 1, 1), ("gone", 2, 2), ("work/alive", 3, 3), ("work/gone", 4, 4),
         ("group:/projects/x", 0, 0), ("group:/projects/x\x1f2", 0, 900), ("missing:default/gone", 5, 5),
     ]))
-    store.upsert_positions("default", "dense", "p1", pos([("gone", 1, 1)]))
+    store.upsert_positions("default", "rich", "all", pos([("gone", 1, 1)]))
     seen: list[tuple[str | None, frozenset]] = []
 
     def existing(qualified: dict[str | None, set[str]]) -> dict[str | None, set[str]] | None:
@@ -433,9 +437,9 @@ def test_prune_drops_sessions_that_no_longer_exist_and_keeps_labels_and_standins
 
     removed = store.prune("default", existing)
     assert removed == 3
-    layout = store.snapshot("default")["layouts"]["dense"]
-    assert set(layout["all"]) == {"alive", "work/alive", "group:/projects/x", "group:/projects/x\x1f2", "missing:default/gone"}
-    assert "p1" not in layout  # an emptied layout goes away
+    layouts = store.snapshot("default")["layouts"]
+    assert set(layouts["dense"]["all"]) == {"alive", "work/alive", "group:/projects/x", "group:/projects/x\x1f2", "missing:default/gone"}
+    assert "rich" not in layouts  # an emptied layout goes away
     assert (None, frozenset({"alive", "gone"})) in seen and ("work", frozenset({"alive", "gone"})) in seen
 
 
@@ -464,13 +468,13 @@ def _lineages(roots: dict[str, str]):
 def test_canonicalise_moves_a_tip_key_to_the_lineage_root(store):
     # Stored before the fix (or before a compaction): keyed by the tip.
     store.upsert_positions("default", "dense", "all", pos([("tip", 125.6, 2.4), ("plain", 7, 7)]))
-    store.upsert_positions("default", "dense", "p1", pos([("work/tip", 3, 4)]))
+    store.upsert_positions("default", "rich", "all", pos([("work/tip", 3, 4)]))
     changed = store.prune("default", _lineages({"tip": "root", "plain": "plain"}))
     assert changed == 2
-    layouts = store.snapshot("default")["layouts"]["dense"]
-    assert {k: (v["x"], v["y"]) for k, v in layouts["all"].items()} == {"root": (125.6, 2.4), "plain": (7, 7)}
+    layouts = store.snapshot("default")["layouts"]
+    assert {k: (v["x"], v["y"]) for k, v in layouts["dense"]["all"].items()} == {"root": (125.6, 2.4), "plain": (7, 7)}
     # A profile-qualified key keeps its profile.
-    assert set(layouts["p1"]) == {"work/root"}
+    assert set(layouts["rich"]["all"]) == {"work/root"}
     # The root key is settled: nothing more to do, nothing written.
     mtime = store.path.stat().st_mtime_ns
     assert store.prune("default", _lineages({"root": "root", "plain": "plain"})) == 0
@@ -481,17 +485,17 @@ def test_canonicalise_conflict_keeps_the_newer_entry_and_drops_every_member_key(
     # all: the root entry is older than the tip's -> the tip's spot wins.
     store.upsert_positions("default", "dense", "all", pos([("root", 1, 1)]))
     store.upsert_positions("default", "dense", "all", pos([("tip", 2, 2)]))
-    # p1: the tip's entry is older than the root's -> the root's spot stays.
-    store.upsert_positions("default", "dense", "p1", pos([("tip", 3, 3)]))
-    store.upsert_positions("default", "dense", "p1", pos([("root", 4, 4)]))
-    # p2: an old middle segment and an old tip both stored (keys piling up, NB3): one root entry.
-    store.upsert_positions("default", "dense", "p2", pos([("seg2", 5, 5)]))
-    store.upsert_positions("default", "dense", "p2", pos([("tip", 6, 6)]))
+    # rich: the tip's entry is older than the root's -> the root's spot stays.
+    store.upsert_positions("default", "rich", "all", pos([("tip", 3, 3)]))
+    store.upsert_positions("default", "rich", "all", pos([("root", 4, 4)]))
+    # subway: an old middle segment and an old tip both stored (keys piling up, NB3): one root entry.
+    store.upsert_positions("default", "subway", "all", pos([("seg2", 5, 5)]))
+    store.upsert_positions("default", "subway", "all", pos([("tip", 6, 6)]))
     store.prune("default", _lineages({"root": "root", "seg2": "root", "tip": "root"}))
-    layouts = store.snapshot("default")["layouts"]["dense"]
-    assert {k: (v["x"], v["y"]) for k, v in layouts["all"].items()} == {"root": (2, 2)}
-    assert {k: (v["x"], v["y"]) for k, v in layouts["p1"].items()} == {"root": (4, 4)}
-    assert {k: (v["x"], v["y"]) for k, v in layouts["p2"].items()} == {"root": (6, 6)}
+    layouts = store.snapshot("default")["layouts"]
+    assert {k: (v["x"], v["y"]) for k, v in layouts["dense"]["all"].items()} == {"root": (2, 2)}
+    assert {k: (v["x"], v["y"]) for k, v in layouts["rich"]["all"].items()} == {"root": (4, 4)}
+    assert {k: (v["x"], v["y"]) for k, v in layouts["subway"]["all"].items()} == {"root": (6, 6)}
 
 
 def test_prune_keeps_root_keys_and_drops_keys_of_sessions_that_are_gone(store):

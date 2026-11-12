@@ -97,8 +97,23 @@ export interface SyncTransport {
     profile: string,
     body: { style: string; scope: string; positions: { id: string; x: number; y: number }[]; backup?: boolean }
   ): Promise<{ rev: number; changed: boolean }>
+  /**
+   * Card 10 (A5, A6): a Re-arrange in a project scope (`backup: true`; the server keeps the
+   * whole style layout in Layout history first) or its Undo: only these blocks change, each on
+   * its own (`PUT /state/layout/project`).
+   */
+  putProjectBlocks(profile: string, body: ProjectBlocksBody): Promise<{ rev: number; changed: boolean }>
   /** Forget these blocks in every layout of the profile (a session moved to another project). */
   forgetBlocks(profile: string, ids: string[]): Promise<{ rev: number; changed: boolean }>
+}
+
+export interface ProjectBlocksBody {
+  style: string
+  scope: string
+  project: string
+  positions: { id: string; x: number; y: number }[]
+  remove: string[]
+  backup: boolean
 }
 
 export interface SyncStorage {
@@ -110,11 +125,31 @@ export interface SyncTimers {
   setTimeout(fn: () => void, ms: number): () => void
 }
 
-/** One style + scope layout of one profile. */
+/**
+ * One style's layout of one profile. Card 10 (L1): `scope` is always `SHARED_SCOPE` (`all`):
+ * a project scope shows the same layout, dimmed and framed (`layoutRef`). The field stays so
+ * the pending queue keeps the shape an older build reads.
+ */
 export interface LayoutRef {
   profile: string
   style: string
   scope: string
+}
+
+/** The only scope key block positions are stored under (card 10, L1 + A1). */
+export const SHARED_SCOPE = 'all'
+
+/** The layout a page shows for `profile` + `style`, whatever its project scope. */
+export const layoutRef = (profile: string, style: string): LayoutRef => ({ profile, style, scope: SHARED_SCOPE })
+
+/**
+ * What a Re-arrange in a project scope replaced (card 10, A6): the project's stored entries
+ * before it, and every key it touched, so its Undo puts back exactly those and nothing else.
+ */
+export interface ProjectUndo {
+  project: string
+  previous: Map<string, Point>
+  touched: string[]
 }
 
 /**
@@ -136,6 +171,8 @@ export type RefusalKind = string
 export interface ReplaceRefusal {
   ref: LayoutRef
   action: 'rearrange' | 'restore'
+  /** A Re-arrange in a project scope (card 10, A11): that project. */
+  project?: string
 }
 
 export interface SyncOptions {
@@ -151,6 +188,7 @@ export interface SyncOptions {
 type Op =
   | { kind: 'upsert'; ref: LayoutRef; mode: 'if_absent' | 'set'; entries: [string, Point][]; at?: number }
   | { kind: 'replace'; ref: LayoutRef; entries: [string, Point][] | null; backup?: boolean }
+  | { kind: 'project'; ref: LayoutRef; project: string; entries: [string, Point][]; remove: string[]; backup: boolean }
   | { kind: 'forget'; profile: string; ids: string[] }
   | { kind: 'settings'; profile: string; patch: Partial<SyncedSettings> }
 
@@ -492,6 +530,34 @@ export class LayoutSync {
   }
 
   /**
+   * Card 10 (A5): a Re-arrange in a project scope. `keys` are every layout key of that project
+   * (its blocks, its group labels); `spots` are where a fresh full auto-layout (All order) puts
+   * them. Those that have a spot go there; those it does not place are forgotten; every other
+   * block stays. One op, applied per block on the server, which keeps the whole style layout in
+   * Layout history first. Answers what Undo needs.
+   */
+  rearrangeProject(ref: LayoutRef, project: string, keys: Iterable<string>, spots: ReadonlyMap<string, Point>): ProjectUndo {
+    const shown = this.positions(ref)
+    const touched = [...new Set(keys)]
+    const previous = new Map(touched.filter(key => shown.has(key)).map(key => [key, shown.get(key)!] as const))
+    const entries = touched.filter(key => spots.has(key)).map(key => [key, { x: spots.get(key)!.x, y: spots.get(key)!.y }] as [string, Point])
+    const remove = touched.filter(key => !spots.has(key) && shown.has(key))
+
+    this.clearRefused(ref)
+    this.queue({ kind: 'project', ref, project, entries, remove, backup: true }, true)
+
+    return { project, previous: new Map([...previous].map(([key, point]) => [key, { x: point.x, y: point.y }])), touched }
+  }
+
+  /** Card 10 (A6): Undo of a scoped Re-arrange: exactly that project's previous entries, no backup. */
+  restoreProject(ref: LayoutRef, undo: ProjectUndo): void {
+    const entries = [...undo.previous].map(([key, point]) => [key, { x: point.x, y: point.y }] as [string, Point])
+    const remove = undo.touched.filter(key => !undo.previous.has(key))
+
+    this.queue({ kind: 'project', ref, project: undo.project, entries, remove, backup: false }, true)
+  }
+
+  /**
    * A block moved to another project: forget its stored spot (by layout key) in every layout of
    * the profile (here and on the server), so each layout places it anew in its new band.
    */
@@ -519,6 +585,11 @@ export class LayoutSync {
   }
 
   private queue(op: Op, notify: boolean): void {
+    if (isRetiredOp(op)) {
+      // Card 10: this page never stores a per-project layout (`layoutRef`); nothing to send.
+      return
+    }
+
     if (this.readOnly) {
       // B1: nothing is sent while the store is read-only; the change shows in this window only.
       this.localOnly.push(op)
@@ -611,7 +682,16 @@ export class LayoutSync {
     }
 
     this.writeSlots(slots)
-    this.pending = [...adopted, ...this.pending]
+
+    // Card 10 (shared requirement 11): an op an older build queued for a retired per-project
+    // layout is dropped here, never sent, with no notice (the server would refuse it).
+    const kept = adopted.filter(op => !isRetiredOp(op))
+
+    if (kept.length === 0) {
+      return false
+    }
+
+    this.pending = [...kept, ...this.pending]
     this.persistPending()
 
     return true
@@ -773,6 +853,17 @@ export class LayoutSync {
 
   /** A dropped Re-arrange or restore from Layout history: tells the page (review t_b632e3ac N2). */
   private replaceRefused(op: Op): void {
+    if (op.kind === 'project') {
+      // Card 10 (A11): a scoped Re-arrange (its Undo showed no toast of its own).
+      if (op.backup) {
+        for (const listener of [...this.replaceRefusedListeners]) {
+          listener({ ref: { profile: op.ref.profile, style: op.ref.style, scope: op.ref.scope }, action: 'rearrange', project: op.project })
+        }
+      }
+
+      return
+    }
+
     if (op.kind !== 'replace') {
       return
     }
@@ -872,6 +963,15 @@ export class LayoutSync {
           positions: op.entries.slice(start, start + BATCH_LIMIT).map(([id, point]) => ({ id, x: point.x, y: point.y }))
         })
       }
+    } else if (op.kind === 'project') {
+      await this.transport.putProjectBlocks(op.ref.profile, {
+        style: op.ref.style,
+        scope: op.ref.scope,
+        project: op.project,
+        positions: op.entries.map(([id, point]) => ({ id, x: point.x, y: point.y })),
+        remove: op.remove,
+        backup: op.backup
+      })
     } else if (op.entries === null) {
       await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope)
     } else {
@@ -1146,6 +1246,19 @@ function applyOp(target: Map<string, Point>, op: Exclude<Op, { kind: 'settings' 
     return
   }
 
+  if (op.kind === 'project') {
+    // Per block (card 10): only these keys change.
+    for (const id of op.remove) {
+      target.delete(id)
+    }
+
+    for (const [id, point] of op.entries) {
+      target.set(id, point)
+    }
+
+    return
+  }
+
   for (const [id, point] of op.entries) {
     if (op.mode === 'set' || !target.has(id)) {
       target.set(id, point)
@@ -1178,7 +1291,26 @@ function isOp(value: unknown): value is Op {
     return typeof op.profile === 'string' && Array.isArray(op.ids)
   }
 
+  if (op.kind === 'project') {
+    return (
+      Boolean(op.ref) &&
+      typeof op.project === 'string' &&
+      Array.isArray(op.entries) &&
+      Array.isArray(op.remove) &&
+      op.remove.every(id => typeof id === 'string') &&
+      typeof op.backup === 'boolean'
+    )
+  }
+
   return (op.kind === 'upsert' || op.kind === 'replace') && Boolean(op.ref) && (op.entries === null || Array.isArray(op.entries))
+}
+
+/**
+ * Card 10: a layout op for a scope other than `SHARED_SCOPE`, which an older build may have
+ * queued (its per-project layouts are retired; the server answers 409 `scope_layout_retired`).
+ */
+function isRetiredOp(op: Op): boolean {
+  return op.kind !== 'settings' && op.kind !== 'forget' && op.ref.scope !== SHARED_SCOPE
 }
 
 export { refKey as layoutRefKey }

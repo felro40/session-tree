@@ -5,6 +5,14 @@ gateway shares: the view settings (``style``, ``snap``) and the block positions,
 → style → scope → block id, each ``{x, y, updated_at}``. Installs and updates replace the plugin
 package, never this file.
 
+* **One layout per style** (card 10, L1 + A1): the only scope key used is :data:`SHARED_SCOPE`
+  (``all``); a project scope shows that same layout, dimmed and framed. The schema stays 1, so
+  an older Session Tree still reads it as its All projects layout. The first load or write
+  after the upgrade drops every other scope's layout and every backup of one
+  (:meth:`LayoutStore._migrate_locked`, under the locks, atomically, one log line); a write to
+  another scope answers 409 :data:`SCOPE_RETIRED_CODE`. A Re-arrange in a project scope is
+  :meth:`LayoutStore.set_project_blocks`: only that project's blocks, per block.
+
 Standard library only (no Hermes, no FastAPI), so the backend and a test's second process load
 the same code.
 
@@ -36,15 +44,17 @@ the same code.
 * **Backups** (``backups.json`` next to ``state.json``, its own schema, the same locks): a
   Re-arrange (:meth:`LayoutStore.delete_layout`) keeps the layout it forgets, and a restore of an
   earlier layout (:meth:`LayoutStore.replace_layout` with ``backup=True``) keeps the one it
-  replaces. At most :data:`MAX_BACKUPS_PER_LAYOUT` per profile + style + scope (the oldest go
+  replaces. At most :data:`MAX_BACKUPS_PER_LAYOUT` per profile + style (the oldest go
   first), :data:`MAX_BACKUPS` in all, within :data:`MAX_BACKUP_FILE_BYTES`. A separate file, so a
   Session Tree that predates it reads ``state.json`` exactly as before. The backup is written
   before ``state.json``: a writer killed in between leaves an extra backup, never a lost layout.
+  Schema 2 (card 10) records ``project`` (what a scoped Re-arrange reset); schema 1 still loads.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -85,15 +95,28 @@ MAX_SCOPE = 1024
 MAX_COORD = 1e7
 MAX_FORGET = 100
 
-#: ``backups.json``: its own schema version (a separate file from ``state.json``).
-BACKUP_SCHEMA_VERSION = 1
+#: ``backups.json``: its own schema version (a separate file from ``state.json``). Schema 2
+#: (card 10) adds ``project`` to each backup: the project a scoped Re-arrange reset, ``None`` for
+#: one in All projects or a restore. A schema-1 file still loads (its backups read as
+#: ``project: None``) and is written back as schema 2.
+BACKUP_SCHEMA_VERSION = 2
+#: Per profile + style (card 10: one layout per style, so one history per style).
 MAX_BACKUPS_PER_LAYOUT = 10
 MAX_BACKUPS = 200
 MAX_BACKUP_FILE_BYTES = 16 * 1024 * 1024
 #: Why a backup was kept: a Re-arrange forgot the layout, or a restore replaced it.
 BACKUP_REASONS = ("rearrange", "restore")
 _BACKUP_ID_RE = re.compile(r"^[0-9a-f]{16}$")
-_BACKUP_KEYS = {"id", "profile", "style", "scope", "created_at", "reason", "positions"}
+_BACKUP_KEYS_V1 = {"id", "profile", "style", "scope", "created_at", "reason", "positions"}
+_BACKUP_KEYS = _BACKUP_KEYS_V1 | {"project"}
+
+#: Card 10 (L1, A1): block positions are stored once per profile + style, under this scope key
+#: (the All projects layout, kept as it was). Every other scope key is retired: dropped by the
+#: one-time migration, and a write to one answers 409 :data:`SCOPE_RETIRED_CODE`.
+SHARED_SCOPE = "all"
+SCOPE_RETIRED_CODE = "scope_layout_retired"
+
+logger = logging.getLogger("session_tree.layout_store")
 
 #: A profile name (``hermes_cli.profiles``) or ``*`` (the "All profiles" view has its own layouts).
 PROFILE_RE = re.compile(r"^(?:\*|[a-z0-9][a-z0-9_-]{0,63})$")
@@ -150,6 +173,33 @@ def check_scope(scope: Any) -> str:
     if not isinstance(scope, str) or not 1 <= len(scope) <= MAX_SCOPE or _SCOPE_CONTROL_RE.search(scope):
         raise StoreError(400, f"scope must be 1-{MAX_SCOPE} characters without control characters")
     return scope
+
+
+def check_shared_scope(scope: Any) -> str:
+    """A layout write's scope: only :data:`SHARED_SCOPE` (card 10). A well-formed other scope is
+    a retired per-project layout (an older page still open): 409, so it gets one notice instead
+    of saving a layout nothing reads."""
+    check_scope(scope)
+    if scope != SHARED_SCOPE:
+        raise StoreError(409, f"{SCOPE_RETIRED_CODE}: block positions are stored once per style (scope "
+                              f"'{SHARED_SCOPE}'); per-project layouts are retired, so this change was not saved")
+    return scope
+
+
+def check_project(project: Any) -> str:
+    """A project id (an auto project's id is its repo path, the no-project group its fixed key)."""
+    if not isinstance(project, str) or not 1 <= len(project) <= MAX_SCOPE or _SCOPE_CONTROL_RE.search(project) \
+            or project == SHARED_SCOPE:
+        raise StoreError(400, f"project must be a project id: 1-{MAX_SCOPE} characters without control characters")
+    return project
+
+
+def check_block_ids(ids: Any, *, cap: int) -> list[str]:
+    if not isinstance(ids, list):
+        raise StoreError(400, "remove must be a list of block ids")
+    if len(ids) > cap:
+        raise StoreError(413, f"at most {cap} block ids per request")
+    return list(dict.fromkeys(check_block_id(block) for block in ids))
 
 
 def check_block_id(block: Any) -> str:
@@ -272,22 +322,28 @@ def new_backup_id() -> str:
 
 
 def _validate_backups(raw: Any) -> dict[str, Any]:
-    """The parsed ``backups.json``, checked as strictly as ``state.json``."""
+    """The parsed ``backups.json``, checked as strictly as ``state.json``. A schema-1 file comes
+    back as schema 2 (each backup ``project: None``), so the next write upgrades it."""
     if not isinstance(raw, dict):
         raise CorruptState("not an object")
     schema = raw.get("schema")
     if isinstance(schema, int) and not isinstance(schema, bool) and schema > BACKUP_SCHEMA_VERSION:
         raise NewerSchema(str(schema))
-    if schema != BACKUP_SCHEMA_VERSION or set(raw) != {"schema", "backups"}:
+    if isinstance(schema, bool) or schema not in (1, BACKUP_SCHEMA_VERSION) or set(raw) != {"schema", "backups"}:
         raise CorruptState("schema")
     backups = raw["backups"]
     if not isinstance(backups, list) or len(backups) > MAX_BACKUPS:
         raise CorruptState("backups")
     seen: set[str] = set()
+    keys = _BACKUP_KEYS_V1 if schema == 1 else _BACKUP_KEYS
     try:
         for each in backups:
-            if not isinstance(each, dict) or set(each) != _BACKUP_KEYS:
+            if not isinstance(each, dict) or set(each) != keys:
                 raise CorruptState("backup")
+            if schema == 1:
+                each["project"] = None
+            elif each["project"] is not None:
+                check_project(each["project"])
             if not isinstance(each["id"], str) or not _BACKUP_ID_RE.fullmatch(each["id"]) or each["id"] in seen:
                 raise CorruptState("backup.id")
             seen.add(each["id"])
@@ -310,6 +366,7 @@ def _validate_backups(raw: Any) -> dict[str, Any]:
                 _coord(point["y"])
     except StoreError as exc:
         raise CorruptState(exc.detail) from exc
+    raw["schema"] = BACKUP_SCHEMA_VERSION
     return raw
 
 
@@ -317,27 +374,33 @@ def _encode(data: dict[str, Any]) -> bytes:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")
 
 
+def _history_of(each: dict[str, Any]) -> tuple[str, str]:
+    """The history a backup belongs to: its profile + style (card 10, A8; the scope is always
+    :data:`SHARED_SCOPE` once the migration ran)."""
+    return each["profile"], each["style"]
+
+
 def _trimmed_backups(backups: list[dict[str, Any]], newest: str) -> list[dict[str, Any]]:
-    """Oldest first in, oldest first out: at most :data:`MAX_BACKUPS_PER_LAYOUT` per layout,
-    :data:`MAX_BACKUPS` in all, the file within :data:`MAX_BACKUP_FILE_BYTES` (``newest`` stays).
-    The global caps drop the oldest backup of a layout that has more than one first, so every
-    layout keeps its newest backup while it can."""
-    per_layout: dict[tuple[str, str, str], int] = {}
+    """Oldest first in, oldest first out: at most :data:`MAX_BACKUPS_PER_LAYOUT` per profile +
+    style, :data:`MAX_BACKUPS` in all, the file within :data:`MAX_BACKUP_FILE_BYTES` (``newest``
+    stays). The global caps drop the oldest backup of a style that has more than one first, so
+    every style keeps its newest backup while it can."""
+    per_layout: dict[tuple[str, str], int] = {}
     kept: list[dict[str, Any]] = []
     for each in reversed(backups):
-        layout = (each["profile"], each["style"], each["scope"])
+        layout = _history_of(each)
         per_layout[layout] = per_layout.get(layout, 0) + 1
         if per_layout[layout] <= MAX_BACKUPS_PER_LAYOUT:
             kept.append(each)
     kept.reverse()
     sizes = [len(_encode(each)) + 1 for each in kept]
     total = len(_encode(_empty_backups())) + sum(sizes)
-    counts: dict[tuple[str, str, str], int] = {}
+    counts: dict[tuple[str, str], int] = {}
     for each in kept:
-        layout = (each["profile"], each["style"], each["scope"])
+        layout = _history_of(each)
         counts[layout] = counts.get(layout, 0) + 1
     while len(kept) > 1 and (len(kept) > MAX_BACKUPS or total > MAX_BACKUP_FILE_BYTES):
-        layouts = [(each["profile"], each["style"], each["scope"]) for each in kept]
+        layouts = [_history_of(each) for each in kept]
         oldest = next((index for index, each in enumerate(kept) if each["id"] != newest and counts[layouts[index]] > 1), None)
         if oldest is None:
             oldest = next(index for index, each in enumerate(kept) if each["id"] != newest)
@@ -481,9 +544,13 @@ class LayoutStore:
                 before_write: Optional[Callable[[float], None]] = None) -> tuple[dict[str, Any], bool]:
         """Re-read under the locks, apply ``change`` (False: nothing changed), bump rev, write; (state, changed).
         ``before_write(stamp)`` runs under the same locks once ``change`` changed something, before
-        ``state.json`` is written (a backup of what the change removed); it may refuse (raise)."""
+        ``state.json`` is written (a backup of what the change removed); it may refuse (raise).
+        A file still holding retired per-project layouts is migrated first (card 10, A2)."""
         with self._locked():
             state = self._load_locked(for_write=True)
+            if _retired_layouts(state):
+                self._migrate_locked()
+                state = self._load_locked(for_write=True)
             stamp = self._stamp()
             # Another process may have stamped later than this process's clock reads.
             stamp = max(stamp, math.nextafter(_max_stamp(state), math.inf))
@@ -499,6 +566,44 @@ class LayoutStore:
                     state["epoch"] = new_epoch()
                 self._write_locked(state)
             return state, changed
+
+    # the one-time migration to one layout per style (card 10, A2) -------------------------------
+
+    def _migrate_locked(self) -> None:
+        """Under the locks: drop every layout of a scope other than :data:`SHARED_SCOPE` from
+        ``state.json`` and every backup of one from ``backups.json``; the ``all`` layouts stay
+        byte for byte. Each file is replaced atomically, the backups first: a writer killed in
+        between leaves ``state.json`` as it was (the next load migrates it), and no ``all``
+        layout is ever touched. Nothing is copied into Layout history (L4). One log line when
+        anything was dropped; afterwards there is nothing left to drop, so it never runs again.
+        A corrupt or newer-schema file is left to the normal paths."""
+        try:
+            state: Optional[dict[str, Any]] = self._read_file()
+        except (CorruptState, NewerSchema):
+            state = None
+        try:
+            data: Optional[dict[str, Any]] = self._read_backups_file()
+        except (CorruptState, NewerSchema):
+            data = None
+        backups = 0
+        if data is not None:
+            kept = [each for each in data["backups"] if each["scope"] == SHARED_SCOPE]
+            backups = len(data["backups"]) - len(kept)
+            if backups:
+                data["backups"] = kept
+                self._replace_file_locked(self.backups_path, _encode(data))
+        layouts = 0
+        if state is not None:
+            layouts = _drop_retired_layouts(state)
+            if layouts:
+                state["rev"] += 1
+                if state["epoch"] in (NO_EPOCH, LEGACY_EPOCH):
+                    state["epoch"] = new_epoch()
+                self._write_locked(state)
+        if layouts or backups:
+            logger.info("session-tree: block positions are now stored once per style; dropped %d per-project "
+                        "layout(s) and %d Layout history backup(s) of them (every 'all' layout kept as it was)",
+                        layouts, backups)
 
     # backups ----------------------------------------------------------------------------------
 
@@ -517,9 +622,10 @@ class LayoutStore:
         return _validate_backups(raw)
 
     def _load_backups_locked(self, *, for_write: bool) -> dict[str, Any]:
-        """Under the locks: the backups, a corrupt file moved aside first (``.bak``)."""
+        """Under the locks: the backups, a corrupt file moved aside first (``.bak``), backups of a
+        retired scope dropped first (the card-10 migration)."""
         try:
-            return self._read_backups_file()
+            data = self._read_backups_file()
         except CorruptState:
             self._backup_corrupt(self.backups_path)
             return _empty_backups()
@@ -530,19 +636,28 @@ class LayoutStore:
                                       f"Session Tree; this one writes schema {BACKUP_SCHEMA_VERSION}, so it does not re-arrange "
                                       f"or restore a layout it could not keep a backup of") from exc
             return {**_empty_backups(), "read_only": True}
+        if _retired_backups(data):
+            self._migrate_locked()
+            return self._read_backups_file()
+        return data
 
     def _read_backups(self) -> dict[str, Any]:
         try:
-            return self._read_backups_file()
+            data = self._read_backups_file()
         except NewerSchema:
             return {**_empty_backups(), "read_only": True}
         except CorruptState:
             with self._locked():
                 return self._load_backups_locked(for_write=False)
+        if _retired_backups(data):
+            with self._locked():
+                return self._load_backups_locked(for_write=False)
+        return data
 
     def _keep_backup_locked(self, profile: str, style: str, scope: str, blocks: dict[str, Any], reason: str,
-                            stamp: float) -> Optional[str]:
+                            stamp: float, project: Optional[str] = None) -> Optional[str]:
         """Under the locks: keep ``blocks`` (one layout's stored entries) as a backup; its id.
+        ``project``: the project a scoped Re-arrange resets (``None``: All projects, a restore).
         An arrangement that layout already has a backup of keeps one copy, now the newest."""
         if not blocks:
             return None
@@ -559,21 +674,26 @@ class LayoutStore:
             backup_id = new_backup_id()
             while backup_id in taken:
                 backup_id = new_backup_id()
-        data["backups"].append({"id": backup_id, "profile": profile, "style": style, "scope": scope,
+        data["backups"].append({"id": backup_id, "profile": profile, "style": style, "scope": scope, "project": project,
                                 "created_at": stamp, "reason": reason, "positions": positions})
         data["backups"] = _trimmed_backups(data["backups"], backup_id)
         self._replace_file_locked(self.backups_path, _encode(data))
         return backup_id
 
-    def list_backups(self, profile: str, style: str, scope: str) -> dict[str, Any]:
-        """One layout's backups, newest first, without their positions."""
+    def list_backups(self, profile: str, style: str, scope: Optional[str] = None) -> dict[str, Any]:
+        """One style's backups (card 10, A8: one history per profile + style, whatever scope the
+        page shows), newest first, without their positions. ``project``: what a scoped Re-arrange
+        reset (``None``: All projects, or a restore). ``scope`` is accepted for an older page and
+        otherwise ignored."""
         check_profile(profile)
         check_style(style)
-        check_scope(scope)
+        if scope is not None:
+            check_scope(scope)
         data = self._read_backups()
-        items = [{"id": each["id"], "created_at": each["created_at"], "reason": each["reason"], "count": len(each["positions"])}
+        items = [{"id": each["id"], "created_at": each["created_at"], "reason": each["reason"], "project": each["project"],
+                  "count": len(each["positions"])}
                  for each in reversed(data["backups"])
-                 if (each["profile"], each["style"], each["scope"]) == (profile, style, scope)]
+                 if (each["profile"], each["style"], each["scope"]) == (profile, style, SHARED_SCOPE)]
         return {"ok": True, "backups": items, "read_only": bool(data.get("read_only"))}
 
     def get_backup(self, profile: str, backup_id: Any) -> dict[str, Any]:
@@ -583,7 +703,7 @@ class LayoutStore:
             raise StoreError(400, "backup id must be 16 hex characters")
         for each in self._read_backups()["backups"]:
             if each["id"] == backup_id and each["profile"] == profile:
-                return {"ok": True, "id": each["id"], "style": each["style"], "scope": each["scope"],
+                return {"ok": True, "id": each["id"], "style": each["style"], "scope": each["scope"], "project": each["project"],
                         "created_at": each["created_at"], "reason": each["reason"],
                         "positions": [{"id": block, "x": point["x"], "y": point["y"]} for block, point in each["positions"].items()]}
         raise StoreError(404, "no such backup")
@@ -591,14 +711,21 @@ class LayoutStore:
     # reads ------------------------------------------------------------------------------------
 
     def read(self) -> dict[str, Any]:
-        """The whole state. A corrupt file is moved aside (under the locks) and reads as empty."""
+        """The whole state. A corrupt file is moved aside (under the locks) and reads as empty. A
+        file still holding retired per-project layouts is migrated first (card 10, A2): the first
+        load after the upgrade drops them, under the locks."""
         try:
-            return self._read_file()
+            state = self._read_file()
         except NewerSchema as exc:
             return _newer(exc)
         except CorruptState:
             with self._locked():
                 return self._load_locked(for_write=False)
+        if _retired_layouts(state):
+            with self._locked():
+                self._migrate_locked()
+                return self._load_locked(for_write=False)
+        return state
 
     def revision(self) -> int:
         return self.read()["rev"]
@@ -626,7 +753,7 @@ class LayoutStore:
         auto-layout placed); otherwise each one replaces the stored entry (a drop)."""
         check_profile(profile)
         check_style(style)
-        check_scope(scope)
+        check_shared_scope(scope)
         items = check_positions(entries)
         counts = {"applied": 0, "skipped": 0, "updated_at": None}
 
@@ -661,11 +788,11 @@ class LayoutStore:
         return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "settings": dict(state["settings"])}
 
     def delete_layout(self, profile: str, style: str, scope: str) -> dict[str, Any]:
-        """Re-arrange: forget one style + scope layout; answers what was removed (for Undo) and
+        """Re-arrange in All projects: forget one style's layout; answers what was removed (for Undo) and
         the backup kept of it (``backup_id``; ``None`` when there was nothing stored)."""
         check_profile(profile)
         check_style(style)
-        check_scope(scope)
+        check_shared_scope(scope)
         removed: dict[str, Any] = {}
         kept: list[Optional[str]] = [None]
 
@@ -685,12 +812,12 @@ class LayoutStore:
         return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "removed": removed, "backup_id": kept[0]}
 
     def replace_layout(self, profile: str, style: str, scope: str, entries: Any, *, backup: bool = False) -> dict[str, Any]:
-        """Undo of a Re-arrange, or a restore of a backup: this style + scope layout becomes
+        """Undo of a Re-arrange, or a restore of a backup: this style's layout becomes
         exactly ``entries``. ``backup``: the layout it replaces is kept as a backup first (a
         restore is itself restorable); ``backup_id`` names it."""
         check_profile(profile)
         check_style(style)
-        check_scope(scope)
+        check_shared_scope(scope)
         # A whole layout may be larger than one upsert batch: it is capped by the layout cap.
         if not isinstance(entries, list):
             raise StoreError(400, "positions must be a list of {id, x, y}")
@@ -719,6 +846,65 @@ class LayoutStore:
 
         state, changed = self._mutate(change, keep)
         return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "count": len(items), "backup_id": kept[0]}
+
+    def set_project_blocks(self, profile: str, style: str, scope: str, project: Any, entries: Any, remove: Any, *,
+                           backup: bool = False) -> dict[str, Any]:
+        """A Re-arrange in a project scope (card 10, A5; ``backup=True``) or its Undo (A6):
+        only the named blocks change, each on its own (last write wins per block, R17), so a
+        block of another project that another device moved meanwhile is never touched.
+
+        ``entries`` (``[{id, x, y}]``) are set; ``remove`` (block ids) are forgotten. A block
+        already at its spot is left as it is (its ``updated_at`` too). ``backup``: the whole style
+        layout as it was is kept in Layout history first (``project`` recorded with it), under
+        the same locks and written before ``state.json``, like :meth:`delete_layout`. Nothing
+        changed: no backup, no new revision."""
+        check_profile(profile)
+        check_style(style)
+        check_shared_scope(scope)
+        check_project(project)
+        if not isinstance(entries, list):
+            raise StoreError(400, "positions must be a list of {id, x, y}")
+        if len(entries) > MAX_ENTRIES_PER_LAYOUT:
+            raise StoreError(413, f"at most {MAX_ENTRIES_PER_LAYOUT} positions per layout")
+        items = _check_many(entries)
+        gone = check_block_ids(remove, cap=MAX_ENTRIES_PER_LAYOUT)
+        if set(gone) & {block for block, _x, _y in items}:
+            raise StoreError(400, "a block id is both in positions and in remove")
+        before: dict[str, Any] = {}
+        kept: list[Optional[str]] = [None]
+        counts = {"applied": 0, "removed": 0}
+
+        def change(state: dict[str, Any], stamp: float) -> bool:
+            current = state["layouts"].get(profile, {}).get(style, {}).get(scope)
+            before.update(current or {})
+            if items:
+                blocks = _layout(state, profile, style, scope, create=True)
+            elif current is None:
+                return False
+            else:
+                blocks = current
+            for block, x, y in items:
+                held = blocks.get(block)
+                if held is not None and held["x"] == x and held["y"] == y:
+                    continue
+                blocks[block] = {"x": x, "y": y, "updated_at": stamp}
+                counts["applied"] += 1
+            for block in gone:
+                if blocks.pop(block, None) is not None:
+                    counts["removed"] += 1
+            if len(blocks) > MAX_ENTRIES_PER_LAYOUT:
+                raise StoreError(413, f"at most {MAX_ENTRIES_PER_LAYOUT} positions per layout")
+            if not blocks:
+                state["layouts"][profile][style].pop(scope, None)
+                _drop_empty(state, profile, style)
+            return counts["applied"] + counts["removed"] > 0
+
+        def keep(stamp: float) -> None:
+            if backup:
+                kept[0] = self._keep_backup_locked(profile, style, scope, before, "rearrange", stamp, project=project)
+
+        state, changed = self._mutate(change, keep)
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, **counts, "backup_id": kept[0]}
 
     def forget_blocks(self, profile: str, ids: Any) -> dict[str, Any]:
         """A session moved to another project: drop these blocks from every layout of
@@ -755,6 +941,9 @@ class LayoutStore:
         except NewerSchema:
             # A newer Session Tree's history: not ours to rewrite, and no reason to refuse a move.
             return
+        if _retired_backups(data):
+            self._migrate_locked()
+            data = self._read_backups_file()
         changed = False
         kept: list[dict[str, Any]] = []
         for each in data["backups"]:
@@ -846,6 +1035,27 @@ def _session_candidates(state: dict[str, Any], profile: str) -> dict[Optional[st
                     key, sid = split_session_entry(block)
                     out.setdefault(key, set()).add(sid)
     return out
+
+
+def _retired_layouts(state: dict[str, Any]) -> int:
+    """How many layouts of a retired scope (anything but :data:`SHARED_SCOPE`) ``state`` holds."""
+    return sum(1 for styles in state["layouts"].values() for scopes in styles.values() for scope in scopes
+               if scope != SHARED_SCOPE)
+
+
+def _drop_retired_layouts(state: dict[str, Any]) -> int:
+    dropped = 0
+    for profile, styles in list(state["layouts"].items()):
+        for style, scopes in list(styles.items()):
+            for scope in [scope for scope in scopes if scope != SHARED_SCOPE]:
+                del scopes[scope]
+                dropped += 1
+            _drop_empty(state, profile, style)
+    return dropped
+
+
+def _retired_backups(data: dict[str, Any]) -> int:
+    return sum(1 for each in data["backups"] if each["scope"] != SHARED_SCOPE)
 
 
 def _layout(state: dict[str, Any], profile: str, style: str, scope: str, *, create: bool) -> dict[str, Any]:

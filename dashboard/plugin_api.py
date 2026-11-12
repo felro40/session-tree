@@ -536,7 +536,7 @@ def get_state(profile: str = _profile_query(), since_rev: Optional[int] = Query(
 
 @router.patch("/state/positions")
 def patch_positions(body: PositionsBody, profile: str = _profile_query()) -> dict[str, Any]:
-    """A batch of block positions for one style + scope; last write wins per block."""
+    """A batch of block positions for one style (scope ``all``); last write wins per block."""
     name = _view_profile(profile)
     result = _store_call(_state_store().upsert_positions, name, body.style, body.scope, body.positions,
                          if_absent=body.mode == "if_absent")
@@ -559,7 +559,7 @@ def patch_settings(body: SettingsBody, profile: str = _profile_query()) -> dict[
 @router.delete("/state/layout")
 def delete_layout(profile: str = _profile_query(), style: str = Query(..., max_length=32),
                   scope: str = Query(..., min_length=1, max_length=1024)) -> dict[str, Any]:
-    """Re-arrange: forget one style + scope layout. Answers the removed entries (Undo's input)
+    """Re-arrange in All projects: forget one style's layout. Answers the removed entries (Undo's input)
     and ``backup_id``: the backup kept of them (``GET /state/backups``)."""
     name = _view_profile(profile)
     result = _store_call(_state_store().delete_layout, name, style, scope)
@@ -571,7 +571,7 @@ def delete_layout(profile: str = _profile_query(), style: str = Query(..., max_l
 @router.put("/state/layout")
 def put_layout(body: LayoutBody, profile: str = _profile_query()) -> dict[str, Any]:
     """Undo of a Re-arrange, or a restore of a backup (``backup: true``: the layout it replaces
-    is kept as a backup first): one style + scope layout becomes exactly ``positions``."""
+    is kept as a backup first): one style's layout becomes exactly ``positions``."""
     name = _view_profile(profile)
     result = _store_call(_state_store().replace_layout, name, body.style, body.scope, body.positions, backup=body.backup)
     if result["changed"]:
@@ -579,11 +579,42 @@ def put_layout(body: LayoutBody, profile: str = _profile_query()) -> dict[str, A
     return result
 
 
+class ProjectBlocksBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    style: StrictStr = Field(..., max_length=32)
+    #: Always ``all`` (one layout per style); any other scope answers 409 ``scope_layout_retired``.
+    scope: StrictStr = Field(..., min_length=1, max_length=1024)
+    #: The project whose blocks these are (recorded with the backup, shown in Layout history).
+    project: StrictStr = Field(..., min_length=1, max_length=1024)
+    #: ``[{id, x, y}]``: each block's new spot. Checked by the store (ids, finite coordinates, caps).
+    positions: list[Any]
+    #: Block ids to forget (a project block the fresh layout does not place).
+    remove: list[Any] = Field(default_factory=list)
+    #: A scoped Re-arrange (keeps the whole style layout in Layout history first); its Undo: false.
+    backup: StrictBool = False
+
+
+@router.put("/state/layout/project")
+def put_project_blocks(body: ProjectBlocksBody, profile: str = _profile_query()) -> dict[str, Any]:
+    """A Re-arrange in a project scope (``backup: true``), or its Undo: only these blocks of the
+    style's layout change, each on its own (last write wins per block), so every other block
+    stays where it is, also one another device moved meanwhile."""
+    name = _view_profile(profile)
+    result = _store_call(_state_store().set_project_blocks, name, body.style, body.scope, body.project,
+                         body.positions, body.remove, backup=body.backup)
+    if result["changed"]:
+        _changed(result["rev"], name, "rearrange" if body.backup else "restore", result["epoch"])
+    return result
+
+
 @router.get("/state/backups")
 def list_backups(profile: str = _profile_query(), style: str = Query(..., max_length=32),
-                 scope: str = Query(..., min_length=1, max_length=1024)) -> dict[str, Any]:
-    """The backups of one style + scope layout, newest first: ``[{id, created_at, reason, count}]``
-    (``reason``: ``rearrange`` or ``restore``, what replaced the layout)."""
+                 scope: Optional[str] = Query(None, min_length=1, max_length=1024)) -> dict[str, Any]:
+    """The backups of one style's layout (one history per profile + style, card 10), newest
+    first: ``[{id, created_at, reason, project, count}]`` (``reason``: ``rearrange`` or
+    ``restore``, what replaced the layout; ``project``: the project a scoped Re-arrange reset,
+    ``null`` for All projects). ``scope`` is accepted from an older page and ignored."""
     name = _view_profile(profile)
     return _store_call(_state_store().list_backups, name, style, scope)
 
