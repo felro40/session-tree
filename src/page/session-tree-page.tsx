@@ -5,8 +5,10 @@
  *
  * Card 4: block positions, the view style and snap come from the synced layout store
  * (`LayoutSync`, per style + profile + scope, saved on drop); Show all, Show archived, the
- * profile filter, the style override, the panel and the zoom + pan stay on this device
- * (`DevicePrefs`). Re-arrange can be undone; an unreachable backend shows the cached layout.
+ * profile filter, the project scope (per profile filter), the style override, the panel and the
+ * zoom + pan stay on this device (`DevicePrefs`), so a closed and reopened page shows the view
+ * it was left on. Re-arrange asks first and can be undone; the layout it forgets is kept in
+ * Layout history (`layout-history.tsx`). An unreachable backend shows the cached layout.
  */
 import { Button, EmptyState, ErrorState, host, useQuery, useValue } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
@@ -30,6 +32,7 @@ import type { HostStatusSnapshot } from '../model/status.ts'
 import { getStyle, registeredStyles, resolveStyleId } from '../styles/registry.ts'
 import { createFrameCache } from './frame-cache.ts'
 import { GraphCanvas, MAX_ZOOM, MIN_ZOOM } from './graph-canvas.tsx'
+import { LayoutHistoryDialog, RearrangeConfirm } from './layout-history.tsx'
 import { PluginCtx } from './plugin-context.ts'
 import { useRowOverrides, useSessionActionsController } from './session-actions.tsx'
 import { SessionActionsCtx } from './session-actions-context.ts'
@@ -65,6 +68,8 @@ interface UndoToast {
   id: number
   message: string
   undo(): void
+  /** The Re-arrange toast also opens Layout history. */
+  history?: boolean
 }
 
 function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; services: Services }) {
@@ -76,12 +81,15 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const profile = device.profile ?? activeProfile
   const showAll = device.showAll
   const showArchived = device.showArchived
-  const [scopeChoice, setScope] = useState(ALL_PROJECTS)
+  // Remembered per profile filter on this device: a reopened page shows the scope it was left on.
+  const scopeChoice = prefs.scope(profile)
   // Card 9: the selected blocks (a set with one primary block), per page; never synced.
   const [selectionChoice, setSelection] = useState<Selection>(EMPTY_SELECTION)
   const [fitRequest, setFitRequest] = useState(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [toast, setToast] = useState<UndoToast>()
+  const [confirmRearrange, setConfirmRearrange] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const settings = sync.settings(profile)
   const style = getStyle(resolveStyleId(device.styleOverride, settings.style))
   const snap = settings.snap && style.draggable
@@ -394,6 +402,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     setToast({
       id,
       message: 'Layout re-arranged',
+      history: true,
       undo: () => {
         sync.restore(ref, previous)
         setToast(undefined)
@@ -401,6 +410,27 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       }
     })
   }, [sync, ref, style, requestFit, setToast])
+
+  // A restore from Layout history: the backup becomes the layout (the server keeps the one it
+  // replaces), with Undo like a Re-arrange.
+  const onRestoreBackup = useCallback(
+    (positions: Map<string, Point>) => {
+      const previous = sync.restoreBackup(ref, positions)
+
+      requestFit()
+      setToast({
+        id: Date.now(),
+        message: 'Earlier layout restored',
+        undo: () => {
+          sync.restore(ref, previous)
+          setToast(undefined)
+          requestFit()
+        }
+      })
+    },
+    [sync, ref, requestFit, setToast]
+  )
+  const flushSync = useCallback(() => sync.flush(), [sync])
 
   useEffect(() => {
     if (!toast) {
@@ -466,6 +496,12 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const Panel = style.Panel
   const panelOpen = prefs.panelOpen(style.id, style.panelDefaultOpen ?? true)
   const onPanel = useCallback((open: boolean) => prefs.setPanelOpen(style.id, open), [prefs, style])
+  const sectionOpen = useCallback((section: string) => prefs.sectionOpen(style.id, section), [prefs, style])
+  const onSection = useCallback((section: string, open: boolean) => prefs.setSectionOpen(style.id, section, open), [prefs, style])
+  // The Re-arrange confirm and Layout history name the view they act on.
+  const viewLabel = `${style.label} · ${scope === ALL_PROJECTS ? 'All projects' : (projectList.find(project => project.id === scope)?.label ?? scope)}${
+    profile === ALL_PROFILES ? ' · All profiles' : profile !== activeProfile ? ` · ${profile}` : ''
+  }`
   const offline = sync.offline(profile)
   // A background refresh (poll, push or Retry) failed while earlier data is on screen: the canvas
   // keeps that data (c5 r4 N2) and a small note says so; the next successful refresh clears it.
@@ -586,12 +622,12 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         <Toolbar
           projects={projectList}
           scope={scope}
-          onScope={setScope}
+          onScope={next => prefs.setScope(profile, next)}
           profiles={profileNames}
           profile={profile}
           onProfile={next => {
+            // The new profile filter shows the scope last chosen for it (All projects at first).
             prefs.set({ profile: next === activeProfile ? null : next })
-            setScope(ALL_PROJECTS)
             setSelection(EMPTY_SELECTION)
           }}
           showAll={showAll}
@@ -606,7 +642,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           minZoom={MIN_ZOOM}
           maxZoom={MAX_ZOOM}
           onFit={fit}
-          onRearrange={onRearrange}
+          onRearrange={() => setConfirmRearrange(true)}
           canRearrange={style.savesLayout}
           snapUnavailable={style.draggable ? undefined : style.snapUnavailable}
           singlesCount={model.singles.length}
@@ -638,7 +674,17 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
             )}
           </div>
           {Panel && panelOpen && sessions.data && (
-            <Panel model={model} selectedId={selectedId} selectedIds={selection.ids} onSelect={onSelect} onOpen={onOpen} statusOf={statusOf} nowMs={nowMs} />
+            <Panel
+              model={model}
+              selectedId={selectedId}
+              selectedIds={selection.ids}
+              onSelect={onSelect}
+              onOpen={onOpen}
+              statusOf={statusOf}
+              nowMs={nowMs}
+              sectionOpen={sectionOpen}
+              onSection={onSection}
+            />
           )}
         </div>
         {toast && (
@@ -647,12 +693,38 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
             <button type="button" className="st-toast-btn" data-testid="session-tree-undo" onClick={toast.undo}>
               Undo
             </button>
+            {toast.history && style.savesLayout && (
+              <button type="button" className="st-toast-btn" data-testid="session-tree-toast-history" onClick={() => setHistoryOpen(true)}>
+                Layout history
+              </button>
+            )}
             <button type="button" className="st-toast-btn" aria-label="Dismiss" onClick={dismissToast}>
               ×
             </button>
           </div>
         )}
         {dialogs}
+        <RearrangeConfirm
+          open={confirmRearrange && style.savesLayout}
+          viewLabel={viewLabel}
+          onClose={() => setConfirmRearrange(false)}
+          onConfirm={onRearrange}
+          onHistory={() => setHistoryOpen(true)}
+        />
+        {historyOpen && style.savesLayout && (
+          <LayoutHistoryDialog
+            // Another view (a scope, profile or style change while open) is a fresh dialog.
+            key={`${ref.profile}\u0000${ref.style}\u0000${ref.scope}`}
+            ctx={ctx}
+            layout={ref}
+            revision={sync.revision(profile)}
+            viewLabel={viewLabel}
+            nowMs={nowMs}
+            flush={flushSync}
+            onClose={() => setHistoryOpen(false)}
+            onRestore={onRestoreBackup}
+          />
+        )}
       </div>
     </SessionActionsCtx.Provider>
   )

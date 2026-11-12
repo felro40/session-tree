@@ -429,7 +429,7 @@ export function Toolbar(props: ToolbarProps) {
             <Label>Archived</Label>
           </ToolButton>
           {props.canRearrange !== false && (
-            <ToolButton testId="session-tree-rearrange" title="Re-arrange (reset this layout)" onClick={props.onRearrange}>
+            <ToolButton testId="session-tree-rearrange" title="Re-arrange (reset this layout; asks first, and opens Layout history)" onClick={props.onRearrange}>
               <Codicon name="refresh" size={13} />
             </ToolButton>
           )}

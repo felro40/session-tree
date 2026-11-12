@@ -14,10 +14,10 @@ from conftest import PREFIX
 @pytest.fixture
 def state_file(plugin_api, hermes_home: Path):
     path = plugin_api._state_store().path
-    for leftover in path.parent.glob("state.json*"):
+    for leftover in [*path.parent.glob("state.json*"), *path.parent.glob("backups.json*")]:
         leftover.unlink()
     yield path
-    for leftover in path.parent.glob("state.json*"):
+    for leftover in [*path.parent.glob("state.json*"), *path.parent.glob("backups.json*")]:
         leftover.unlink()
 
 
@@ -101,6 +101,40 @@ def test_delete_then_put_restores_the_layout(client, state_file, events):
     layout = state(client).json()["layouts"]["dense"]["/p/x"]
     assert {block: (entry["x"], entry["y"]) for block, entry in layout.items()} == {"st-split-root": (1, 2), "st-hp-root": (3, 4)}
     assert [payload["kind"] for _name, payload in events] == ["positions", "rearrange", "restore"]
+
+
+def test_backups_endpoints_list_and_restore_a_rearranged_layout(client, state_file, events):
+    patch_positions(client, {"style": "dense", "scope": "/p/x", "mode": "set",
+                             "positions": [{"id": "st-split-root", "x": 1, "y": 2}]})
+    deleted = client.delete(f"{PREFIX}/state/layout", params={"session_profile": "default", "style": "dense", "scope": "/p/x"}).json()
+    listing = client.get(f"{PREFIX}/state/backups", params={"session_profile": "default", "style": "dense", "scope": "/p/x"})
+    assert listing.status_code == 200, listing.text
+    backups = listing.json()["backups"]
+    assert [(each["id"], each["reason"], each["count"]) for each in backups] == [(deleted["backup_id"], "rearrange", 1)]
+    assert isinstance(backups[0]["created_at"], float)
+    one = client.get(f"{PREFIX}/state/backups/{deleted['backup_id']}", params={"session_profile": "default"})
+    assert one.status_code == 200 and one.json()["positions"] == [{"id": "st-split-root", "x": 1, "y": 2}]
+    put = client.put(f"{PREFIX}/state/layout", params={"session_profile": "default"},
+                     json={"style": "dense", "scope": "/p/x", "positions": one.json()["positions"], "backup": True})
+    assert put.status_code == 200, put.text
+    assert state(client).json()["layouts"]["dense"]["/p/x"]["st-split-root"]["x"] == 1
+    # Nothing was stored when it was restored: no second backup.
+    assert put.json()["backup_id"] is None
+    assert events[-1][1]["kind"] == "restore"
+
+
+@pytest.mark.parametrize("call,status", [
+    (lambda c: c.get(f"{PREFIX}/state/backups/0123456789abcdef", params={"session_profile": "default"}), 404),
+    (lambda c: c.get(f"{PREFIX}/state/backups/not-an-id", params={"session_profile": "default"}), 400),
+    (lambda c: c.get(f"{PREFIX}/state/backups/0123456789abcdef", params={"session_profile": "nope"}), 404),
+    (lambda c: c.get(f"{PREFIX}/state/backups", params={"session_profile": "default", "style": "Dense", "scope": "all"}), 400),
+    (lambda c: c.get(f"{PREFIX}/state/backups", params={"session_profile": "default", "style": "dense"}), 422),
+    (lambda c: c.put(f"{PREFIX}/state/layout", params={"session_profile": "default"},
+                     json={"style": "dense", "scope": "all", "positions": [], "backup": "yes"}), 422),
+])
+def test_backups_endpoints_validate_input(client, state_file, call, status):
+    assert call(client).status_code == status
+    assert not state_file.exists()
 
 
 def test_forget_endpoint(client, state_file, events):

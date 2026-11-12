@@ -57,9 +57,9 @@ var react_default, init_react = __esm({
   }
 });
 
-// node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js
+// ../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js
 var require_use_sync_external_store_shim_production = __commonJS({
-  "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js"(exports) {
+  "../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js"(exports) {
     "use strict";
     init_define_import_meta_env();
     var React2 = (init_react(), __toCommonJS(react_exports));
@@ -101,18 +101,18 @@ var require_use_sync_external_store_shim_production = __commonJS({
   }
 });
 
-// node_modules/use-sync-external-store/shim/index.js
+// ../../session-tree/node_modules/use-sync-external-store/shim/index.js
 var require_shim = __commonJS({
-  "node_modules/use-sync-external-store/shim/index.js"(exports, module) {
+  "../../session-tree/node_modules/use-sync-external-store/shim/index.js"(exports, module) {
     "use strict";
     init_define_import_meta_env();
     module.exports = require_use_sync_external_store_shim_production();
   }
 });
 
-// node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js
+// ../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js
 var require_with_selector_production = __commonJS({
-  "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js"(exports) {
+  "../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js"(exports) {
     "use strict";
     init_define_import_meta_env();
     var React2 = (init_react(), __toCommonJS(react_exports)), shim = require_shim();
@@ -164,9 +164,9 @@ var require_with_selector_production = __commonJS({
   }
 });
 
-// node_modules/use-sync-external-store/shim/with-selector.js
+// ../../session-tree/node_modules/use-sync-external-store/shim/with-selector.js
 var require_with_selector = __commonJS({
-  "node_modules/use-sync-external-store/shim/with-selector.js"(exports, module) {
+  "../../session-tree/node_modules/use-sync-external-store/shim/with-selector.js"(exports, module) {
     "use strict";
     init_define_import_meta_env();
     module.exports = require_with_selector_production();
@@ -177,7 +177,7 @@ var require_with_selector = __commonJS({
 init_define_import_meta_env();
 import { host as host6, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
-// node_modules/@xyflow/react/dist/base.css
+// ../../session-tree/node_modules/@xyflow/react/dist/base.css
 var base_default = `/* this will be exported as base.css and can be used for a basic styling */
 /* these are the necessary styles for React/Svelte Flow, they get used by base.css and style.css */
 .react-flow {
@@ -687,14 +687,14 @@ svg.react-flow__connectionline {
 
 // src/page/session-tree-page.tsx
 init_define_import_meta_env();
-import { Button as Button2, EmptyState, ErrorState, host as host4, useQuery, useValue } from "@hermes/plugin-sdk";
+import { Button as Button3, EmptyState, ErrorState, host as host4, useQuery as useQuery2, useValue } from "@hermes/plugin-sdk";
 
-// node_modules/@xyflow/react/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
 import { jsxs, Fragment, jsx } from "react/jsx-runtime";
 import { createContext, useContext, useMemo, forwardRef, useEffect, useRef, useState, useLayoutEffect, useCallback, memo } from "react";
 
-// node_modules/classcat/index.js
+// ../../session-tree/node_modules/classcat/index.js
 init_define_import_meta_env();
 function cc(names) {
   if (typeof names == "string" || typeof names == "number") return "" + names;
@@ -708,13 +708,13 @@ function cc(names) {
   return out;
 }
 
-// node_modules/@xyflow/system/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/system/dist/esm/index.js
 init_define_import_meta_env();
 
-// node_modules/d3-drag/dist/d3-drag.mjs
+// ../../session-tree/node_modules/d3-drag/dist/d3-drag.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-dispatch/dist/d3-dispatch.mjs
+// ../../session-tree/node_modules/d3-dispatch/dist/d3-dispatch.mjs
 init_define_import_meta_env();
 var noop = { value: () => {
 } };
@@ -778,7 +778,7 @@ function set(type, name, callback) {
   return callback != null && type.push({ name, value: callback }), type;
 }
 
-// node_modules/d3-selection/dist/d3-selection.mjs
+// ../../session-tree/node_modules/d3-selection/dist/d3-selection.mjs
 init_define_import_meta_env();
 var xhtml = "http://www.w3.org/1999/xhtml", namespaces = {
   svg: "http://www.w3.org/2000/svg",
@@ -1396,7 +1396,7 @@ function pointer(event, node) {
   return [event.pageX, event.pageY];
 }
 
-// node_modules/d3-drag/dist/d3-drag.mjs
+// ../../session-tree/node_modules/d3-drag/dist/d3-drag.mjs
 var nonpassive = { passive: !1 }, nonpassivecapture = { capture: !0, passive: !1 };
 function nopropagation(event) {
   event.stopImmediatePropagation();
@@ -1558,13 +1558,13 @@ function drag() {
   }, drag2;
 }
 
-// node_modules/d3-zoom/dist/d3-zoom.mjs
+// ../../session-tree/node_modules/d3-zoom/dist/d3-zoom.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-interpolate/dist/d3-interpolate.mjs
+// ../../session-tree/node_modules/d3-interpolate/dist/d3-interpolate.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-color/dist/d3-color.mjs
+// ../../session-tree/node_modules/d3-color/dist/d3-color.mjs
 init_define_import_meta_env();
 function define(constructor, factory, prototype) {
   constructor.prototype = factory.prototype = prototype, prototype.constructor = constructor;
@@ -1969,7 +1969,7 @@ define(Cubehelix, cubehelix, extend(Color, {
   }
 }));
 
-// node_modules/d3-interpolate/dist/d3-interpolate.mjs
+// ../../session-tree/node_modules/d3-interpolate/dist/d3-interpolate.mjs
 function basis(t12, v0, v1, v2, v3) {
   var t22 = t12 * t12, t32 = t22 * t12;
   return ((1 - 3 * t12 + 3 * t22 - t32) * v0 + (4 - 6 * t22 + 3 * t32) * v1 + (1 + 3 * t12 + 3 * t22 - 3 * t32) * v2 + t32 * v3) / 6;
@@ -2226,10 +2226,10 @@ function cubehelix2(hue) {
 }
 var cubehelix_default = cubehelix2(hue$1), cubehelixLong = cubehelix2(nogamma);
 
-// node_modules/d3-transition/dist/d3-transition.mjs
+// ../../session-tree/node_modules/d3-transition/dist/d3-transition.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-timer/dist/d3-timer.mjs
+// ../../session-tree/node_modules/d3-timer/dist/d3-timer.mjs
 init_define_import_meta_env();
 var frame = 0, timeout$1 = 0, interval$1 = 0, pokeDelay = 1e3, taskHead, taskTail, clockLast = 0, clockNow = 0, clockSkew = 0, clock = typeof performance == "object" && performance.now ? performance : Date, setFrame = typeof window == "object" && window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : function(f) {
   setTimeout(f, 17);
@@ -2294,7 +2294,7 @@ function timeout(callback, delay, time) {
   }, delay, time), t;
 }
 
-// node_modules/d3-ease/dist/d3-ease.mjs
+// ../../session-tree/node_modules/d3-ease/dist/d3-ease.mjs
 init_define_import_meta_env();
 function cubicInOut(t) {
   return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
@@ -2372,7 +2372,7 @@ var overshoot = 1.70158, backIn = (function custom4(s) {
   }, elasticInOut2;
 })(amplitude, period);
 
-// node_modules/d3-transition/dist/d3-transition.mjs
+// ../../session-tree/node_modules/d3-transition/dist/d3-transition.mjs
 var emptyOn = dispatch("start", "end", "cancel", "interrupt"), emptyTween = [], CREATED = 0, SCHEDULED = 1, STARTING = 2, STARTED = 3, RUNNING = 4, ENDING = 5, ENDED = 6;
 function schedule(node, name, id2, index2, group, timing) {
   var schedules = node.__transition;
@@ -2892,7 +2892,7 @@ function selection_transition(name) {
 selection.prototype.interrupt = selection_interrupt;
 selection.prototype.transition = selection_transition;
 
-// node_modules/d3-zoom/dist/d3-zoom.mjs
+// ../../session-tree/node_modules/d3-zoom/dist/d3-zoom.mjs
 var constant4 = (x) => () => x;
 function ZoomEvent(type, {
   sourceEvent: sourceEvent2,
@@ -3179,7 +3179,7 @@ function zoom2() {
   }, zoom3;
 }
 
-// node_modules/@xyflow/system/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/system/dist/esm/index.js
 var errorMessages = {
   error001: (lib = "react") => `Seems like you have not used ${lib === "svelte" ? "SvelteFlowProvider" : "ReactFlowProvider"} as an ancestor. Help: https://${lib}flow.dev/error#001`,
   error002: () => "It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them.",
@@ -4880,12 +4880,12 @@ function XYResizer({ domNode, nodeId, getStoreItems, onChange, onEnd }) {
   };
 }
 
-// node_modules/zustand/esm/traditional.mjs
+// ../../session-tree/node_modules/zustand/esm/traditional.mjs
 init_define_import_meta_env();
 var import_with_selector = __toESM(require_with_selector(), 1);
 import ReactExports from "react";
 
-// node_modules/zustand/esm/vanilla.mjs
+// ../../session-tree/node_modules/zustand/esm/vanilla.mjs
 init_define_import_meta_env();
 var createStoreImpl = (createState) => {
   let state, listeners = /* @__PURE__ */ new Set(), setState = (partial, replace) => {
@@ -4902,7 +4902,7 @@ var createStoreImpl = (createState) => {
   return api;
 }, createStore = (createState) => createState ? createStoreImpl(createState) : createStoreImpl;
 
-// node_modules/zustand/esm/traditional.mjs
+// ../../session-tree/node_modules/zustand/esm/traditional.mjs
 var { useDebugValue } = ReactExports, { useSyncExternalStoreWithSelector } = import_with_selector.default, identity3 = (arg) => arg;
 function useStoreWithEqualityFn(api, selector2 = identity3, equalityFn) {
   let slice = useSyncExternalStoreWithSelector(
@@ -4919,7 +4919,7 @@ var createWithEqualityFnImpl = (createState, defaultEqualityFn) => {
   return Object.assign(useBoundStoreWithEqualityFn, api), useBoundStoreWithEqualityFn;
 }, createWithEqualityFn = (createState, defaultEqualityFn) => createState ? createWithEqualityFnImpl(createState, defaultEqualityFn) : createWithEqualityFnImpl;
 
-// node_modules/zustand/esm/shallow.mjs
+// ../../session-tree/node_modules/zustand/esm/shallow.mjs
 init_define_import_meta_env();
 function shallow$1(objA, objB) {
   if (Object.is(objA, objB))
@@ -4964,7 +4964,7 @@ function createPortal(children2, container, key) {
   };
 }
 
-// node_modules/@xyflow/react/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/react/dist/esm/index.js
 var StoreContext = createContext(null), Provider$1 = StoreContext.Provider, zustandErrorMessage = errorMessages.error001("react");
 function useStore(selector2, equalityFn) {
   let store = useContext(StoreContext);
@@ -7510,6 +7510,12 @@ function stateTransport(ctx) {
   };
 }
 var LAYOUT_CHANGED_EVENT = "plugin.session-tree.layout.changed";
+function fetchBackups(ctx, profile, style2, scope) {
+  return ctx.rest(`/state/backups?${profileQuery(profile, { style: style2, scope })}`, { timeoutMs: 1e4 });
+}
+function fetchBackup(ctx, profile, id2) {
+  return ctx.rest(`/state/backups/${encodeURIComponent(id2)}?${profileQuery(profile)}`, { timeoutMs: 15e3 });
+}
 function fetchDetails(ctx, profile, ids, tzOffsetMinutes) {
   return ctx.rest("/sessions/details", {
     method: "POST",
@@ -7701,7 +7707,16 @@ function settleOverrides(rows, overrides) {
 
 // src/model/device-prefs.ts
 init_define_import_meta_env();
-var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = { styleOverride: null, showAll: !1, showArchived: !1, profile: null, panelOpen: {}, collapsedLanes: [] }, MAX_COLLAPSED_LANES = 200, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
+var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = {
+  styleOverride: null,
+  showAll: !1,
+  showArchived: !1,
+  profile: null,
+  scopes: {},
+  panelOpen: {},
+  sectionsOpen: {},
+  collapsedLanes: []
+}, MAX_COLLAPSED_LANES = 200, MAX_SCOPES = 100, ALL_SCOPE = "all", MAX_KEY = 4096, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
   storage;
   listeners = /* @__PURE__ */ new Set();
   toggles;
@@ -7720,11 +7735,27 @@ var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = { styleOv
     for (let listener of [...this.listeners])
       listener();
   }
+  /** The project scope last chosen for one profile filter value; `all` when none. */
+  scope(profile) {
+    return this.toggles.scopes[profile] ?? ALL_SCOPE;
+  }
+  setScope(profile, scope) {
+    if (this.scope(profile) === scope)
+      return;
+    let others = Object.fromEntries(Object.entries(this.toggles.scopes).filter(([key]) => key !== profile));
+    this.set({ scopes: scope === ALL_SCOPE ? others : { ...others, [profile]: scope } });
+  }
   panelOpen(style2, fallback = !0) {
     return this.toggles.panelOpen[style2] ?? fallback;
   }
   setPanelOpen(style2, open) {
     this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
+  }
+  sectionOpen(style2, section, fallback = !0) {
+    return this.toggles.sectionsOpen[`${style2}:${section}`] ?? fallback;
+  }
+  setSectionOpen(style2, section, open) {
+    this.set({ sectionsOpen: { ...this.toggles.sectionsOpen, [`${style2}:${section}`]: open } });
   }
   laneCollapsed(key) {
     return this.toggles.collapsedLanes.includes(key);
@@ -7746,12 +7777,23 @@ var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = { styleOv
     return this.listeners.add(listener), () => this.listeners.delete(listener);
   }
 };
+function booleans(value2) {
+  let out = {};
+  if (value2 && typeof value2 == "object" && !Array.isArray(value2))
+    for (let [key, open] of Object.entries(value2))
+      typeof open == "boolean" && key.length <= MAX_KEY && (out[key] = open);
+  return out;
+}
+function scopes(value2) {
+  if (!value2 || typeof value2 != "object" || Array.isArray(value2))
+    return {};
+  let entries = Object.entries(value2).filter(
+    (entry) => entry[0].length > 0 && entry[0].length <= MAX_KEY && typeof entry[1] == "string" && entry[1].length > 0 && entry[1].length <= MAX_KEY && entry[1] !== ALL_SCOPE
+  );
+  return Object.fromEntries(entries.slice(-MAX_SCOPES));
+}
 function sanitize(value2) {
-  let raw = value2 && typeof value2 == "object" ? value2 : {}, panelOpen = {};
-  if (raw.panelOpen && typeof raw.panelOpen == "object")
-    for (let [style2, open] of Object.entries(raw.panelOpen))
-      typeof open == "boolean" && (panelOpen[style2] = open);
-  let collapsedLanes = Array.isArray(raw.collapsedLanes) ? [...new Set(raw.collapsedLanes.filter((key) => typeof key == "string" && key.length > 0 && key.length <= 4096))].slice(
+  let raw = value2 && typeof value2 == "object" ? value2 : {}, collapsedLanes = Array.isArray(raw.collapsedLanes) ? [...new Set(raw.collapsedLanes.filter((key) => typeof key == "string" && key.length > 0 && key.length <= MAX_KEY))].slice(
     -MAX_COLLAPSED_LANES
   ) : DEFAULTS.collapsedLanes;
   return {
@@ -7759,7 +7801,9 @@ function sanitize(value2) {
     showAll: typeof raw.showAll == "boolean" ? raw.showAll : DEFAULTS.showAll,
     showArchived: typeof raw.showArchived == "boolean" ? raw.showArchived : DEFAULTS.showArchived,
     profile: typeof raw.profile == "string" ? raw.profile : DEFAULTS.profile,
-    panelOpen,
+    scopes: scopes(raw.scopes),
+    panelOpen: booleans(raw.panelOpen),
+    sectionsOpen: booleans(raw.sectionsOpen),
     collapsedLanes
   };
 }
@@ -8913,7 +8957,6 @@ function DenseLink({ id: id2, source, target, data }) {
 // src/styles/dense/inspector.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon3 } from "@hermes/plugin-sdk";
-import { useState as useState2 } from "react";
 
 // src/page/labels.ts
 init_define_import_meta_env();
@@ -9151,7 +9194,7 @@ function SelectionList({ model, ids, onSelect, onOpen, nowMs }) {
   ] });
 }
 function DenseInspector(props) {
-  let { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs } = props, [singlesOpen, setSinglesOpen] = useState2(!0), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model), several = selectedIds.length > 1;
+  let { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs, sectionOpen, onSection } = props, singlesOpen = sectionOpen("singles"), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model), several = selectedIds.length > 1;
   return /* @__PURE__ */ jsxs4("aside", { className: "st-insp", "data-testid": "session-tree-inspector", "data-selected-id": node?.id ?? "", "data-selected-count": selectedIds.length, children: [
     /* @__PURE__ */ jsxs4("div", { className: "st-ib", children: [
       several && /* @__PURE__ */ jsx4(SelectionList, { model, ids: selectedIds, onSelect, onOpen, nowMs }),
@@ -9163,7 +9206,7 @@ function DenseInspector(props) {
       node?.kind === "session" && /* @__PURE__ */ jsx4(SessionDetails, { ...props, node, status: statusOf(node) })
     ] }),
     /* @__PURE__ */ jsxs4("div", { className: `st-singles${singlesOpen ? "" : " is-collapsed"}`, "data-testid": "session-tree-singles", children: [
-      /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-singles-toggle", onClick: () => setSinglesOpen((open) => !open), "aria-expanded": singlesOpen, children: [
+      /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-singles-toggle", onClick: () => onSection("singles", !singlesOpen), "aria-expanded": singlesOpen, children: [
         /* @__PURE__ */ jsx4(Codicon3, { name: singlesOpen ? "chevron-down" : "chevron-right", size: 12 }),
         /* @__PURE__ */ jsx4("b", { children: "Singles" }),
         /* @__PURE__ */ jsx4("span", { "data-testid": "session-tree-singles-count", children: singles.length }),
@@ -9206,7 +9249,7 @@ init_define_import_meta_env();
 
 // src/styles/rich/context.tsx
 init_define_import_meta_env();
-import { createContext as createContext4, useContext as useContext4, useEffect as useEffect2, useMemo as useMemo3, useState as useState3, useSyncExternalStore } from "react";
+import { createContext as createContext4, useContext as useContext4, useEffect as useEffect2, useMemo as useMemo3, useState as useState2, useSyncExternalStore } from "react";
 
 // src/page/plugin-context.ts
 init_define_import_meta_env();
@@ -9410,7 +9453,7 @@ function useDetails(id2) {
   );
 }
 function RichProvider({ model, children: children2 }) {
-  let ctx = usePluginCtx(), [store] = useState3(
+  let ctx = usePluginCtx(), [store] = useState2(
     () => new DetailsStore(
       (profile, ids, tz) => fetchDetails(ctx, profile, ids, tz),
       { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms), now: () => Date.now() },
@@ -9992,7 +10035,7 @@ init_define_import_meta_env();
 
 // src/styles/subway/context.tsx
 init_define_import_meta_env();
-import { createContext as createContext5, useContext as useContext5, useMemo as useMemo5, useState as useState4, useSyncExternalStore as useSyncExternalStore2 } from "react";
+import { createContext as createContext5, useContext as useContext5, useMemo as useMemo5, useState as useState3, useSyncExternalStore as useSyncExternalStore2 } from "react";
 
 // src/styles/subway/plan.ts
 init_define_import_meta_env();
@@ -10070,7 +10113,7 @@ function useLabelSpot(id2) {
   return useSyncExternalStore2(store ? (listener) => store.subscribe(id2, listener) : NO_SUBSCRIBE2, store ? () => store.get(id2) : NOTHING2, NOTHING2);
 }
 function SubwayProvider({ model, children: children2 }) {
-  let [labels] = useState4(() => new LabelStore()), value2 = useMemo5(() => ({ model, plan: () => subwayPlan(model), labels }), [model, labels]);
+  let [labels] = useState3(() => new LabelStore()), value2 = useMemo5(() => ({ model, plan: () => subwayPlan(model), labels }), [model, labels]);
   return /* @__PURE__ */ jsx8(SubwayCtx.Provider, { value: value2, children: children2 });
 }
 
@@ -11417,7 +11460,7 @@ function resolveStyleId(override, synced) {
 
 // src/page/graph-canvas.tsx
 init_define_import_meta_env();
-import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo7, useRef as useRef4, useState as useState6 } from "react";
+import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo7, useRef as useRef4, useState as useState5 } from "react";
 
 // src/page/canvas-routing.ts
 init_define_import_meta_env();
@@ -11488,7 +11531,7 @@ import {
   icons,
   PROFILE_SWATCHES
 } from "@hermes/plugin-sdk";
-import { useCallback as useCallback3, useState as useState5 } from "react";
+import { useCallback as useCallback3, useState as useState4 } from "react";
 import { Fragment as Fragment9, jsx as jsx13, jsxs as jsxs11 } from "react/jsx-runtime";
 function nodeIdAt(target) {
   let element = target?.closest?.(".react-flow__node, [data-st-node]");
@@ -11600,7 +11643,7 @@ function MenuItems({ node, actions, labels }) {
   ] });
 }
 function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) {
-  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState5(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback3(
+  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState4(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback3(
     (event) => {
       let id2 = actions?.takeRequestedMenuNode() ?? null ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
       if (!actions || !actions.canAct(target)) {
@@ -11647,7 +11690,7 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState5(initialViewport), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState5(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState5(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState5(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState5(null), active = frame2 ? activeExtra : null, [routing] = useState5(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
     let out = /* @__PURE__ */ new Map();
     for (let [id2, rect] of rects)
       canvasSelectable(model, shown, id2) && out.set(id2, rect);
@@ -12024,23 +12067,165 @@ function GraphCanvas(props) {
   ) });
 }
 
+// src/page/layout-history.tsx
+init_define_import_meta_env();
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from "@hermes/plugin-sdk";
+import { useState as useState6 } from "react";
+import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
+var BACKUPS_KEPT = 10, REASON_LABEL = {
+  rearrange: "Before Re-arrange",
+  restore: "Before a restore"
+};
+function focusOn(testId) {
+  return (event) => {
+    let target = event.target?.querySelector(`[data-testid="${testId}"]`);
+    target && (event.preventDefault(), target.focus());
+  };
+}
+function RearrangeConfirm({
+  open,
+  viewLabel,
+  onClose,
+  onConfirm,
+  onHistory
+}) {
+  return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
+    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
+      /* @__PURE__ */ jsx15(DialogTitle, { children: "Re-arrange this layout?" }),
+      /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-rearrange-text", children: [
+        "Every block in ",
+        viewLabel,
+        " goes back to the automatic layout. The current arrangement is kept in Layout history, so you can bring it back."
+      ] }) })
+    ] }),
+    /* @__PURE__ */ jsxs13(DialogFooter, { children: [
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          variant: "ghost",
+          className: "st-dlg-left",
+          "data-testid": "session-tree-rearrange-history",
+          onClick: () => {
+            onClose(), onHistory();
+          },
+          children: "Layout history…"
+        }
+      ),
+      /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", "data-testid": "session-tree-rearrange-cancel", onClick: onClose, children: "Cancel" }),
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          "data-testid": "session-tree-rearrange-confirm",
+          onClick: () => {
+            onClose(), onConfirm();
+          },
+          children: "Re-arrange"
+        }
+      )
+    ] })
+  ] }) });
+}
+function LayoutHistoryDialog({
+  ctx,
+  layout,
+  revision,
+  viewLabel,
+  nowMs,
+  flush,
+  onClose,
+  onRestore
+}) {
+  let [restoring, setRestoring] = useState6(null), [error, setError] = useState6(null), list = useQuery({
+    queryKey: ["session-tree", "backups", layout.profile, layout.style, layout.scope, revision],
+    queryFn: async () => (await flush(), fetchBackups(ctx, layout.profile, layout.style, layout.scope)),
+    retry: !1,
+    refetchOnWindowFocus: !1,
+    // A new revision keeps the list on screen until the new one arrives.
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey.slice(0, 5).join("\0") === ["session-tree", "backups", layout.profile, layout.style, layout.scope].join("\0") ? previous : void 0
+  }), restore = async (backup) => {
+    if (!restoring) {
+      setRestoring(backup.id), setError(null);
+      try {
+        let full = await fetchBackup(ctx, layout.profile, backup.id);
+        if (full.style !== layout.style || full.scope !== layout.scope)
+          throw new Error("That backup belongs to another view.");
+        onRestore(new Map(full.positions.map((entry) => [entry.id, { x: entry.x, y: entry.y }]))), onClose();
+      } catch (err) {
+        setError(restErrorText(err));
+      } finally {
+        setRestoring(null);
+      }
+    }
+  }, backups = list.data?.backups ?? [];
+  return /* @__PURE__ */ jsx15(Dialog, { open: !0, onOpenChange: (open) => !open && !restoring && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-lg", "data-testid": "session-tree-history-dialog", onOpenAutoFocus: focusOn("session-tree-history-close"), children: [
+    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
+      /* @__PURE__ */ jsx15(DialogTitle, { children: "Layout history" }),
+      /* @__PURE__ */ jsxs13(DialogDescription, { children: [
+        "Earlier arrangements of ",
+        viewLabel,
+        ". Each Re-arrange or restore keeps the arrangement it replaces (up to the last ",
+        BACKUPS_KEPT,
+        " per view, shared by your devices). Restoring replaces the current arrangement, which is kept here too."
+      ] })
+    ] }),
+    list.isPending && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-loading", children: "Loading…" }),
+    list.isError && !list.data && /* @__PURE__ */ jsxs13("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-error", children: [
+      "Could not load the layout history: ",
+      restErrorText(list.error)
+    ] }),
+    list.data && backups.length === 0 && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-empty", children: "No earlier arrangements of this view yet. Re-arrange keeps the one it replaces here." }),
+    backups.length > 0 && /* @__PURE__ */ jsx15("ul", { className: "st-hist-list", "data-testid": "session-tree-history-list", children: backups.map((backup) => /* @__PURE__ */ jsxs13("li", { className: "st-hist-row", "data-testid": "session-tree-history-row", "data-backup-id": backup.id, "data-count": backup.count, "data-reason": backup.reason, children: [
+      /* @__PURE__ */ jsxs13("span", { className: "st-hist-when", children: [
+        /* @__PURE__ */ jsx15("b", { children: dateTimeLabel(backup.created_at) }),
+        /* @__PURE__ */ jsx15("span", { className: "st-hist-ago", children: agoLabel(backup.created_at, nowMs) })
+      ] }),
+      /* @__PURE__ */ jsxs13("span", { className: "st-hist-what", children: [
+        backup.count,
+        " block",
+        backup.count === 1 ? "" : "s",
+        " · ",
+        REASON_LABEL[backup.reason]
+      ] }),
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          variant: "outline",
+          size: "sm",
+          disabled: !!restoring,
+          "data-testid": "session-tree-history-restore",
+          onClick: () => {
+            restore(backup);
+          },
+          children: restoring === backup.id ? "Restoring…" : "Restore"
+        }
+      )
+    ] }, backup.id)) }),
+    list.data?.read_only && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-read-only", children: "The history was written by a newer Session Tree: it reads as empty here." }),
+    error && /* @__PURE__ */ jsx15("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-restore-error", children: error }),
+    /* @__PURE__ */ jsx15(DialogFooter, { children: /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", disabled: !!restoring, "data-testid": "session-tree-history-close", onClick: onClose, children: "Close" }) })
+  ] }) });
+}
+
 // src/page/session-actions.tsx
 init_define_import_meta_env();
 import {
-  Button,
+  Button as Button2,
   ConfirmDialog,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog as Dialog2,
+  DialogContent as DialogContent2,
+  DialogFooter as DialogFooter2,
+  DialogHeader as DialogHeader2,
+  DialogTitle as DialogTitle2,
   host as host2,
   Input,
   isSubmitEnter,
   randomUuid
 } from "@hermes/plugin-sdk";
 import { useEffect as useEffect6, useMemo as useMemo8, useRef as useRef5, useState as useState7 } from "react";
-import { Fragment as Fragment10, jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
+import { Fragment as Fragment10, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
 var errorText = (error) => restErrorText(error), rpcReason = (error) => error?.data?.reason;
 function useRowOverrides(serverRows) {
   let [overrides, setOverrides] = useState7(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState7(serverRows);
@@ -12181,8 +12366,8 @@ function useSessionActionsController(options) {
       () => fetchMutationSnapshot(ctx, node.profile, row.id),
       (identity4) => postRename(ctx, node.profile, row.id, title, identity4)
     ))?.title;
-  }, dialogs = /* @__PURE__ */ jsxs13(Fragment10, { children: [
-    /* @__PURE__ */ jsx15(
+  }, dialogs = /* @__PURE__ */ jsxs14(Fragment10, { children: [
+    /* @__PURE__ */ jsx16(
       RenameDialog,
       {
         node: renaming,
@@ -12203,7 +12388,7 @@ function useSessionActionsController(options) {
       },
       renaming?.id ?? "none"
     ),
-    /* @__PURE__ */ jsx15(
+    /* @__PURE__ */ jsx16(
       DeleteDialog,
       {
         node: deleting,
@@ -12252,9 +12437,9 @@ function RenameDialog({
       setBusy(!1);
     }
   };
-  return /* @__PURE__ */ jsx15(Dialog, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
-    /* @__PURE__ */ jsx15(DialogHeader, { children: /* @__PURE__ */ jsx15(DialogTitle, { children: labels.renameTitle }) }),
-    /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(Dialog2, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs14(DialogContent2, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
+    /* @__PURE__ */ jsx16(DialogHeader2, { children: /* @__PURE__ */ jsx16(DialogTitle2, { children: labels.renameTitle }) }),
+    /* @__PURE__ */ jsx16(
       Input,
       {
         autoFocus: !0,
@@ -12269,10 +12454,10 @@ function RenameDialog({
         }
       }
     ),
-    error && /* @__PURE__ */ jsx15("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
-    /* @__PURE__ */ jsxs13(DialogFooter, { children: [
-      /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
-      /* @__PURE__ */ jsx15(Button, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
+    error && /* @__PURE__ */ jsx16("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
+    /* @__PURE__ */ jsxs14(DialogFooter2, { children: [
+      /* @__PURE__ */ jsx16(Button2, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
+      /* @__PURE__ */ jsx16(Button2, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
         submit();
       }, children: labels.save })
     ] })
@@ -12288,12 +12473,12 @@ function DeleteDialog({
 }) {
   let note = branchNote(branches), description = node ? [labels.deleteDesc(node.title), note, blocked ?? ""].filter(Boolean).join(`
 `) : "";
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     ConfirmDialog,
     {
       open: !!node,
       title: labels.deleteTitle,
-      description: /* @__PURE__ */ jsx15("span", { "data-testid": "session-tree-delete-text", children: description }),
+      description: /* @__PURE__ */ jsx16("span", { "data-testid": "session-tree-delete-text", children: description }),
       confirmLabel: labels.delete,
       busyLabel: labels.deleting,
       doneLabel: labels.deleted,
@@ -12463,6 +12648,14 @@ var LayoutSync = class {
     this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
   }
   /**
+   * A restore from Layout history: the layout becomes a backup's positions (by layout key); the
+   * server keeps the layout it replaces as a backup first. Answers what was shown, for Undo.
+   */
+  restoreBackup(ref, positions) {
+    let previous = this.positions(ref);
+    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: [...positions].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), backup: !0 }, !0), previous;
+  }
+  /**
    * A block moved to another project: forget its stored spot (by layout key) in every layout of
    * the profile (here and on the server), so each layout places it anew in its new band.
    */
@@ -12625,7 +12818,8 @@ var LayoutSync = class {
     else op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
       style: op.ref.style,
       scope: op.ref.scope,
-      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
+      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
+      ...op.backup ? { backup: !0 } : {}
     });
   }
   /** The server applied `op`: fold it into the snapshot this window keeps (the next fetch corrects it). */
@@ -12636,10 +12830,10 @@ var LayoutSync = class {
         state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
       return;
     }
-    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes]) => Object.keys(scopes).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
+    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes2]) => Object.keys(scopes2).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
     for (let ref of refs) {
-      let scopes = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
-      applyOp(current, op), current.size === 0 ? delete scopes[ref.scope] : scopes[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes).length === 0 && delete server.layouts[ref.style];
+      let scopes2 = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes2[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+      applyOp(current, op), current.size === 0 ? delete scopes2[ref.scope] : scopes2[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes2).length === 0 && delete server.layouts[ref.style];
     }
     state.server = server, this.cache(opProfile(op));
   }
@@ -12823,8 +13017,8 @@ function cssScale(rectWidth, layoutWidth, cssZoom) {
 }
 
 // src/page/toolbar.tsx
-import { Fragment as Fragment11, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
-var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx16("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0;
+import { Fragment as Fragment11, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
+var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx17("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0;
 function zoomOf(element) {
   let own = element.currentCSSZoom;
   if (typeof own == "number" && own > 0)
@@ -12889,7 +13083,7 @@ function ToolButton({
   children: children2,
   className
 }) {
-  return /* @__PURE__ */ jsx16(
+  return /* @__PURE__ */ jsx17(
     "button",
     {
       type: "button",
@@ -12934,12 +13128,12 @@ function Toolbar(props) {
     };
   }, [contents]), useLayoutEffect4(() => {
     stripRef.current && revealSelected(stripRef.current);
-  }, [props.scope]), /* @__PURE__ */ jsxs14("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
-    /* @__PURE__ */ jsxs14("span", { className: "st-brand", title: "Session tree", children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "type-hierarchy", size: 14 }),
-      /* @__PURE__ */ jsx16(Label, { children: "Session tree" })
+  }, [props.scope]), /* @__PURE__ */ jsxs15("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
+    /* @__PURE__ */ jsxs15("span", { className: "st-brand", title: "Session tree", children: [
+      /* @__PURE__ */ jsx17(Codicon10, { name: "type-hierarchy", size: 14 }),
+      /* @__PURE__ */ jsx17(Label, { children: "Session tree" })
     ] }),
-    /* @__PURE__ */ jsx16("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs14(
+    /* @__PURE__ */ jsx17("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs15(
       "div",
       {
         className: "st-scope",
@@ -12953,7 +13147,7 @@ function Toolbar(props) {
         },
         onScroll: (event) => applyFade(event.currentTarget),
         children: [
-          /* @__PURE__ */ jsx16(
+          /* @__PURE__ */ jsx17(
             "button",
             {
               type: "button",
@@ -12967,7 +13161,7 @@ function Toolbar(props) {
               children: "All"
             }
           ),
-          scoped.map((project) => /* @__PURE__ */ jsxs14(
+          scoped.map((project) => /* @__PURE__ */ jsxs15(
             "button",
             {
               type: "button",
@@ -12979,7 +13173,7 @@ function Toolbar(props) {
               onMouseDown: noFocus,
               onClick: () => props.onScope(project.id),
               children: [
-                /* @__PURE__ */ jsx16(ProjectGlyph, { project, size: 11 }),
+                /* @__PURE__ */ jsx17(ProjectGlyph, { project, size: 11 }),
                 project.label
               ]
             },
@@ -12988,9 +13182,9 @@ function Toolbar(props) {
         ]
       }
     ) }),
-    /* @__PURE__ */ jsxs14("label", { className: "st-profile", title: "Profile", children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "account", size: 12 }),
-      /* @__PURE__ */ jsxs14(
+    /* @__PURE__ */ jsxs15("label", { className: "st-profile", title: "Profile", children: [
+      /* @__PURE__ */ jsx17(Codicon10, { name: "account", size: 12 }),
+      /* @__PURE__ */ jsxs15(
         "select",
         {
           "data-testid": "session-tree-profile",
@@ -13003,20 +13197,20 @@ function Toolbar(props) {
             event.key === "Escape" && event.currentTarget.blur();
           },
           children: [
-            props.profiles.map((name) => /* @__PURE__ */ jsx16("option", { value: name, children: name }, name)),
-            /* @__PURE__ */ jsx16("option", { value: ALL_PROFILES, children: "All profiles" })
+            props.profiles.map((name) => /* @__PURE__ */ jsx17("option", { value: name, children: name }, name)),
+            /* @__PURE__ */ jsx17("option", { value: ALL_PROFILES, children: "All profiles" })
           ]
         }
       )
     ] }),
-    /* @__PURE__ */ jsxs14(
+    /* @__PURE__ */ jsxs15(
       "label",
       {
         className: "st-profile st-style",
         title: props.styleSource === "device" ? "View style (this device only — Settings → Plugins → Session Tree)" : "View style (synced to every device)",
         children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "layout", size: 12 }),
-          /* @__PURE__ */ jsx16(
+          /* @__PURE__ */ jsx17(Codicon10, { name: "layout", size: 12 }),
+          /* @__PURE__ */ jsx17(
             "select",
             {
               "data-testid": "session-tree-style",
@@ -13029,15 +13223,15 @@ function Toolbar(props) {
               onKeyDown: (event) => {
                 event.key === "Escape" && event.currentTarget.blur();
               },
-              children: props.styles.map((style2) => /* @__PURE__ */ jsx16("option", { value: style2.id, children: style2.label }, style2.id))
+              children: props.styles.map((style2) => /* @__PURE__ */ jsx17("option", { value: style2.id, children: style2.label }, style2.id))
             }
           )
         ]
       }
     ),
-    /* @__PURE__ */ jsxs14("div", { className: "st-tools", children: [
-      /* @__PURE__ */ jsxs14("span", { className: "st-tool-group", children: [
-        /* @__PURE__ */ jsxs14(
+    /* @__PURE__ */ jsxs15("div", { className: "st-tools", children: [
+      /* @__PURE__ */ jsxs15("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsxs15(
           ToolButton,
           {
             testId: "session-tree-show-all",
@@ -13045,12 +13239,12 @@ function Toolbar(props) {
             pressed: props.showAll,
             onClick: () => props.onShowAll(!props.showAll),
             children: [
-              /* @__PURE__ */ jsx16(Codicon10, { name: "list-flat", size: 13 }),
-              /* @__PURE__ */ jsx16(Label, { children: "Show all" })
+              /* @__PURE__ */ jsx17(Codicon10, { name: "list-flat", size: 13 }),
+              /* @__PURE__ */ jsx17(Label, { children: "Show all" })
             ]
           }
         ),
-        /* @__PURE__ */ jsxs14(
+        /* @__PURE__ */ jsxs15(
           ToolButton,
           {
             testId: "session-tree-show-archived",
@@ -13058,17 +13252,17 @@ function Toolbar(props) {
             pressed: props.showArchived,
             onClick: () => props.onShowArchived(!props.showArchived),
             children: [
-              /* @__PURE__ */ jsx16(Codicon10, { name: "archive", size: 13 }),
-              /* @__PURE__ */ jsx16(Label, { children: "Archived" })
+              /* @__PURE__ */ jsx17(Codicon10, { name: "archive", size: 13 }),
+              /* @__PURE__ */ jsx17(Label, { children: "Archived" })
             ]
           }
         ),
-        props.canRearrange !== !1 && /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx16(Codicon10, { name: "refresh", size: 13 }) })
+        props.canRearrange !== !1 && /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout; asks first, and opens Layout history)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx17(Codicon10, { name: "refresh", size: 13 }) })
       ] }),
-      /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
       props.snapUnavailable ? (
         // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
-        /* @__PURE__ */ jsx16("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs14(
+        /* @__PURE__ */ jsx17("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs15(
           "button",
           {
             type: "button",
@@ -13080,12 +13274,12 @@ function Toolbar(props) {
             disabled: !0,
             onMouseDown: noFocus,
             children: [
-              /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-              /* @__PURE__ */ jsx16(Label, { children: "Snap" })
+              /* @__PURE__ */ jsx17(Codicon10, { name: "symbol-numeric", size: 13 }),
+              /* @__PURE__ */ jsx17(Label, { children: "Snap" })
             ]
           }
         ) })
-      ) : /* @__PURE__ */ jsxs14(
+      ) : /* @__PURE__ */ jsxs15(
         ToolButton,
         {
           testId: "session-tree-snap",
@@ -13093,40 +13287,40 @@ function Toolbar(props) {
           pressed: props.snap,
           onClick: () => props.onSnap(!props.snap),
           children: [
-            /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-            /* @__PURE__ */ jsx16(Label, { children: "Snap" })
+            /* @__PURE__ */ jsx17(Codicon10, { name: "symbol-numeric", size: 13 }),
+            /* @__PURE__ */ jsx17(Label, { children: "Snap" })
           ]
         }
       ),
-      /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-      /* @__PURE__ */ jsxs14("span", { className: "st-tool-group", children: [
-        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+      /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsxs15("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
           zoomTo(clamp2(getZoom() / ZOOM_STEP));
         }, children: "−" }),
-        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
           zoomTo(1);
-        }, className: "st-zoom", children: /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-zoom", children: [
+        }, className: "st-zoom", children: /* @__PURE__ */ jsxs15("span", { "data-testid": "session-tree-zoom", children: [
           Math.round(zoom3 * 100),
           "%"
         ] }) }),
-        /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
           zoomTo(clamp2(getZoom() * ZOOM_STEP));
         }, children: "+" }),
-        /* @__PURE__ */ jsxs14(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "screen-full", size: 13 }),
-          /* @__PURE__ */ jsx16(Label, { children: "Fit" })
+        /* @__PURE__ */ jsxs15(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+          /* @__PURE__ */ jsx17(Codicon10, { name: "screen-full", size: 13 }),
+          /* @__PURE__ */ jsx17(Label, { children: "Fit" })
         ] })
       ] }),
-      props.hasPanel && /* @__PURE__ */ jsxs14(Fragment11, { children: [
-        /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-        /* @__PURE__ */ jsx16(
+      props.hasPanel && /* @__PURE__ */ jsxs15(Fragment11, { children: [
+        /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
+        /* @__PURE__ */ jsx17(
           ToolButton,
           {
             testId: "session-tree-panel",
             title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
             pressed: props.panelOpen,
             onClick: () => props.onPanel(!props.panelOpen),
-            children: /* @__PURE__ */ jsx16(Codicon10, { name: "layout-sidebar-right", size: 13 })
+            children: /* @__PURE__ */ jsx17(Codicon10, { name: "layout-sidebar-right", size: 13 })
           }
         )
       ] })
@@ -13155,27 +13349,27 @@ function useLiveRefresh(ctx, refresh) {
 }
 
 // src/page/session-tree-page.tsx
-import { Fragment as Fragment12, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
 var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", REFRESH_FAILED_MESSAGE = "Couldn’t refresh — showing the last data", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx, services }) {
-  return /* @__PURE__ */ jsx17(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx17(ReactFlowProvider, { children: /* @__PURE__ */ jsx17(PageBody, { ctx, services }) }) });
+  return /* @__PURE__ */ jsx18(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx18(ReactFlowProvider, { children: /* @__PURE__ */ jsx18(PageBody, { ctx, services }) }) });
 }
 function PageBody({ ctx, services: { sync, prefs } }) {
   let activeProfile = useValue(host4.state.profile) || "default", syncVersion = useSyncVersion(sync);
   usePrefsVersion(prefs);
-  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState8(ALL_PROJECTS), [selectionChoice, setSelection] = useState8(EMPTY_SELECTION), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
+  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, scopeChoice = prefs.scope(profile), [selectionChoice, setSelection] = useState8(EMPTY_SELECTION), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), [confirmRearrange, setConfirmRearrange] = useState8(!1), [historyOpen, setHistoryOpen] = useState8(!1), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
   useEffect8(() => sync.watch(profile), [sync, profile]);
-  let health = useQuery({
+  let health = useQuery2({
     queryKey: ["session-tree", "health", activeProfile],
     queryFn: () => fetchHealth(ctx, activeProfile),
     retry: !1,
     refetchOnWindowFocus: !1
-  }), profiles = useQuery({
+  }), profiles = useQuery2({
     queryKey: ["session-tree", "profiles"],
     queryFn: () => fetchProfiles(ctx),
     retry: !1,
     refetchOnWindowFocus: !1
-  }), sessions = useQuery({
+  }), sessions = useQuery2({
     queryKey: ["session-tree", "sessions", profile, showArchived],
     queryFn: () => fetchSessions(ctx, { profile, includeArchived: showArchived }),
     // Show archived refetches with the same profile: keep the canvas (viewport, selection,
@@ -13186,7 +13380,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   }), profileNames = useMemo9(() => {
     let names = new Set(profiles.data?.profiles ?? []);
     return names.add(activeProfile), profile !== ALL_PROFILES && names.add(profile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
-  }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
+  }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery2({
     queryKey: ["session-tree", "projects", projectProfiles.join(",")],
     queryFn: () => fetchProjects(projectProfiles, ctx),
     // The gateway socket may still be connecting on a cold page load.
@@ -13302,11 +13496,24 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     requestFit(), setToast({
       id: id2,
       message: "Layout re-arranged",
+      history: !0,
       undo: () => {
         sync.restore(ref, previous), setToast(void 0), requestFit();
       }
     });
-  }, [sync, ref, style2, requestFit, setToast]);
+  }, [sync, ref, style2, requestFit, setToast]), onRestoreBackup = useCallback6(
+    (positions) => {
+      let previous = sync.restoreBackup(ref, positions);
+      requestFit(), setToast({
+        id: Date.now(),
+        message: "Earlier layout restored",
+        undo: () => {
+          sync.restore(ref, previous), setToast(void 0), requestFit();
+        }
+      });
+    },
+    [sync, ref, requestFit, setToast]
+  ), flushSync = useCallback6(() => sync.flush(), [sync]);
   useEffect8(() => {
     if (toast)
       return ctx.setTimeout(() => setToast((current) => current?.id === toast.id ? void 0 : current), UNDO_TOAST_MS);
@@ -13342,28 +13549,28 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   }), visibleCount = useMemo9(() => visibleRows(rows).length, [rows]), onCanvas = useMemo9(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
-  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
+  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), sectionOpen = useCallback6((section) => prefs.sectionOpen(style2.id, section), [prefs, style2]), onSection = useCallback6((section, open) => prefs.setSectionOpen(style2.id, section, open), [prefs, style2]), viewLabel = `${style2.label} · ${scope === ALL_PROJECTS ? "All projects" : projectList.find((project) => project.id === scope)?.label ?? scope}${profile === ALL_PROFILES ? " · All profiles" : profile !== activeProfile ? ` · ${profile}` : ""}`, offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
     (id2) => {
       prefs.get().styleOverride ? prefs.set({ styleOverride: id2 }) : sync.setSettings(profile, { style: id2 });
     },
     [prefs, sync, profile]
   );
   if (health.isError)
-    return /* @__PURE__ */ jsx17("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx17(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
+    return /* @__PURE__ */ jsx18("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx18(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
   let body, sessionsFailed = sessions.isError && !sessions.data, projectsFailed = projects.isError && !projects.data;
   if (sessionsFailed || projectsFailed) {
     let failed = sessionsFailed ? sessions : projects;
-    body = /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessionsFailed ? "sessions" : "projects", children: /* @__PURE__ */ jsx17(ErrorState, { title: sessionsFailed ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx17(Button2, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
+    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessionsFailed ? "sessions" : "projects", children: /* @__PURE__ */ jsx18(ErrorState, { title: sessionsFailed ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx18(Button3, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
       failed.refetch();
     }, children: failed.isFetching ? "Retrying…" : "Retry" }) }) });
   } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile))
-    body = /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx17(EmptyState, { title: "Loading sessions…" }) });
+    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx18(EmptyState, { title: "Loading sessions…" }) });
   else if (model.nodes.length === 0)
-    body = /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx17(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
+    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx18(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
   else {
     let saved = prefs.viewport(vpKey);
-    body = /* @__PURE__ */ jsxs15(Fragment12, { children: [
-      /* @__PURE__ */ jsx17(
+    body = /* @__PURE__ */ jsxs16(Fragment12, { children: [
+      /* @__PURE__ */ jsx18(
         GraphCanvas,
         {
           style: style2,
@@ -13388,10 +13595,10 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           onPanel
         }
       ),
-      onCanvas === 0 && /* @__PURE__ */ jsx17("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : style2.singles === "depot" ? "No branched sessions here — the sessions without branches are in the depot below." : "No branched sessions here — the sessions without branches are listed on the right." })
+      onCanvas === 0 && /* @__PURE__ */ jsx18("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : style2.singles === "depot" ? "No branched sessions here — the sessions without branches are in the depot below." : "No branched sessions here — the sessions without branches are listed on the right." })
     ] });
   }
-  return /* @__PURE__ */ jsx17(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs15(
+  return /* @__PURE__ */ jsx18(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs16(
     "div",
     {
       className: "session-tree",
@@ -13408,16 +13615,16 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       "data-refresh-failed": refreshFailed ? "true" : void 0,
       title: projects.isError ? `projects.tree: ${errorText2(projects.error)}` : void 0,
       children: [
-        /* @__PURE__ */ jsx17(
+        /* @__PURE__ */ jsx18(
           Toolbar,
           {
             projects: projectList,
             scope,
-            onScope: setScope,
+            onScope: (next) => prefs.setScope(profile, next),
             profiles: profileNames,
             profile,
             onProfile: (next) => {
-              prefs.set({ profile: next === activeProfile ? null : next }), setScope(ALL_PROJECTS), setSelection(EMPTY_SELECTION);
+              prefs.set({ profile: next === activeProfile ? null : next }), setSelection(EMPTY_SELECTION);
             },
             showAll,
             onShowAll: (on) => {
@@ -13430,7 +13637,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             minZoom: MIN_ZOOM,
             maxZoom: MAX_ZOOM,
             onFit: fit,
-            onRearrange,
+            onRearrange: () => setConfirmRearrange(!0),
             canRearrange: style2.savesLayout,
             snapUnavailable: style2.draggable ? void 0 : style2.snapUnavailable,
             singlesCount: model.singles.length,
@@ -13443,21 +13650,59 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             onPanel: (open) => prefs.setPanelOpen(style2.id, open)
           }
         ),
-        offline && /* @__PURE__ */ jsx17("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
-        sync.storeReadOnly && /* @__PURE__ */ jsx17("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
-        /* @__PURE__ */ jsxs15("div", { className: "session-tree__main", children: [
-          /* @__PURE__ */ jsxs15("div", { className: "session-tree__stage", children: [
+        offline && /* @__PURE__ */ jsx18("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
+        sync.storeReadOnly && /* @__PURE__ */ jsx18("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
+        /* @__PURE__ */ jsxs16("div", { className: "session-tree__main", children: [
+          /* @__PURE__ */ jsxs16("div", { className: "session-tree__stage", children: [
             body,
-            refreshFailed && /* @__PURE__ */ jsx17("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
+            refreshFailed && /* @__PURE__ */ jsx18("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
           ] }),
-          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx17(Panel2, { model, selectedId, selectedIds: selection2.ids, onSelect, onOpen, statusOf, nowMs })
+          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx18(
+            Panel2,
+            {
+              model,
+              selectedId,
+              selectedIds: selection2.ids,
+              onSelect,
+              onOpen,
+              statusOf,
+              nowMs,
+              sectionOpen,
+              onSection
+            }
+          )
         ] }),
-        toast && /* @__PURE__ */ jsxs15("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
-          /* @__PURE__ */ jsx17("span", { children: toast.message }),
-          /* @__PURE__ */ jsx17("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
-          /* @__PURE__ */ jsx17("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
+        toast && /* @__PURE__ */ jsxs16("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
+          /* @__PURE__ */ jsx18("span", { children: toast.message }),
+          /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
+          toast.history && style2.savesLayout && /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-toast-history", onClick: () => setHistoryOpen(!0), children: "Layout history" }),
+          /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
         ] }),
-        dialogs
+        dialogs,
+        /* @__PURE__ */ jsx18(
+          RearrangeConfirm,
+          {
+            open: confirmRearrange && style2.savesLayout,
+            viewLabel,
+            onClose: () => setConfirmRearrange(!1),
+            onConfirm: onRearrange,
+            onHistory: () => setHistoryOpen(!0)
+          }
+        ),
+        historyOpen && style2.savesLayout && /* @__PURE__ */ jsx18(
+          LayoutHistoryDialog,
+          {
+            ctx,
+            layout: ref,
+            revision: sync.revision(profile),
+            viewLabel,
+            nowMs,
+            flush: flushSync,
+            onClose: () => setHistoryOpen(!1),
+            onRestore: onRestoreBackup
+          },
+          `${ref.profile}\0${ref.style}\0${ref.scope}`
+        )
       ]
     }
   ) });
@@ -13470,29 +13715,29 @@ function errorText2(error) {
 init_define_import_meta_env();
 import { host as host5, ListRow, SegmentedControl, ToggleRow, useValue as useValue2 } from "@hermes/plugin-sdk";
 import { useEffect as useEffect9 } from "react";
-import { jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
+import { jsx as jsx19, jsxs as jsxs17 } from "react/jsx-runtime";
 var USE_SYNCED = "synced";
 function SettingsPage({ services: { sync, prefs } }) {
   let profile = useValue2(host5.state.profile) || "default";
   useSyncVersion(sync), usePrefsVersion(prefs), useEffect9(() => sync.watch(profile), [sync, profile]);
   let styles = registeredStyles().map((style2) => ({ id: style2.id, label: style2.label })), settings = sync.settings(profile), synced = isRegisteredStyle(settings.style) ? settings.style : DEFAULT_STYLE_ID, override = prefs.get().styleOverride, device = isRegisteredStyle(override) ? override : USE_SYNCED, offline = sync.offline(profile);
-  return /* @__PURE__ */ jsxs16("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
-    /* @__PURE__ */ jsx18(
+  return /* @__PURE__ */ jsxs17("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
+    /* @__PURE__ */ jsx19(
       ListRow,
       {
         id: "session-tree-view-style",
         title: "View style",
         description: "How the session graph is drawn, on every device that uses this Hermes.",
-        action: /* @__PURE__ */ jsx18("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx18(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
+        action: /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx19(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
       }
     ),
-    /* @__PURE__ */ jsx18(
+    /* @__PURE__ */ jsx19(
       ListRow,
       {
         id: "session-tree-device-style",
         title: "On this device",
         description: "Use the synced style here, or pick one for this device only.",
-        action: /* @__PURE__ */ jsx18("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx18(
+        action: /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx19(
           SegmentedControl,
           {
             options: [{ id: USE_SYNCED, label: "Use synced style" }, ...styles],
@@ -13502,7 +13747,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         ) })
       }
     ),
-    /* @__PURE__ */ jsx18("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx18(
+    /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx19(
       ToggleRow,
       {
         id: "session-tree-snap-default",
@@ -13512,7 +13757,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         onChange: (on) => sync.setSettings(profile, { snap: on })
       }
     ) }),
-    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx18("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
+    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx19("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
   ] });
 }
 
@@ -14506,6 +14751,58 @@ g.is-dimmed {
 
 .st-toast-btn:hover {
   background: var(--ui-bg-tertiary);
+}
+
+/* Layout history (the backups a Re-arrange or a restore keeps). */
+.st-hist-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 360px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 7px;
+}
+
+.st-hist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
+  font-size: 12.5px;
+}
+
+.st-hist-row + .st-hist-row {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+
+.st-hist-when {
+  display: flex;
+  flex-direction: column;
+  min-width: 112px;
+}
+
+.st-hist-ago,
+.st-hist-what {
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+}
+
+.st-hist-what {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-hist-note {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+/* The Re-arrange confirm: Layout history… on the left, Cancel and Re-arrange on the right. */
+.st-dlg-left {
+  margin-right: auto;
 }
 
 .st-style select {
@@ -16080,7 +16377,7 @@ var subway_default = `/* --- Subway map (card 7; mockup variants/subway-map/) --
 `;
 
 // src/plugin.tsx
-import { jsx as jsx19 } from "react/jsx-runtime";
+import { jsx as jsx20 } from "react/jsx-runtime";
 var PLUGIN_ID = "session-tree", ROUTE_PATH = "/session-tree";
 function injectStyles(ctx) {
   let style2 = document.createElement("style");
@@ -16100,7 +16397,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx19(SessionTreePage, { ctx, services })
+        render: () => /* @__PURE__ */ jsx20(SessionTreePage, { ctx, services })
       },
       {
         id: "nav",
@@ -16121,7 +16418,7 @@ var plugin = {
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx19(SettingsPage, { services })
+      render: () => /* @__PURE__ */ jsx20(SettingsPage, { services })
     });
   }
 }, plugin_default = plugin;

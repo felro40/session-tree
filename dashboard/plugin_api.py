@@ -502,6 +502,8 @@ class LayoutBody(BaseModel):
     style: StrictStr = Field(..., max_length=32)
     scope: StrictStr = Field(..., min_length=1, max_length=1024)
     positions: list[Any]
+    #: A restore of a backup: the layout it replaces is kept as a backup first.
+    backup: StrictBool = False
 
 
 class SettingsBody(BaseModel):
@@ -557,7 +559,8 @@ def patch_settings(body: SettingsBody, profile: str = _profile_query()) -> dict[
 @router.delete("/state/layout")
 def delete_layout(profile: str = _profile_query(), style: str = Query(..., max_length=32),
                   scope: str = Query(..., min_length=1, max_length=1024)) -> dict[str, Any]:
-    """Re-arrange: forget one style + scope layout. Answers the removed entries (Undo's input)."""
+    """Re-arrange: forget one style + scope layout. Answers the removed entries (Undo's input)
+    and ``backup_id``: the backup kept of them (``GET /state/backups``)."""
     name = _view_profile(profile)
     result = _store_call(_state_store().delete_layout, name, style, scope)
     if result["changed"]:
@@ -567,12 +570,29 @@ def delete_layout(profile: str = _profile_query(), style: str = Query(..., max_l
 
 @router.put("/state/layout")
 def put_layout(body: LayoutBody, profile: str = _profile_query()) -> dict[str, Any]:
-    """Undo of a Re-arrange: one style + scope layout becomes exactly ``positions``."""
+    """Undo of a Re-arrange, or a restore of a backup (``backup: true``: the layout it replaces
+    is kept as a backup first): one style + scope layout becomes exactly ``positions``."""
     name = _view_profile(profile)
-    result = _store_call(_state_store().replace_layout, name, body.style, body.scope, body.positions)
+    result = _store_call(_state_store().replace_layout, name, body.style, body.scope, body.positions, backup=body.backup)
     if result["changed"]:
         _changed(result["rev"], name, "restore", result["epoch"])
     return result
+
+
+@router.get("/state/backups")
+def list_backups(profile: str = _profile_query(), style: str = Query(..., max_length=32),
+                 scope: str = Query(..., min_length=1, max_length=1024)) -> dict[str, Any]:
+    """The backups of one style + scope layout, newest first: ``[{id, created_at, reason, count}]``
+    (``reason``: ``rearrange`` or ``restore``, what replaced the layout)."""
+    name = _view_profile(profile)
+    return _store_call(_state_store().list_backups, name, style, scope)
+
+
+@router.get("/state/backups/{backup_id}")
+def get_backup(backup_id: str, profile: str = _profile_query()) -> dict[str, Any]:
+    """One backup with its positions (``[{id, x, y}]``, ``PUT /state/layout``'s input)."""
+    name = _view_profile(profile)
+    return _store_call(_state_store().get_backup, name, backup_id)
 
 
 class ForgetBody(BaseModel):

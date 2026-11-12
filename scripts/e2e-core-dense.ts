@@ -210,6 +210,16 @@ async function clickToolbar(page: Page, testId: string): Promise<void> {
   await page.waitForTimeout(250)
 }
 
+/** Re-arrange asks first: the toolbar button, then the confirm's Re-arrange. */
+async function rearrange(page: Page): Promise<void> {
+  await page.locator('[data-testid="session-tree-rearrange"]').click()
+  const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
+  await dialog.locator('[data-testid="session-tree-rearrange-confirm"]').click()
+  await dialog.waitFor({ state: 'detached', timeout: 5000 })
+  await page.waitForTimeout(250)
+}
+
 async function setScope(page: Page, label: string): Promise<void> {
   await page.locator('[data-testid="session-tree-scope"] button', { hasText: label }).first().click()
   await page.waitForTimeout(400)
@@ -562,7 +572,7 @@ async function main(): Promise<void> {
       const dragged = await flowPosition(page, 'st-sys-tip')
 
       assert(dragged.y > position.y + 30, `no block drag after Space: ${dragged.y - position.y}`)
-      await clickToolbar(page, 'session-tree-rearrange')
+      await rearrange(page)
       await page.waitForTimeout(300)
 
       return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
@@ -623,7 +633,7 @@ async function main(): Promise<void> {
       const dragged = await flowPosition(page, 'st-sys-tip')
 
       assert(dragged.y > position.y + 30, `no block drag after Alt: ${dragged.y - position.y}`)
-      await clickToolbar(page, 'session-tree-rearrange')
+      await rearrange(page)
       await page.waitForTimeout(300)
 
       return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
@@ -703,9 +713,44 @@ async function main(): Promise<void> {
       return { detoured, samples: intrusions.samples, links: all.length }
     })
 
-    await check('Re-arrange recomputes the auto-layout', async () => {
+    await check('Re-arrange asks first (Cancel, Space and Enter keep the layout); confirmed, it recomputes the auto-layout', async () => {
+      const kept = await flowPosition(page, 'st-hp-routing')
+      const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
       await clickToolbar(page, 'session-tree-rearrange')
+      await dialog.waitFor({ timeout: 5000 })
+      await page.screenshot({ path: join(shots, 'core-dense-rearrange-confirm.png') })
+      // The focus opens on a harmless button: a misclick followed by Space (pan) or Enter.
+      const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null)
+
+      await page.keyboard.press('Space')
+      await page.waitForTimeout(300)
+      await page.keyboard.press('Enter')
+      await page.waitForTimeout(300)
+
+      if (await dialog.count()) {
+        await dialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+      }
+
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
+      // Whatever Space / Enter opened (Layout history), close it.
+      const history = page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+
+      if (await history.count()) {
+        await history.locator('[data-testid="session-tree-history-close"]').click()
+        await history.waitFor({ state: 'detached', timeout: 5000 })
+      }
+
+      await clickToolbar(page, 'session-tree-rearrange')
+      await dialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
       await page.waitForTimeout(400)
+      const afterCancel = await flowPosition(page, 'st-hp-routing')
+
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}, not Cancel`)
+      assert(near(afterCancel.x, kept.x, 0.5) && near(afterCancel.y, kept.y, 0.5), `Space / Enter / Cancel moved the block: ${JSON.stringify(kept)} → ${JSON.stringify(afterCancel)}`)
+      await rearrange(page)
+      await page.waitForTimeout(150)
       const routing = await flowPosition(page, 'st-hp-routing')
       const root = await flowPosition(page, 'st-hp-root')
 

@@ -10,7 +10,8 @@ How Session Tree keeps block positions and the view settings across reloads, win
 | View style (`style`), Snap grid (`snap`) | backend store, `settings` | every window and device served by the gateway |
 | Block positions, per profile → style → scope → layout key, `{x, y, updated_at}` | backend store, `layouts` | yes |
 | Zoom + pan per style + profile + scope | `ctx.storage` `viewport.v1:<style>\|<profile>\|<scope>` | no (this device) |
-| Show all, Show archived, the profile filter, the style override, the side panel per style | `ctx.storage` `device.v1` | no |
+| Show all, Show archived, the profile filter, the project scope per profile filter (`scopes`), the style override, the side panel per style, a panel's sections (`sectionsOpen`: the Dense inspector's Singles) | `ctx.storage` `device.v1` | no |
+| Layout history: the arrangements a Re-arrange or a restore replaced, per profile → style → scope | backend store, `backups.json` | yes |
 | The last server snapshot of each profile (offline fallback; never a read-only one) | `ctx.storage` `layoutCache.v1:<profile>` | — |
 | Changes not yet acknowledged by the backend, one slot per window | `ctx.storage` `layoutPending.v2` | — |
 | The latest drop time per layout + key on this device | `ctx.storage` `layoutDrops.v1` | — |
@@ -93,6 +94,28 @@ its spot, and every compaction leaves exactly one entry.
   entry is kept when its key is an existing session id or the lineage root of one. Group labels
   and stand-ins are not sessions and stay. When a profile's store cannot be read, nothing is
   pruned or moved.
+- **Layout history (`backups.json`, its own schema 1):** `{"schema": 1, "backups": [{id, profile,
+  style, scope, created_at, reason, positions: {key: {x, y}}}]}`, oldest first. A Re-arrange
+  (`DELETE /state/layout`) keeps the layout it forgets (`reason: "rearrange"`); a restore
+  (`PUT /state/layout` with `backup: true`) keeps the one it replaces (`"restore"`); an Undo
+  (`PUT` without it) and a Re-arrange of nothing keep none. An arrangement the layout already has
+  a backup of adds no second copy (that one moves to the newest end). At most 10 per profile +
+  style + scope (the oldest go first), 200 in all, within 16 MiB; the global caps take the oldest
+  backup of a layout that has more than one first, so a layout keeps its newest backup unless
+  every layout is down to one. Written under the same locks,
+  atomically, **before** `state.json`: a writer killed in between leaves one extra backup, never a
+  lost layout. A corrupt `backups.json` is moved to `backups.json.corrupt-<time>-<random>.bak` and
+  never blocks a Re-arrange; a newer-schema one (after a downgrade) reads as empty
+  (`read_only: true`) and refuses a Re-arrange and a restore (409 `layout_history_newer: …`, the
+  layout stays; not `newer_schema`, so the page stays writable and the page drops the refused op
+  with one notice). Drops, Undo and `POST /state/forget` still work then (forget leaves a newer
+  file alone). `POST /state/forget` drops the blocks from
+  the profile's backups too (a backup that held only them goes). Backups are not pruned when a
+  session is deleted: a restore with a gone session's key is harmless (no block uses it, and the
+  next `GET /state` prunes it). A restore is a `PUT` of positions, not of a backup id, so the
+  server cannot tell that they came from a backup of the same style + scope; the page checks it
+  (`layout-history.tsx`), and a mismatched `PUT` is no worse than any other `PUT`. A separate
+  file, so `state.json` keeps its schema and an older Session Tree reads it as before.
 
 ## Endpoints (`dashboard/plugin_api.py`)
 
@@ -105,8 +128,10 @@ Every write answers `epoch` too.
 | `GET /state[?since_rev=N&epoch=E]` | `{schema, epoch, rev, settings, layouts, read_only[, store_schema]}` of the profile (pruned and canonicalised first); `since_rev` + `epoch` naming the current state answer `{schema, epoch, rev, unchanged: true}` (the cheap poll). Only both together: a `since_rev` without `epoch`, or with another epoch, gets the full state. |
 | `PATCH /state/positions` `{style, scope, mode: set\|if_absent, positions: [{id, x, y}]}` | Batch upsert → `{ok, rev, changed, applied, skipped, updated_at}`. |
 | `PATCH /settings` `{style?, snap?}` | The synced settings (global) → `{ok, rev, changed, settings}`. |
-| `DELETE /state/layout?style=&scope=` | Re-arrange: removes one layout → `{ok, rev, changed, removed}`. |
-| `PUT /state/layout` `{style, scope, positions}` | Undo: the layout becomes exactly `positions` → `{ok, rev, changed, count}`. |
+| `DELETE /state/layout?style=&scope=` | Re-arrange: removes one layout (keeping a backup of it) → `{ok, rev, changed, removed, backup_id}`. |
+| `PUT /state/layout` `{style, scope, positions, backup?}` | Undo: the layout becomes exactly `positions` → `{ok, rev, changed, count, backup_id}`. `backup: true` (a restore from Layout history) keeps the layout it replaces first. |
+| `GET /state/backups?style=&scope=` | Layout history of one layout, newest first → `{ok, backups: [{id, created_at, reason, count}], read_only}`. |
+| `GET /state/backups/{id}` | One backup of the profile → `{ok, id, style, scope, created_at, reason, positions: [{id, x, y}]}` (404 for another profile's or an unknown id; 400 for a malformed id). |
 | `POST /state/forget` `{ids}` | A session moved to another project: its blocks leave every layout of the profile (so each layout places it anew in its new band). |
 
 None of them touches `state.db`.
@@ -121,8 +146,18 @@ None of them touches `state.db`.
 - **Writes:** queued, sent after a 300 ms trailing debounce, consecutive upserts of one layout
   batched into one request. Nothing is sent while a block is dragged (`setDragging`); the drop is
   recorded on mouse-up and goes out 300 ms later. Auto-layout placements go as `if_absent`.
-- **Re-arrange** queues a delete of the current style + scope layout and shows a toast with Undo,
-  which queues a `PUT` of exactly what the window showed before.
+- **Re-arrange** asks first (a plain dialog naming the view, not the SDK's ConfirmDialog, which
+  confirms on Enter and Space whichever button holds focus: Space is the pan key). The confirm
+  opens with focus on Cancel and Layout history with focus on Close, so Space, Enter or Escape
+  after a misclick change nothing; only a click on Re-arrange or Restore does. Then it
+  queues a delete of the
+  current style + scope layout and shows a toast with Undo, which queues a `PUT` of exactly what
+  the window showed before.
+- **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
+  in Swimlanes; the toolbar has no room for a button of its own at the narrowest widths) sends this
+  window's queue first, then lists the backups of the shown layout, refetched on every store
+  revision. Restore fetches one backup and queues a `PUT` with `backup: true` (shown at once,
+  with an Undo toast like Re-arrange); blocks the backup lacks are placed anew by the auto-layout.
 - **Offline (transient failures):** a request with no answer (network, timeout), a 5xx, 408 or
   429 keeps the queue in `ctx.storage`, marks the profile offline ("offline: showing last saved
   layout" banner) and retries with a backoff (1, 2, 5, 5, 10 s). Nothing is notified. The page keeps
