@@ -4,9 +4,13 @@
  * restore keeps the one it replaces, so a misclick can be taken back after the Undo toast is
  * gone, and from any device. Restore replaces the current arrangement (with Undo).
  *
- * Also the Re-arrange confirm: Re-arrange is never one click.
+ * Also the Re-arrange confirm, which is where Layout history is opened from (and the Re-arrange
+ * toast): the toolbar has no room for a button of its own at the narrowest widths. The confirm is
+ * a plain dialog, not the SDK's ConfirmDialog, which confirms on Enter and Space whichever button
+ * has focus: Space is the pan key, and a misclick followed by Space must not re-arrange. Focus
+ * opens on Layout history…; only a click on Re-arrange re-arranges.
  */
-import { Button, ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from '@hermes/plugin-sdk'
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
 import { useState } from 'react'
 
@@ -25,22 +29,59 @@ const REASON_LABEL: Record<LayoutBackupInfo['reason'], string> = {
   restore: 'Before a restore'
 }
 
-export function RearrangeConfirm({ open, viewLabel, onClose, onConfirm }: { open: boolean; viewLabel: string; onClose(): void; onConfirm(): void }) {
+export function RearrangeConfirm({
+  open,
+  viewLabel,
+  onClose,
+  onConfirm,
+  onHistory
+}: {
+  open: boolean
+  viewLabel: string
+  onClose(): void
+  onConfirm(): void
+  onHistory(): void
+}) {
   return (
-    <ConfirmDialog
-      open={open}
-      title="Re-arrange this layout?"
-      description={
-        <span data-testid="session-tree-rearrange-text">
-          Every block in {viewLabel} goes back to the automatic layout. The current arrangement is kept in Layout history, so you can bring it back.
-        </span>
-      }
-      confirmLabel="Re-arrange"
-      cancelLabel="Cancel"
-      dismissOnConfirm
-      onClose={onClose}
-      onConfirm={onConfirm}
-    />
+    <Dialog open={open} onOpenChange={next => !next && onClose()}>
+      <DialogContent className="max-w-md" data-testid="session-tree-rearrange-dialog">
+        <DialogHeader>
+          <DialogTitle>Re-arrange this layout?</DialogTitle>
+          <DialogDescription>
+            <span data-testid="session-tree-rearrange-text">
+              Every block in {viewLabel} goes back to the automatic layout. The current arrangement is kept in Layout history, so you can bring it back.
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            className="st-dlg-left"
+            data-testid="session-tree-rearrange-history"
+            onClick={() => {
+              onClose()
+              onHistory()
+            }}
+          >
+            Layout history…
+          </Button>
+          <Button type="button" variant="ghost" data-testid="session-tree-rearrange-cancel" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            data-testid="session-tree-rearrange-confirm"
+            onClick={() => {
+              onClose()
+              onConfirm()
+            }}
+          >
+            Re-arrange
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -549,30 +549,48 @@ async function main(): Promise<void> {
       return { overrideKeptSynced: true, denseTip: dense, altTip: alt }
     })
 
-    await check('Re-arrange asks first (Cancel and Escape keep the layout); confirmed, it resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
+    await check('Re-arrange asks first (Cancel, Escape, Space and Enter keep the layout); confirmed, it resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
       await fit(a.page)
       const before = layoutOf(await stored(a))
       const moved = before[key('st-sys-tip')]
-      const confirmDialog = a.page.getByRole('dialog').filter({ hasText: 'Re-arrange this layout?' })
+      const confirmDialog = a.page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+      const historyDialog = a.page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
 
       // A misclick: nothing is forgotten until the confirm.
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
       await confirmDialog.waitFor({ timeout: 5000 })
       const asked = (await a.page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+      const focused = await a.page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null)
 
       await a.page.screenshot({ path: join(shots, 'sync-rearrange-confirm.png') })
-      await confirmDialog.getByRole('button', { name: 'Cancel' }).click()
+      await confirmDialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
       await confirmDialog.waitFor({ state: 'detached', timeout: 5000 })
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
       await confirmDialog.waitFor({ timeout: 5000 })
       await a.page.keyboard.press('Escape')
       await confirmDialog.waitFor({ state: 'detached', timeout: 5000 })
+      // Space (the pan key) and Enter right after a misclick: the focused button is not Re-arrange.
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.waitFor({ timeout: 5000 })
+      await a.page.keyboard.press('Space')
+      await sleep(300)
+      await a.page.keyboard.press('Enter')
+      await sleep(300)
+
+      for (const dialog of [confirmDialog, historyDialog]) {
+        if (await dialog.count()) {
+          await a.page.keyboard.press('Escape')
+          await dialog.waitFor({ state: 'detached', timeout: 5000 })
+        }
+      }
+
       await sleep(1000)
+      assert(focused !== 'session-tree-rearrange-confirm', 'the confirm opens with Re-arrange focused')
       assert(!saves(logA).some(entry => entry.method === 'DELETE'), 'a cancelled Re-arrange sent a DELETE')
       assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'a cancelled Re-arrange changed the layout')
       assert(/Dense \+ inspector · All projects/.test(asked) && /Layout history/.test(asked), `confirm text: ${asked}`)
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
-      await confirmDialog.getByRole('button', { name: 'Re-arrange' }).click()
+      await confirmDialog.locator('[data-testid="session-tree-rearrange-confirm"]').click()
       await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ timeout: 5000 })
       await a.page.screenshot({ path: join(shots, 'sync-rearrange-toast.png') })
       const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
@@ -595,16 +613,27 @@ async function main(): Promise<void> {
       assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
       assert(saves(logA).some(entry => entry.method === 'DELETE') && saves(logA).some(entry => entry.method === 'PUT'), 'no DELETE / PUT')
 
-      return { asked, dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+      return { asked, focused, dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
     })
 
-    await check('Layout history: after the Undo toast is gone, the other device (B) restores the re-arranged layout; the restore is itself in the history', async () => {
+    await check('Layout history: the Re-arrange toast opens it; after the toast is gone, the other device (B) opens it from the Re-arrange confirm and restores the layout; the restore is itself in the history', async () => {
       const before = layoutOf(await stored(a))
       const moved = before[key('st-sys-tip')]
+      const historyOn = (page: Page) => page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+      const listOf = (page: Page) =>
+        historyOn(page)
+          .locator('[data-testid="session-tree-history-row"]')
+          .evaluateAll(list => list.map(row => ({ id: row.getAttribute('data-backup-id'), reason: row.getAttribute('data-reason'), count: Number(row.getAttribute('data-count')) })))
+      // Layout history from the Re-arrange confirm (its own button: the toolbar has no room for one).
+      const openFromConfirm = async (page: Page) => {
+        await page.locator('[data-testid="session-tree-rearrange"]').click()
+        await page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"] [data-testid="session-tree-rearrange-history"]').click()
+        await historyOn(page).locator('[data-testid="session-tree-history-row"]').first().waitFor({ timeout: 10_000 })
+      }
 
-      // Re-arrange on A, and let the toast (with its Undo) go.
+      // Re-arrange on A; its toast opens Layout history, which lists what it forgot.
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
-      await a.page.getByRole('dialog').getByRole('button', { name: 'Re-arrange' }).click()
+      await a.page.locator('[data-testid="session-tree-rearrange-confirm"]').click()
       const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
         const tip = layoutOf(value)[key('st-sys-tip')]
 
@@ -612,17 +641,21 @@ async function main(): Promise<void> {
       })
       const freshLayout = layoutOf(fresh)
 
+      await a.page.locator('[data-testid="session-tree-toast-history"]').click()
+      await historyOn(a.page).locator('[data-testid="session-tree-history-row"]').first().waitFor({ timeout: 10_000 })
+      const fromToast = await listOf(a.page)
+
+      await historyOn(a.page).locator('[data-testid="session-tree-history-close"]').click()
+      await historyOn(a.page).waitFor({ state: 'detached', timeout: 5000 })
+      assert(fromToast[0]?.reason === 'rearrange' && fromToast[0].count === Object.keys(before).length, `history from the toast: ${JSON.stringify(fromToast)}`)
+      // Let the toast (with its Undo) go.
       await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ state: 'detached', timeout: 15_000 })
       await waitFor('B re-arranged', () => flowPos(b.page, 'st-sys-tip'), pos => near(pos, freshLayout[key('st-sys-tip')]), 8000)
       // B opens Layout history: the arrangement A's Re-arrange forgot is listed first.
-      await b.page.locator('[data-testid="session-tree-history"]').click()
-      const history = b.page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
-
-      await history.waitFor({ timeout: 5000 })
+      await openFromConfirm(b.page)
+      const history = historyOn(b.page)
       const rows = history.locator('[data-testid="session-tree-history-row"]')
-
-      await rows.first().waitFor({ timeout: 10_000 })
-      const listed = await rows.evaluateAll(list => list.map(row => ({ id: row.getAttribute('data-backup-id'), reason: row.getAttribute('data-reason'), count: Number(row.getAttribute('data-count')) })))
+      const listed = await listOf(b.page)
 
       await b.page.screenshot({ path: join(shots, 'sync-history-dialog.png') })
       assert(listed[0].reason === 'rearrange' && listed[0].count === Object.keys(before).length, `history: ${JSON.stringify(listed)}`)
@@ -639,19 +672,18 @@ async function main(): Promise<void> {
       await waitFor('A restored', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, moved), 8000)
       assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
       // The restore kept the layout it replaced: the history now starts with it.
-      await a.page.locator('[data-testid="session-tree-history"]').click()
-      const historyA = a.page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
-      const rowsA = historyA.locator('[data-testid="session-tree-history-row"]')
-
-      await rowsA.first().waitFor({ timeout: 10_000 })
-      const listedA = await rowsA.evaluateAll(list => list.map(row => ({ reason: row.getAttribute('data-reason'), count: Number(row.getAttribute('data-count')) })))
+      await openFromConfirm(a.page)
+      const historyA = historyOn(a.page)
+      const listedA = await listOf(a.page)
 
       assert(listedA[0].reason === 'restore' && listedA[1]?.reason === 'rearrange', `A's history: ${JSON.stringify(listedA)}`)
       await historyA.locator('[data-testid="session-tree-history-close"]').click()
       await historyA.waitFor({ state: 'detached', timeout: 5000 })
       assert(saves(logB).some(entry => entry.method === 'PUT' && /"backup":true/.test(entry.body ?? '')), 'no PUT with backup: true from B')
+      // Opening the history from the confirm re-arranged nothing.
+      assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'opening Layout history from the confirm changed the layout')
 
-      return { listedOnB: listed, listedOnA: listedA, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+      return { fromToast, listedOnB: listed, listedOnA: listedA, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
     })
 
     await check('closing and reopening the page keeps this device\'s project scope, view and Singles list (per profile filter); the other device keeps its own', async () => {

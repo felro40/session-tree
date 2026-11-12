@@ -68,6 +68,8 @@ interface UndoToast {
   id: number
   message: string
   undo(): void
+  /** The Re-arrange toast also opens Layout history. */
+  history?: boolean
 }
 
 function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; services: Services }) {
@@ -399,7 +401,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     requestFit()
     setToast({
       id,
-      message: 'Layout re-arranged · the old one is in Layout history',
+      message: 'Layout re-arranged',
+      history: true,
       undo: () => {
         sync.restore(ref, previous)
         setToast(undefined)
@@ -640,7 +643,6 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           maxZoom={MAX_ZOOM}
           onFit={fit}
           onRearrange={() => setConfirmRearrange(true)}
-          onHistory={() => setHistoryOpen(true)}
           canRearrange={style.savesLayout}
           snapUnavailable={style.draggable ? undefined : style.snapUnavailable}
           singlesCount={model.singles.length}
@@ -691,13 +693,24 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
             <button type="button" className="st-toast-btn" data-testid="session-tree-undo" onClick={toast.undo}>
               Undo
             </button>
+            {toast.history && style.savesLayout && (
+              <button type="button" className="st-toast-btn" data-testid="session-tree-toast-history" onClick={() => setHistoryOpen(true)}>
+                Layout history
+              </button>
+            )}
             <button type="button" className="st-toast-btn" aria-label="Dismiss" onClick={dismissToast}>
               ×
             </button>
           </div>
         )}
         {dialogs}
-        <RearrangeConfirm open={confirmRearrange && style.savesLayout} viewLabel={viewLabel} onClose={() => setConfirmRearrange(false)} onConfirm={onRearrange} />
+        <RearrangeConfirm
+          open={confirmRearrange && style.savesLayout}
+          viewLabel={viewLabel}
+          onClose={() => setConfirmRearrange(false)}
+          onConfirm={onRearrange}
+          onHistory={() => setHistoryOpen(true)}
+        />
         {historyOpen && style.savesLayout && (
           <LayoutHistoryDialog
             // Another view (a scope, profile or style change while open) is a fresh dialog.

@@ -139,10 +139,13 @@ None of them touches `state.db`.
 - **Writes:** queued, sent after a 300 ms trailing debounce, consecutive upserts of one layout
   batched into one request. Nothing is sent while a block is dragged (`setDragging`); the drop is
   recorded on mouse-up and goes out 300 ms later. Auto-layout placements go as `if_absent`.
-- **Re-arrange** asks first (a confirm naming the view; Cancel and Escape change nothing), then
-  queues a delete of the current style + scope layout and shows a toast with Undo, which queues a
-  `PUT` of exactly what the window showed before.
-- **Layout history** (the toolbar's clock button, next to Re-arrange; not in Swimlanes) sends this
+- **Re-arrange** asks first (a plain dialog naming the view, not the SDK's ConfirmDialog, which
+  confirms on Enter and Space whichever button holds focus: Space is the pan key. Focus opens on
+  Layout history…; Cancel, Escape, Space and Enter change nothing), then queues a delete of the
+  current style + scope layout and shows a toast with Undo, which queues a `PUT` of exactly what
+  the window showed before.
+- **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
+  in Swimlanes; the toolbar has no room for a button of its own at the narrowest widths) sends this
   window's queue first, then lists the backups of the shown layout, refetched on every store
   revision. Restore fetches one backup and queues a `PUT` with `backup: true` (shown at once,
   with an Undo toast like Re-arrange); blocks the backup lacks are placed anew by the auto-layout.

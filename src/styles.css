@@ -1036,6 +1036,11 @@ g.is-dimmed {
   font-size: 12px;
 }
 
+/* The Re-arrange confirm: Layout history… on the left, Cancel and Re-arrange on the right. */
+.st-dlg-left {
+  margin-right: auto;
+}
+
 .st-style select {
   max-width: 150px;
 }

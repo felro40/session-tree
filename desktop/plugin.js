@@ -12069,31 +12069,57 @@ function GraphCanvas(props) {
 
 // src/page/layout-history.tsx
 init_define_import_meta_env();
-import { Button, ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from "@hermes/plugin-sdk";
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from "@hermes/plugin-sdk";
 import { useState as useState6 } from "react";
 import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
 var BACKUPS_KEPT = 10, REASON_LABEL = {
   rearrange: "Before Re-arrange",
   restore: "Before a restore"
 };
-function RearrangeConfirm({ open, viewLabel, onClose, onConfirm }) {
-  return /* @__PURE__ */ jsx15(
-    ConfirmDialog,
-    {
-      open,
-      title: "Re-arrange this layout?",
-      description: /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-rearrange-text", children: [
+function RearrangeConfirm({
+  open,
+  viewLabel,
+  onClose,
+  onConfirm,
+  onHistory
+}) {
+  return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", children: [
+    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
+      /* @__PURE__ */ jsx15(DialogTitle, { children: "Re-arrange this layout?" }),
+      /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-rearrange-text", children: [
         "Every block in ",
         viewLabel,
         " goes back to the automatic layout. The current arrangement is kept in Layout history, so you can bring it back."
-      ] }),
-      confirmLabel: "Re-arrange",
-      cancelLabel: "Cancel",
-      dismissOnConfirm: !0,
-      onClose,
-      onConfirm
-    }
-  );
+      ] }) })
+    ] }),
+    /* @__PURE__ */ jsxs13(DialogFooter, { children: [
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          variant: "ghost",
+          className: "st-dlg-left",
+          "data-testid": "session-tree-rearrange-history",
+          onClick: () => {
+            onClose(), onHistory();
+          },
+          children: "Layout history…"
+        }
+      ),
+      /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", "data-testid": "session-tree-rearrange-cancel", onClick: onClose, children: "Cancel" }),
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          "data-testid": "session-tree-rearrange-confirm",
+          onClick: () => {
+            onClose(), onConfirm();
+          },
+          children: "Re-arrange"
+        }
+      )
+    ] })
+  ] }) });
 }
 function LayoutHistoryDialog({
   ctx,
@@ -12181,7 +12207,7 @@ function LayoutHistoryDialog({
 init_define_import_meta_env();
 import {
   Button as Button2,
-  ConfirmDialog as ConfirmDialog2,
+  ConfirmDialog,
   Dialog as Dialog2,
   DialogContent as DialogContent2,
   DialogFooter as DialogFooter2,
@@ -12442,7 +12468,7 @@ function DeleteDialog({
   let note = branchNote(branches), description = node ? [labels.deleteDesc(node.title), note, blocked ?? ""].filter(Boolean).join(`
 `) : "";
   return /* @__PURE__ */ jsx16(
-    ConfirmDialog2,
+    ConfirmDialog,
     {
       open: !!node,
       title: labels.deleteTitle,
@@ -13225,10 +13251,7 @@ function Toolbar(props) {
             ]
           }
         ),
-        props.canRearrange !== !1 && /* @__PURE__ */ jsxs15(Fragment11, { children: [
-          /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout; asks first)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx17(Codicon10, { name: "refresh", size: 13 }) }),
-          /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-history", title: "Layout history (restore an earlier arrangement)", onClick: props.onHistory, children: /* @__PURE__ */ jsx17(Codicon10, { name: "history", size: 13 }) })
-        ] })
+        props.canRearrange !== !1 && /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout; asks first, and opens Layout history)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx17(Codicon10, { name: "refresh", size: 13 }) })
       ] }),
       /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
       props.snapUnavailable ? (
@@ -13466,7 +13489,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     let previous = sync.rearrange(ref), id2 = Date.now();
     requestFit(), setToast({
       id: id2,
-      message: "Layout re-arranged · the old one is in Layout history",
+      message: "Layout re-arranged",
+      history: !0,
       undo: () => {
         sync.restore(ref, previous), setToast(void 0), requestFit();
       }
@@ -13608,7 +13632,6 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             maxZoom: MAX_ZOOM,
             onFit: fit,
             onRearrange: () => setConfirmRearrange(!0),
-            onHistory: () => setHistoryOpen(!0),
             canRearrange: style2.savesLayout,
             snapUnavailable: style2.draggable ? void 0 : style2.snapUnavailable,
             singlesCount: model.singles.length,
@@ -13646,10 +13669,20 @@ function PageBody({ ctx, services: { sync, prefs } }) {
         toast && /* @__PURE__ */ jsxs16("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
           /* @__PURE__ */ jsx18("span", { children: toast.message }),
           /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
+          toast.history && style2.savesLayout && /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-toast-history", onClick: () => setHistoryOpen(!0), children: "Layout history" }),
           /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
         ] }),
         dialogs,
-        /* @__PURE__ */ jsx18(RearrangeConfirm, { open: confirmRearrange && style2.savesLayout, viewLabel, onClose: () => setConfirmRearrange(!1), onConfirm: onRearrange }),
+        /* @__PURE__ */ jsx18(
+          RearrangeConfirm,
+          {
+            open: confirmRearrange && style2.savesLayout,
+            viewLabel,
+            onClose: () => setConfirmRearrange(!1),
+            onConfirm: onRearrange,
+            onHistory: () => setHistoryOpen(!0)
+          }
+        ),
         historyOpen && style2.savesLayout && /* @__PURE__ */ jsx18(
           LayoutHistoryDialog,
           {
@@ -14759,6 +14792,11 @@ g.is-dimmed {
 .st-hist-note {
   color: var(--ui-text-secondary);
   font-size: 12px;
+}
+
+/* The Re-arrange confirm: Layout history… on the left, Cancel and Re-arrange on the right. */
+.st-dlg-left {
+  margin-right: auto;
 }
 
 .st-style select {
