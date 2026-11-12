@@ -1,0 +1,178 @@
+/**
+ * Layout history: the earlier arrangements of the shown style + scope layout that the backend
+ * keeps (`dashboard/layout_store.py` backups). A Re-arrange keeps the layout it forgets, and a
+ * restore keeps the one it replaces, so a misclick can be taken back after the Undo toast is
+ * gone, and from any device. Restore replaces the current arrangement (with Undo).
+ *
+ * Also the Re-arrange confirm: Re-arrange is never one click.
+ */
+import { Button, ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from '@hermes/plugin-sdk'
+import type { PluginContext } from '@hermes/plugin-sdk'
+import { useState } from 'react'
+
+import { fetchBackup, fetchBackups } from '../api.ts'
+import type { LayoutBackupInfo } from '../api.ts'
+import { restErrorText } from '../model/actions.ts'
+import { agoLabel, dateTimeLabel } from '../model/format.ts'
+import type { Point } from '../model/layout.ts'
+import type { LayoutRef } from '../model/layout-sync.ts'
+
+/** How many backups the backend keeps per layout (`MAX_BACKUPS_PER_LAYOUT`). */
+export const BACKUPS_KEPT = 10
+
+const REASON_LABEL: Record<LayoutBackupInfo['reason'], string> = {
+  rearrange: 'Before Re-arrange',
+  restore: 'Before a restore'
+}
+
+export function RearrangeConfirm({ open, viewLabel, onClose, onConfirm }: { open: boolean; viewLabel: string; onClose(): void; onConfirm(): void }) {
+  return (
+    <ConfirmDialog
+      open={open}
+      title="Re-arrange this layout?"
+      description={
+        <span data-testid="session-tree-rearrange-text">
+          Every block in {viewLabel} goes back to the automatic layout. The current arrangement is kept in Layout history, so you can bring it back.
+        </span>
+      }
+      confirmLabel="Re-arrange"
+      cancelLabel="Cancel"
+      dismissOnConfirm
+      onClose={onClose}
+      onConfirm={onConfirm}
+    />
+  )
+}
+
+export function LayoutHistoryDialog({
+  ctx,
+  layout,
+  revision,
+  viewLabel,
+  nowMs,
+  flush,
+  onClose,
+  onRestore
+}: {
+  ctx: PluginContext
+  layout: LayoutRef
+  /** The store's revision: a change (a Re-arrange sent, another device's) refetches the list. */
+  revision: null | number
+  viewLabel: string
+  nowMs: number
+  /** Sends this window's queued changes first (a Re-arrange just made is listed). */
+  flush(): Promise<void>
+  onClose(): void
+  /** The backup's positions (by layout key) become the layout. */
+  onRestore(positions: Map<string, Point>): void
+}) {
+  const [restoring, setRestoring] = useState<null | string>(null)
+  const [error, setError] = useState<null | string>(null)
+  const list = useQuery({
+    queryKey: ['session-tree', 'backups', layout.profile, layout.style, layout.scope, revision],
+    queryFn: async () => {
+      await flush()
+
+      return fetchBackups(ctx, layout.profile, layout.style, layout.scope)
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
+    // A new revision keeps the list on screen until the new one arrives.
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey.slice(0, 5).join('\u0000') === ['session-tree', 'backups', layout.profile, layout.style, layout.scope].join('\u0000') ? previous : undefined)
+  })
+
+  const restore = async (backup: LayoutBackupInfo) => {
+    if (restoring) {
+      return
+    }
+
+    setRestoring(backup.id)
+    setError(null)
+
+    try {
+      const full = await fetchBackup(ctx, layout.profile, backup.id)
+
+      if (full.style !== layout.style || full.scope !== layout.scope) {
+        throw new Error('That backup belongs to another view.')
+      }
+
+      onRestore(new Map(full.positions.map(entry => [entry.id, { x: entry.x, y: entry.y }])))
+      onClose()
+    } catch (err) {
+      setError(restErrorText(err))
+    } finally {
+      setRestoring(null)
+    }
+  }
+
+  const backups = list.data?.backups ?? []
+
+  return (
+    <Dialog open onOpenChange={open => !open && !restoring && onClose()}>
+      <DialogContent className="max-w-lg" data-testid="session-tree-history-dialog">
+        <DialogHeader>
+          <DialogTitle>Layout history</DialogTitle>
+          <DialogDescription>
+            Earlier arrangements of {viewLabel}. Each Re-arrange or restore keeps the arrangement it replaces (the last {BACKUPS_KEPT}, shared by your devices). Restoring
+            replaces the current arrangement, which is kept here too.
+          </DialogDescription>
+        </DialogHeader>
+        {list.isPending && (
+          <div className="st-hist-note" data-testid="session-tree-history-loading">
+            Loading…
+          </div>
+        )}
+        {list.isError && !list.data && (
+          <div className="st-dialog-error" role="alert" data-testid="session-tree-history-error">
+            Could not load the layout history: {restErrorText(list.error)}
+          </div>
+        )}
+        {list.data && backups.length === 0 && (
+          <div className="st-hist-note" data-testid="session-tree-history-empty">
+            No earlier arrangements of this view yet. Re-arrange keeps the one it replaces here.
+          </div>
+        )}
+        {backups.length > 0 && (
+          <ul className="st-hist-list" data-testid="session-tree-history-list">
+            {backups.map(backup => (
+              <li key={backup.id} className="st-hist-row" data-testid="session-tree-history-row" data-backup-id={backup.id} data-count={backup.count} data-reason={backup.reason}>
+                <span className="st-hist-when">
+                  <b>{dateTimeLabel(backup.created_at)}</b>
+                  <span className="st-hist-ago">{agoLabel(backup.created_at, nowMs)}</span>
+                </span>
+                <span className="st-hist-what">
+                  {backup.count} block{backup.count === 1 ? '' : 's'} · {REASON_LABEL[backup.reason]}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={Boolean(restoring)}
+                  data-testid="session-tree-history-restore"
+                  onClick={() => void restore(backup)}
+                >
+                  {restoring === backup.id ? 'Restoring…' : 'Restore'}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {list.data?.read_only && (
+          <div className="st-hist-note" data-testid="session-tree-history-read-only">
+            The history was written by a newer Session Tree: it reads as empty here.
+          </div>
+        )}
+        {error && (
+          <div className="st-dialog-error" role="alert" data-testid="session-tree-history-restore-error">
+            {error}
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="ghost" disabled={Boolean(restoring)} data-testid="session-tree-history-close" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

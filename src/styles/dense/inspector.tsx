@@ -3,7 +3,6 @@
  * list (R8) at its foot, filtered by scope. Its action buttons run the session actions (R14).
  */
 import { Codicon } from '@hermes/plugin-sdk'
-import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { agoLabel, compactNumber, costLabel, dateTimeLabel, shortAge } from '../../model/format.ts'
@@ -289,8 +288,9 @@ function SelectionList({ model, ids, onSelect, onOpen, nowMs }: { model: GraphMo
 }
 
 export function DenseInspector(props: StylePanelProps) {
-  const { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs } = props
-  const [singlesOpen, setSinglesOpen] = useState(true)
+  const { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs, sectionOpen, onSection } = props
+  // Remembered on this device (closing and reopening the page keeps it).
+  const singlesOpen = sectionOpen('singles')
   const node = selectedId ? model.nodeById.get(selectedId) : undefined
   const singles = singlesInScope(model)
   const several = selectedIds.length > 1
@@ -310,7 +310,7 @@ export function DenseInspector(props: StylePanelProps) {
         {node?.kind === 'session' && <SessionDetails {...props} node={node} status={statusOf(node)} />}
       </div>
       <div className={`st-singles${singlesOpen ? '' : ' is-collapsed'}`} data-testid="session-tree-singles">
-        <button type="button" className="st-singles-toggle" onClick={() => setSinglesOpen(open => !open)} aria-expanded={singlesOpen}>
+        <button type="button" className="st-singles-toggle" onClick={() => onSection('singles', !singlesOpen)} aria-expanded={singlesOpen}>
           <Codicon name={singlesOpen ? 'chevron-down' : 'chevron-right'} size={12} />
           <b>Singles</b>
           <span data-testid="session-tree-singles-count">{singles.length}</span>· no branches

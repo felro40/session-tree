@@ -61,6 +61,9 @@ export interface StylePanelProps {
   onOpen(node: GraphNode): void
   statusOf(node: GraphNode): LiveStatus | undefined
   nowMs: number
+  /** The panel's own sections (Dense: Singles), open or closed on this device; default open. */
+  sectionOpen(section: string): boolean
+  onSection(section: string, open: boolean): void
 }
 
 /** What a framed style's layout is computed from (card 5): the data and this device only. */

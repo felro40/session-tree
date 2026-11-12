@@ -142,6 +142,37 @@ export function stateTransport(ctx: PluginContext): SyncTransport {
 /** The backend's push for a layout change (`broadcast_plugin_event`, card 1 pre-check 5). */
 export const LAYOUT_CHANGED_EVENT = 'plugin.session-tree.layout.changed'
 
+// --- Layout history: the backups a Re-arrange (or a restore) keeps, `/state/backups` ----------
+
+/** One backup in the list (no positions). `reason`: what replaced that layout. */
+export interface LayoutBackupInfo {
+  id: string
+  /** Server time, epoch seconds. */
+  created_at: number
+  reason: 'rearrange' | 'restore'
+  /** Stored positions (blocks) in it. */
+  count: number
+}
+
+export interface LayoutBackup {
+  id: string
+  style: string
+  scope: string
+  created_at: number
+  reason: 'rearrange' | 'restore'
+  /** By layout key (`PUT /state/layout`'s input). */
+  positions: { id: string; x: number; y: number }[]
+}
+
+/** The backups of one style + scope layout of `profile`, newest first. */
+export function fetchBackups(ctx: PluginContext, profile: string, style: string, scope: string): Promise<{ backups: LayoutBackupInfo[]; read_only?: boolean }> {
+  return ctx.rest(`/state/backups?${profileQuery(profile, { style, scope })}`, { timeoutMs: 10000 })
+}
+
+export function fetchBackup(ctx: PluginContext, profile: string, id: string): Promise<LayoutBackup> {
+  return ctx.rest(`/state/backups/${encodeURIComponent(id)}?${profileQuery(profile)}`, { timeoutMs: 15000 })
+}
+
 // --- Rich cards details (card 6): excerpt + 7-day activity per session ------------------------
 
 /**

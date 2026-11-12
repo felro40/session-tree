@@ -549,12 +549,30 @@ async function main(): Promise<void> {
       return { overrideKeptSynced: true, denseTip: dense, altTip: alt }
     })
 
-    await check('Re-arrange resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
+    await check('Re-arrange asks first (Cancel and Escape keep the layout); confirmed, it resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
       await fit(a.page)
       const before = layoutOf(await stored(a))
       const moved = before[key('st-sys-tip')]
+      const confirmDialog = a.page.getByRole('dialog').filter({ hasText: 'Re-arrange this layout?' })
 
+      // A misclick: nothing is forgotten until the confirm.
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.waitFor({ timeout: 5000 })
+      const asked = (await a.page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+
+      await a.page.screenshot({ path: join(shots, 'sync-rearrange-confirm.png') })
+      await confirmDialog.getByRole('button', { name: 'Cancel' }).click()
+      await confirmDialog.waitFor({ state: 'detached', timeout: 5000 })
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.waitFor({ timeout: 5000 })
+      await a.page.keyboard.press('Escape')
+      await confirmDialog.waitFor({ state: 'detached', timeout: 5000 })
+      await sleep(1000)
+      assert(!saves(logA).some(entry => entry.method === 'DELETE'), 'a cancelled Re-arrange sent a DELETE')
+      assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'a cancelled Re-arrange changed the layout')
+      assert(/Dense \+ inspector · All projects/.test(asked) && /Layout history/.test(asked), `confirm text: ${asked}`)
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.getByRole('button', { name: 'Re-arrange' }).click()
       await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ timeout: 5000 })
       await a.page.screenshot({ path: join(shots, 'sync-rearrange-toast.png') })
       const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
@@ -577,7 +595,124 @@ async function main(): Promise<void> {
       assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
       assert(saves(logA).some(entry => entry.method === 'DELETE') && saves(logA).some(entry => entry.method === 'PUT'), 'no DELETE / PUT')
 
-      return { dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+      return { asked, dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+    })
+
+    await check('Layout history: after the Undo toast is gone, the other device (B) restores the re-arranged layout; the restore is itself in the history', async () => {
+      const before = layoutOf(await stored(a))
+      const moved = before[key('st-sys-tip')]
+
+      // Re-arrange on A, and let the toast (with its Undo) go.
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await a.page.getByRole('dialog').getByRole('button', { name: 'Re-arrange' }).click()
+      const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
+        const tip = layoutOf(value)[key('st-sys-tip')]
+
+        return Boolean(tip) && !near(tip, moved)
+      })
+      const freshLayout = layoutOf(fresh)
+
+      await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ state: 'detached', timeout: 15_000 })
+      await waitFor('B re-arranged', () => flowPos(b.page, 'st-sys-tip'), pos => near(pos, freshLayout[key('st-sys-tip')]), 8000)
+      // B opens Layout history: the arrangement A's Re-arrange forgot is listed first.
+      await b.page.locator('[data-testid="session-tree-history"]').click()
+      const history = b.page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+
+      await history.waitFor({ timeout: 5000 })
+      const rows = history.locator('[data-testid="session-tree-history-row"]')
+
+      await rows.first().waitFor({ timeout: 10_000 })
+      const listed = await rows.evaluateAll(list => list.map(row => ({ id: row.getAttribute('data-backup-id'), reason: row.getAttribute('data-reason'), count: Number(row.getAttribute('data-count')) })))
+
+      await b.page.screenshot({ path: join(shots, 'sync-history-dialog.png') })
+      assert(listed[0].reason === 'rearrange' && listed[0].count === Object.keys(before).length, `history: ${JSON.stringify(listed)}`)
+      // The same arrangement re-arranged twice (the previous check's Undo) is listed once.
+      assert(listed.filter(row => row.reason === 'rearrange').length === 1, `duplicate backups: ${JSON.stringify(listed)}`)
+      await rows.first().locator('[data-testid="session-tree-history-restore"]').click()
+      await history.waitFor({ state: 'detached', timeout: 10_000 })
+      await b.page.locator('[data-testid="session-tree-toast"]').waitFor({ timeout: 5000 })
+      const restored = await waitFor('restored in the store', () => stored(b), value => near(layoutOf(value)[key('st-sys-tip')], moved))
+      const restoredLayout = layoutOf(restored)
+      const lost = Object.entries(before).filter(([id, point]) => !near(restoredLayout[id], point))
+
+      await waitFor('B restored', () => flowPos(b.page, 'st-sys-tip'), pos => near(pos, moved))
+      await waitFor('A restored', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, moved), 8000)
+      assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
+      // The restore kept the layout it replaced: the history now starts with it.
+      await a.page.locator('[data-testid="session-tree-history"]').click()
+      const historyA = a.page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+      const rowsA = historyA.locator('[data-testid="session-tree-history-row"]')
+
+      await rowsA.first().waitFor({ timeout: 10_000 })
+      const listedA = await rowsA.evaluateAll(list => list.map(row => ({ reason: row.getAttribute('data-reason'), count: Number(row.getAttribute('data-count')) })))
+
+      assert(listedA[0].reason === 'restore' && listedA[1]?.reason === 'rearrange', `A's history: ${JSON.stringify(listedA)}`)
+      await historyA.locator('[data-testid="session-tree-history-close"]').click()
+      await historyA.waitFor({ state: 'detached', timeout: 5000 })
+      assert(saves(logB).some(entry => entry.method === 'PUT' && /"backup":true/.test(entry.body ?? '')), 'no PUT with backup: true from B')
+
+      return { listedOnB: listed, listedOnA: listedA, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+    })
+
+    await check('closing and reopening the page keeps this device\'s project scope, view and Singles list (per profile filter); the other device keeps its own', async () => {
+      const page = a.page
+      const syscanvas = page.locator('[data-testid="session-tree-scope"] button[title="Project: syscanvas"]')
+
+      await syscanvas.click()
+      await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"][data-scope]')?.getAttribute('data-scope') !== 'all', undefined, { timeout: 5000 })
+      const scope = await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      await settled(page)
+      await page.locator('[data-testid="session-tree-zoom-in"]').click()
+      await sleep(600)
+      await page.locator('[data-testid="session-tree-singles"] .st-singles-toggle').click()
+      await sleep(400)
+      const view = await viewport(page)
+      const singlesClosed = (await page.getAttribute('[data-testid="session-tree-singles"] .st-singles-toggle', 'aria-expanded')) === 'false'
+
+      // "Close the tab": leave the route, then open Session Tree again; then a full reload too.
+      await goto(t, page, '/')
+      await sleep(1000)
+      await openTree(a)
+      const reopened = {
+        scope: await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope'),
+        chip: await syscanvas.getAttribute('aria-checked'),
+        view: await viewport(page),
+        singles: await page.getAttribute('[data-testid="session-tree-singles"] .st-singles-toggle', 'aria-expanded')
+      }
+
+      facts.reloadLanded = [...((facts.reloadLanded as string[]) ?? []), await reloadTree(a)]
+      const reloaded = {
+        scope: await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope'),
+        view: await viewport(page),
+        singles: await page.getAttribute('[data-testid="session-tree-singles"] .st-singles-toggle', 'aria-expanded')
+      }
+      const scopeB = await b.page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      assert(singlesClosed, 'Singles did not collapse')
+      assert(reopened.scope === scope && reopened.chip === 'true', `reopened on scope ${reopened.scope} (chip ${reopened.chip}), left on ${scope}`)
+      assert(near(reopened.view, view, 1) && Math.abs(reopened.view.zoom - view.zoom) < 0.001, `reopened view ${JSON.stringify(reopened.view)} vs ${JSON.stringify(view)}`)
+      assert(reopened.singles === 'false' && reloaded.singles === 'false', `Singles reopened ${reopened.singles}, reloaded ${reloaded.singles}`)
+      assert(reloaded.scope === scope && near(reloaded.view, view, 1), `reloaded ${JSON.stringify(reloaded)}`)
+      assert(scopeB === 'all', `B's scope changed: ${scopeB}`)
+      // Another profile filter has its own scope (All projects at first); back on default, syscanvas.
+      await page.locator('[data-testid="session-tree-profile"]').selectOption('*')
+      await sleep(800)
+      const otherProfile = await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      await page.locator('[data-testid="session-tree-profile"]').selectOption('default')
+      await settled(page)
+      const backOnDefault = await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      assert(otherProfile === 'all' && backOnDefault === scope, `All profiles: ${otherProfile}, back on default: ${backOnDefault}`)
+      // Leave A as the next checks expect: All projects, Singles open, the whole map in view.
+      await page.locator('[data-testid="session-tree-singles"] .st-singles-toggle').click()
+      await page.locator('[data-testid="session-tree-scope"] button[data-scope="all"]').click()
+      await settled(page)
+      await fit(page)
+      assert(!saves(logA).some(entry => /scopes|sectionsOpen|singles/.test(entry.body ?? '')), 'a device preference went to the backend')
+
+      return { scope, view, reopened, reloaded, otherProfile, b: scopeB }
     })
 
     await check('a new seeded session is placed without moving any stored block (every stored coordinate unchanged, in the store and on screen)', async () => {

@@ -240,6 +240,8 @@ declare module '@hermes/plugin-sdk' {
     doneLabel?: string
     cancelLabel?: string
     destructive?: boolean
+    /** Close as soon as onConfirm resolves (no busy → done beat). */
+    dismissOnConfirm?: boolean
   }>
   export const ColorSwatches: ComponentType<{
     swatches: readonly string[]

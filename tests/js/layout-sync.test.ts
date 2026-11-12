@@ -89,8 +89,8 @@ class FakeServer implements SyncTransport {
     return { rev: this.rev, changed: true }
   }
 
-  async putLayout(profile: string, body: { style: string; scope: string; positions: { id: string; x: number; y: number }[] }) {
-    await this.enter('put')
+  async putLayout(profile: string, body: { style: string; scope: string; positions: { id: string; x: number; y: number }[]; backup?: boolean }) {
+    await this.enter(body.backup ? 'put:backup' : 'put')
     const blocks = this.blocks(profile, body.style, body.scope)
 
     for (const key of Object.keys(blocks)) {
@@ -487,6 +487,34 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     await timers.advance(300)
     assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [333, 444], b: [100, 0] })
     assert.ok(server.calls.includes('delete') && server.calls.includes('put'))
+  })
+
+  it('a restore from Layout history replaces the layout (PUT with backup: true); its Undo is a plain PUT', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a', 'b']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    const shown = sync.restoreBackup(
+      REF,
+      new Map([
+        ['a', { x: 333, y: 444 }],
+        ['gone', { x: 1, y: 1 }]
+      ])
+    )
+
+    assert.deepEqual(pointsOf(shown), { a: [7, 8], b: [100, 0] })
+    // Shown at once, before the server answers; a block the backup lacks is placed anew.
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [333, 444], gone: [1, 1] })
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [333, 444], gone: [1, 1] })
+    assert.equal(server.calls.filter(call => call === 'put:backup').length, 1)
+    sync.restore(REF, shown)
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [7, 8], b: [100, 0] })
+    assert.equal(server.calls.at(-1), 'put')
   })
 
   it('forget drops a block from every layout of the profile, so the next layout re-places it', async () => {

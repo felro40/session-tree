@@ -14,8 +14,9 @@
  *   - a drop is a `set` upsert (last write wins per block on the server);
  *   - what an auto-layout placed is an `if_absent` upsert, so a late first save from one window
  *     can never undo another window's drop;
- *   - Re-arrange is a delete of the style + scope layout; its Undo puts back what this window
- *     showed before (`PUT`).
+ *   - Re-arrange is a delete of the style + scope layout (the server keeps a backup of it); its
+ *     Undo puts back what this window showed before (`PUT`); a restore from Layout history is a
+ *     `PUT` with `backup: true` (the server keeps the layout it replaces too).
  * - **Failures** (card-4 review B1):
  *   - *transient* (no answer, a timeout, 5xx, 408, 429): the queue stays, the profile is marked
  *     offline (the banner) and the send is retried with a backoff; nothing is notified;
@@ -89,7 +90,11 @@ export interface SyncTransport {
   patchPositions(profile: string, body: PositionsBody): Promise<{ rev: number; changed: boolean }>
   patchSettings(profile: string, patch: Partial<SyncedSettings>): Promise<{ rev: number; changed: boolean; settings: SyncedSettings }>
   deleteLayout(profile: string, style: string, scope: string): Promise<{ rev: number; changed: boolean }>
-  putLayout(profile: string, body: { style: string; scope: string; positions: { id: string; x: number; y: number }[] }): Promise<{ rev: number; changed: boolean }>
+  /** `backup`: a restore of an earlier layout; the server keeps the layout it replaces first. */
+  putLayout(
+    profile: string,
+    body: { style: string; scope: string; positions: { id: string; x: number; y: number }[]; backup?: boolean }
+  ): Promise<{ rev: number; changed: boolean }>
   /** Forget these blocks in every layout of the profile (a session moved to another project). */
   forgetBlocks(profile: string, ids: string[]): Promise<{ rev: number; changed: boolean }>
 }
@@ -134,7 +139,7 @@ export interface SyncOptions {
 
 type Op =
   | { kind: 'upsert'; ref: LayoutRef; mode: 'if_absent' | 'set'; entries: [string, Point][]; at?: number }
-  | { kind: 'replace'; ref: LayoutRef; entries: [string, Point][] | null }
+  | { kind: 'replace'; ref: LayoutRef; entries: [string, Point][] | null; backup?: boolean }
   | { kind: 'forget'; profile: string; ids: string[] }
   | { kind: 'settings'; profile: string; patch: Partial<SyncedSettings> }
 
@@ -448,6 +453,19 @@ export class LayoutSync {
   /** Undo of a Re-arrange: the layout becomes `previous` again. */
   restore(ref: LayoutRef, previous: ReadonlyMap<string, Point>): void {
     this.queue({ kind: 'replace', ref, entries: [...previous].map(([id, point]) => [id, { x: point.x, y: point.y }]) }, true)
+  }
+
+  /**
+   * A restore from Layout history: the layout becomes a backup's positions (by layout key); the
+   * server keeps the layout it replaces as a backup first. Answers what was shown, for Undo.
+   */
+  restoreBackup(ref: LayoutRef, positions: ReadonlyMap<string, Point>): Map<string, Point> {
+    const previous = this.positions(ref)
+
+    this.clearRefused(ref)
+    this.queue({ kind: 'replace', ref, entries: [...positions].map(([id, point]) => [id, { x: point.x, y: point.y }]), backup: true }, true)
+
+    return previous
   }
 
   /**
@@ -817,7 +835,8 @@ export class LayoutSync {
       await this.transport.putLayout(op.ref.profile, {
         style: op.ref.style,
         scope: op.ref.scope,
-        positions: op.entries.map(([id, point]) => ({ id, x: point.x, y: point.y }))
+        positions: op.entries.map(([id, point]) => ({ id, x: point.x, y: point.y })),
+        ...(op.backup ? { backup: true } : {})
       })
     }
   }

@@ -213,6 +213,8 @@ export interface ToolbarProps {
   maxZoom: number
   onFit(): void
   onRearrange(): void
+  /** Layout history: the earlier arrangements kept by Re-arrange (shown with Re-arrange). */
+  onHistory(): void
   /** Re-arrange exists only for a style that saves positions (not Swimlanes, R12). */
   canRearrange?: boolean
   /** Set when the style has no dragging: Snap shows disabled with this tooltip. */
@@ -429,9 +431,14 @@ export function Toolbar(props: ToolbarProps) {
             <Label>Archived</Label>
           </ToolButton>
           {props.canRearrange !== false && (
-            <ToolButton testId="session-tree-rearrange" title="Re-arrange (reset this layout)" onClick={props.onRearrange}>
-              <Codicon name="refresh" size={13} />
-            </ToolButton>
+            <>
+              <ToolButton testId="session-tree-rearrange" title="Re-arrange (reset this layout; asks first)" onClick={props.onRearrange}>
+                <Codicon name="refresh" size={13} />
+              </ToolButton>
+              <ToolButton testId="session-tree-history" title="Layout history (restore an earlier arrangement)" onClick={props.onHistory}>
+                <Codicon name="history" size={13} />
+              </ToolButton>
+            </>
           )}
         </span>
         <span className="st-sep" />

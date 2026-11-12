@@ -210,6 +210,16 @@ async function clickToolbar(page: Page, testId: string): Promise<void> {
   await page.waitForTimeout(250)
 }
 
+/** Re-arrange asks first: the toolbar button, then the confirm's Re-arrange. */
+async function rearrange(page: Page): Promise<void> {
+  await page.locator('[data-testid="session-tree-rearrange"]').click()
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Re-arrange this layout?' })
+
+  await dialog.getByRole('button', { name: 'Re-arrange' }).click()
+  await dialog.waitFor({ state: 'detached', timeout: 5000 })
+  await page.waitForTimeout(250)
+}
+
 async function setScope(page: Page, label: string): Promise<void> {
   await page.locator('[data-testid="session-tree-scope"] button', { hasText: label }).first().click()
   await page.waitForTimeout(400)
@@ -344,7 +354,7 @@ async function main(): Promise<void> {
 
       assert(['default', 'work', 'scale', '*'].every(value => options.includes(value)), `profile options ${options}`)
 
-      for (const id of ['show-all', 'show-archived', 'snap', 'zoom-out', 'zoom-level', 'zoom-in', 'fit', 'rearrange']) {
+      for (const id of ['show-all', 'show-archived', 'snap', 'zoom-out', 'zoom-level', 'zoom-in', 'fit', 'rearrange', 'history']) {
         assert(await page.locator(`[data-testid="session-tree-${id}"]`).count(), `no ${id}`)
       }
 
@@ -562,7 +572,7 @@ async function main(): Promise<void> {
       const dragged = await flowPosition(page, 'st-sys-tip')
 
       assert(dragged.y > position.y + 30, `no block drag after Space: ${dragged.y - position.y}`)
-      await clickToolbar(page, 'session-tree-rearrange')
+      await rearrange(page)
       await page.waitForTimeout(300)
 
       return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
@@ -623,7 +633,7 @@ async function main(): Promise<void> {
       const dragged = await flowPosition(page, 'st-sys-tip')
 
       assert(dragged.y > position.y + 30, `no block drag after Alt: ${dragged.y - position.y}`)
-      await clickToolbar(page, 'session-tree-rearrange')
+      await rearrange(page)
       await page.waitForTimeout(300)
 
       return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
@@ -703,9 +713,22 @@ async function main(): Promise<void> {
       return { detoured, samples: intrusions.samples, links: all.length }
     })
 
-    await check('Re-arrange recomputes the auto-layout', async () => {
+    await check('Re-arrange asks first (Cancel keeps the layout); confirmed, it recomputes the auto-layout', async () => {
+      const kept = await flowPosition(page, 'st-hp-routing')
+
       await clickToolbar(page, 'session-tree-rearrange')
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Re-arrange this layout?' })
+
+      await dialog.waitFor({ timeout: 5000 })
+      await page.screenshot({ path: join(shots, 'core-dense-rearrange-confirm.png') })
+      await dialog.getByRole('button', { name: 'Cancel' }).click()
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
       await page.waitForTimeout(400)
+      const afterCancel = await flowPosition(page, 'st-hp-routing')
+
+      assert(near(afterCancel.x, kept.x, 0.5) && near(afterCancel.y, kept.y, 0.5), `Cancel moved the block: ${JSON.stringify(kept)} → ${JSON.stringify(afterCancel)}`)
+      await rearrange(page)
+      await page.waitForTimeout(150)
       const routing = await flowPosition(page, 'st-hp-routing')
       const root = await flowPosition(page, 'st-hp-root')
 
