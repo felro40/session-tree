@@ -43,11 +43,15 @@ import {
   fit,
   flowPos,
   freshHome,
+  ITEM,
+  MENU,
   openTree,
   PAGE,
   portsFree,
   positionWrites,
+  rowOf,
   rowsOf,
+  setProfile,
   sleep,
   stored,
   suite,
@@ -576,6 +580,179 @@ async function main(): Promise<void> {
         return { count, ownDragged, what, restored: Object.keys(restored).length, writes }
       })
     }
+
+    // Review t_5e9be878 N1: an Undo never puts back the old spot of a block moved to another
+    // project since (Dense). `st-split-child` (mdesign) is a branch of a syscanvas root, so its
+    // family's band is syscanvas's before and after the move.
+    const MOVED = 'st-split-child'
+    let syscanvasId = ''
+
+    /** Its family's band (`group:<project>` and its continuation labels), as drawn. */
+    const inBand = (shown: Record<string, Point>, project: string, point: Point) => {
+      const labels = Object.entries(shown).filter(([id]) => id.startsWith('group:'))
+      const tops = labels.map(([, p]) => p.y)
+
+      return labels.some(([id, p]) => {
+        const bottom = Math.min(Infinity, ...tops.filter(y => y > p.y))
+
+        return id.split('\u001f')[0] === `group:${project}` && point.y >= p.y && point.y < bottom
+      })
+    }
+
+    /** Move to project ▸ <label> from the block menu (real right-click and clicks). */
+    const moveTo = async (id: string, label: string) => {
+      const target = await scopeIdOf(page, label)
+
+      await fit(page)
+      const b = await box(page, BLOCK(id))
+
+      await page.mouse.click(b.x + Math.min(30, b.width * 0.2), b.y + b.height / 2, { button: 'right' })
+      await page.locator(`${MENU}[data-node-id="${id}"]`).waitFor({ timeout: 5000 })
+      await page.locator(ITEM('move')).hover()
+      await page.locator('[data-testid="session-tree-menu-move"]').waitFor({ timeout: 5000 })
+      await page.locator(`[data-testid="session-tree-menu-move"] [data-project-id="${target}"]`).click()
+      await waitFor('the moved row', () => rowOf(s, id), row => Boolean(row?.cwd?.endsWith(`/${label}`)))
+      await page.waitForFunction(([i, p]) => document.querySelector(`[data-session-id="${i}"]`)?.getAttribute('data-project-id') === p, [id, target] as const, { timeout: 20_000 })
+    }
+
+    /**
+     * Drag `MOVED` off its spot (P0), Re-arrange (`scopeLabel`: a project scope, else All), move
+     * `MOVED` to `toLabel` with the menu, Undo inside the toast's 10 s. Answers what to compare.
+     */
+    const rearrangeMoveUndo = async (scopeLabel: null | string, toLabel: string, by: Point) => {
+      await setScope(page, scopeLabel)
+      await fit(page)
+      const was = await entries(s, 'dense')
+
+      await dragBlock(page, 'dense', MOVED, by)
+      const dragged = await waitFor('the drag stored', () => entries(s, 'dense'), value => !close5(value[key(MOVED)], was[key(MOVED)]))
+      const p0 = dragged[key(MOVED)]
+
+      await sleep(600)
+      const before = await entries(s, 'dense')
+      const text = await confirmRearrange(page)
+      const started = Date.now()
+
+      await waitFor('the Re-arrange stored', () => entries(s, 'dense'), value => !close5(value[key(MOVED)], p0))
+      const moving = Date.now()
+
+      await moveTo(MOVED, toLabel)
+      // The move's forget reached the store; then the auto-layout placed the block anew.
+      await waitFor('the forget sent', async () => positionWrites(log, moving).filter(entry => entry.path.startsWith('/state/forget')).length, n => n > 0)
+      await sleep(1200)
+      const placed = await waitFor('the moved block placed anew', () => entries(s, 'dense'), value => Boolean(value[key(MOVED)]))
+      const elapsed = Date.now() - started
+
+      assert(elapsed < 9000 && (await page.locator('[data-testid="session-tree-undo"]').count()) === 1, `the Undo toast is gone (${elapsed} ms)`)
+      await page.locator('[data-testid="session-tree-undo"]').click()
+      const others = Object.keys(before).filter(id => id !== key(MOVED))
+
+      await waitFor('Undo stored', () => entries(s, 'dense'), value => others.every(id => close5(value[id], before[id])) && Boolean(value[key(MOVED)]))
+      await sleep(1500)
+      const after = await entries(s, 'dense')
+      const shown = await flowPositions(page)
+      const notBack = others.filter(id => !close5(after[id], before[id]))
+      const shownOff = Object.keys(shown).filter(id => id !== MOVED && before[key(id)] && !close5(shown[id], before[key(id)]))
+      const extra = Object.keys(after).filter(id => !before[id])
+      const spot = after[key(MOVED)]
+
+      assert(spot && !close5(spot, p0), `Undo put back ${MOVED}'s pre-Re-arrange spot ${JSON.stringify(p0)}: stored ${JSON.stringify(spot)}`)
+      assert(close5(shown[MOVED], spot), `${MOVED} shows at ${JSON.stringify(shown[MOVED])}, stored ${JSON.stringify(spot)}`)
+      // A project Undo sends nothing for the moved block: it keeps the spot it was placed at.
+      assert(scopeLabel === null || close5(spot, placed[key(MOVED)]), `the project Undo moved ${MOVED}: placed ${JSON.stringify(placed[key(MOVED)])}, now ${JSON.stringify(spot)}`)
+      assert(inBand(shown, syscanvasId, spot), `${MOVED} at ${JSON.stringify(spot)} is outside its band (syscanvas)`)
+      assert(notBack.length === 0 && shownOff.length === 0 && extra.length === 0, `after Undo: not back ${notBack.slice(0, 5).join(', ')}, shown off ${shownOff.slice(0, 5).join(', ')}, extra ${extra.join(', ')}`)
+      await setScope(page, null)
+
+      return { text: text.split('.')[0], p0, placed: placed[key(MOVED)], undone: spot, restored: others.length, elapsed }
+    }
+
+    await check(`dense (review t_5e9be878 N1): Re-arrange in the ${PROJECT} scope, move ${MOVED} to syscanvas (block menu), Undo: ${MOVED} keeps its new auto spot in its band (not its pre-Re-arrange spot); every other entry is back exactly (±0.5, store and screen)`, async () => {
+      await switchStyle(page, 'dense')
+      await waitFor('the synced style stored', () => stored(s), value => value.settings.style === 'dense')
+      await setScope(page, null)
+      syscanvasId = await scopeIdOf(page, 'syscanvas')
+      assert((await rowOf(s, MOVED))?.cwd?.endsWith(`/${PROJECT}`), `${MOVED} is not in ${PROJECT}`)
+
+      return rearrangeMoveUndo(PROJECT, 'syscanvas', { x: 46, y: 26 })
+    })
+
+    await check(`dense (review t_5e9be878 N1): the same for Re-arrange in All projects (${MOVED} moved back to ${PROJECT})`, async () => rearrangeMoveUndo(null, PROJECT, { x: -42, y: 24 }))
+
+    await check('dense (review t_5e9be878 N4): each project\u2019s Re-arrange confirm counts exactly its undimmed blocks on the canvas; Cancel sends nothing', async () => {
+      await setScope(page, null)
+      const titles = (await page.$$eval('[data-testid="session-tree-scope"] button', buttons => buttons.map(button => button.getAttribute('title') ?? ''))).filter(title => title.startsWith('Project: '))
+      const counts: Record<string, [number, number]> = {}
+      const from = Date.now()
+
+      for (const title of titles) {
+        const label = title.replace(/^Project: /, '')
+
+        await setScope(page, label)
+        await fit(page)
+        const own = (await nodeBoxes(page)).filter(r => !r.dimmed).length
+
+        await dismissToast(page)
+        await page.locator('[data-testid="session-tree-rearrange"]').click()
+        const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
+        await dialog.waitFor({ timeout: 5000 })
+        const text = (await page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+        const count = Number(/^The (\d+) blocks? of /.exec(text)?.[1] ?? (text.startsWith('No block of') ? 0 : NaN))
+
+        await dialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+        await dialog.waitFor({ state: 'detached', timeout: 5000 })
+        counts[label] = [count, own]
+        assert(count === own, `${label}: the confirm counts ${count}, the canvas shows ${own} (${text})`)
+        assert(own === 0 || text.startsWith(own === 1 ? `The 1 block of ${label} goes back` : `The ${own} blocks of ${label} go back`), `${label}: ${text}`)
+      }
+
+      await setScope(page, null)
+      const writes = positionWrites(log, from).filter(entry => entry.path.startsWith('/state/layout'))
+
+      assert(writes.length === 0, `Cancel wrote: ${writes.map(entry => entry.path).join(', ')}`)
+
+      return counts
+    })
+
+    await check(`dense (review t_5e9be878 N4): a project with no block on the canvas (profile work: singles only, Show all off) says there is nothing to re-arrange; Re-arrange is disabled, Cancel has the focus, Layout history\u2026 still opens`, async () => {
+      await setProfile(page, 'work')
+      await page.waitForFunction(p => document.querySelector(p)?.getAttribute('data-canvas-count') === '0', PAGE, { timeout: 20_000 })
+      await setScope(page, PROJECT)
+      const from = Date.now()
+
+      await dismissToast(page)
+      await page.locator('[data-testid="session-tree-rearrange"]').click()
+      const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
+      await dialog.waitFor({ timeout: 5000 })
+      const text = (await page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+      const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null)
+      const disabled = await dialog.locator('[data-testid="session-tree-rearrange-confirm"]').isDisabled()
+
+      await page.keyboard.press('Enter') // on Cancel: closes, never confirms
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
+      await page.locator('[data-testid="session-tree-rearrange"]').click()
+      await dialog.waitFor({ timeout: 5000 })
+      await dialog.locator('[data-testid="session-tree-rearrange-history"]').click()
+      const history = page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+
+      await history.waitFor({ timeout: 10_000 })
+      await history.locator('[data-testid="session-tree-history-close"]').click()
+      await history.waitFor({ state: 'detached', timeout: 5000 })
+      await sleep(800)
+      const writes = positionWrites(log, from).filter(entry => entry.path.startsWith('/state/layout'))
+
+      await setScope(page, null)
+      await setProfile(page, 'default')
+      await page.locator(BLOCK('st-md-tip')).waitFor({ timeout: 20_000 })
+      assert(text === `No block of ${PROJECT} is on the canvas, so there is nothing to re-arrange.`, `confirm text: ${text}`)
+      assert(disabled, 'the Re-arrange button is enabled')
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}`)
+      assert(writes.length === 0, `writes: ${writes.map(entry => `${entry.method} ${entry.path}`).join(', ')}`)
+
+      return { text, disabled, focused }
+    })
 
     await check('no page errors from the plugin in either context', () => {
       const fromPlugin = stacks.filter(stack => /blob:|session-tree|desktop-plugins/.test(stack))

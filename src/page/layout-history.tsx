@@ -25,7 +25,7 @@ import { restErrorText } from '../model/actions.ts'
 import { agoLabel, dateTimeLabel } from '../model/format.ts'
 import type { Point } from '../model/layout.ts'
 import type { LayoutRef } from '../model/layout-sync.ts'
-import { backupLabel } from './history-labels.ts'
+import { backupLabel, rearrangeText } from './history-labels.ts'
 
 /** How many backups the backend keeps per profile + style (`MAX_BACKUPS_PER_LAYOUT`). */
 export const BACKUPS_KEPT = 10
@@ -52,24 +52,24 @@ export function RearrangeConfirm({
 }: {
   open: boolean
   viewLabel: string
-  /** Card 10 (A7): a Re-arrange in a project scope resets only that project's blocks. */
+  /**
+   * Card 10 (A7): a Re-arrange in a project scope resets only that project's blocks; `count` is
+   * how many of them it moves on the canvas (0: nothing to re-arrange, review t_5e9be878 N4).
+   */
   project?: { label: string; count: number }
   onClose(): void
   onConfirm(): void
   onHistory(): void
 }) {
+  const { text, canConfirm } = rearrangeText(viewLabel, project)
+
   return (
     <Dialog open={open} onOpenChange={next => !next && onClose()}>
       <DialogContent className="max-w-md" data-testid="session-tree-rearrange-dialog" onOpenAutoFocus={focusOn('session-tree-rearrange-cancel')}>
         <DialogHeader>
           <DialogTitle>{project ? 'Re-arrange this project?' : 'Re-arrange this layout?'}</DialogTitle>
           <DialogDescription>
-            <span data-testid="session-tree-rearrange-text">
-              {project
-                ? `The ${project.count} block${project.count === 1 ? '' : 's'} of ${project.label} go back to their automatic spots; other projects stay where they are.`
-                : `Every block in ${viewLabel} goes back to the automatic layout.`}{' '}
-              The current arrangement is kept in Layout history, so you can bring it back.
-            </span>
+            <span data-testid="session-tree-rearrange-text">{text}</span>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -91,6 +91,7 @@ export function RearrangeConfirm({
           <Button
             type="button"
             data-testid="session-tree-rearrange-confirm"
+            disabled={!canConfirm}
             onClick={() => {
               onClose()
               onConfirm()

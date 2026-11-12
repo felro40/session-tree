@@ -8839,6 +8839,19 @@ function isRetiredOp(op) {
   return op.kind !== "settings" && op.kind !== "forget" && op.ref.scope !== "all";
 }
 
+// src/model/layout-undo.ts
+init_define_import_meta_env();
+function blockProjects(model) {
+  return new Map(model.nodes.map((node) => [node.layoutKey, node.projectId ?? NO_PROJECT_ID]));
+}
+var movedSince = (key, then, now2) => then.has(key) && now2.has(key) && then.get(key) !== now2.get(key);
+function undoPositions(previous, then, now2) {
+  return new Map([...previous].filter(([key]) => !movedSince(key, then, now2)).map(([key, point]) => [key, { x: point.x, y: point.y }]));
+}
+function undoProject(undo, then, now2) {
+  return { project: undo.project, previous: undoPositions(undo.previous, then, now2), touched: undo.touched.filter((key) => !movedSince(key, then, now2)) };
+}
+
 // src/model/project-rearrange.ts
 init_define_import_meta_env();
 var scopeGroupKey = (scope) => groupKey(scope === NO_PROJECT_ID ? void 0 : scope);
@@ -12651,6 +12664,10 @@ var REMOVED_PROJECT = "a removed project";
 function backupLabel(backup, projectLabel) {
   return backup.reason === "restore" ? "Before a restore" : `Before Re-arrange · ${backup.project ? projectLabel(backup.project) ?? REMOVED_PROJECT : "All projects"}`;
 }
+var KEPT = "The current arrangement is kept in Layout history, so you can bring it back.";
+function rearrangeText(viewLabel, project) {
+  return project ? project.count === 0 ? { text: `No block of ${project.label} is on the canvas, so there is nothing to re-arrange.`, canConfirm: !1 } : { text: `${project.count === 1 ? `The 1 block of ${project.label} goes back to its automatic spot` : `The ${project.count} blocks of ${project.label} go back to their automatic spots`}; other projects stay where they are. ${KEPT}`, canConfirm: !0 } : { text: `Every block in ${viewLabel} goes back to the automatic layout. ${KEPT}`, canConfirm: !0 };
+}
 
 // src/page/layout-history.tsx
 import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
@@ -12669,14 +12686,11 @@ function RearrangeConfirm({
   onConfirm,
   onHistory
 }) {
+  let { text, canConfirm } = rearrangeText(viewLabel, project);
   return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
     /* @__PURE__ */ jsxs13(DialogHeader, { children: [
       /* @__PURE__ */ jsx15(DialogTitle, { children: project ? "Re-arrange this project?" : "Re-arrange this layout?" }),
-      /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-rearrange-text", children: [
-        project ? `The ${project.count} block${project.count === 1 ? "" : "s"} of ${project.label} go back to their automatic spots; other projects stay where they are.` : `Every block in ${viewLabel} goes back to the automatic layout.`,
-        " ",
-        "The current arrangement is kept in Layout history, so you can bring it back."
-      ] }) })
+      /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsx15("span", { "data-testid": "session-tree-rearrange-text", children: text }) })
     ] }),
     /* @__PURE__ */ jsxs13(DialogFooter, { children: [
       /* @__PURE__ */ jsx15(
@@ -12698,6 +12712,7 @@ function RearrangeConfirm({
         {
           type: "button",
           "data-testid": "session-tree-rearrange-confirm",
+          disabled: !canConfirm,
           onClick: () => {
             onClose(), onConfirm();
           },
@@ -13631,11 +13646,15 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   ), onMove = useCallback6(
     (moves) => sync.drop(ref, new Map([...moves].map(([id2, point]) => [keys.toStore(id2), point]))),
     [sync, ref, keys]
-  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), onRearrange = useCallback6(() => {
+  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), modelRef = useRef8(model);
+  useEffect8(() => {
+    modelRef.current = model;
+  });
+  let onRearrange = useCallback6(() => {
     if (!style2.savesLayout)
       return;
     if (scope !== ALL_PROJECTS) {
-      let reset = projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys), undo = sync.rearrangeProject(ref, scope, reset.keys, reset.spots);
+      let reset = projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys), undo = sync.rearrangeProject(ref, scope, reset.keys, reset.spots), then2 = blockProjects(model);
       requestFit(), setToast({
         id: Date.now(),
         message: "Project re-arranged",
@@ -13644,12 +13663,12 @@ function PageBody({ ctx, services: { sync, prefs } }) {
         layout: refKey(ref),
         project: scope,
         undo: () => {
-          sync.restoreProject(ref, undo), setToast(void 0), requestFit();
+          sync.restoreProject(ref, undoProject(undo, then2, blockProjects(modelRef.current))), setToast(void 0), requestFit();
         }
       });
       return;
     }
-    let previous = sync.rearrange(ref), id2 = Date.now();
+    let previous = sync.rearrange(ref), then = blockProjects(model), id2 = Date.now();
     requestFit(), setToast({
       id: id2,
       message: "Layout re-arranged",
@@ -13657,19 +13676,22 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       action: "rearrange",
       layout: refKey(ref),
       undo: () => {
-        sync.restore(ref, previous), setToast(void 0), requestFit();
+        sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current))), setToast(void 0), requestFit();
       }
     });
-  }, [sync, ref, style2, scope, model, spec, keys, requestFit, setToast]), onRestoreBackup = useCallback6(
+  }, [sync, ref, style2, scope, model, spec, keys, requestFit, setToast]), rearrangeCount = useMemo9(
+    () => confirmRearrange && style2.savesLayout && scope !== ALL_PROJECTS ? projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys).blocks : 0,
+    [confirmRearrange, style2, scope, model, spec, sync, ref, keys]
+  ), onRestoreBackup = useCallback6(
     (positions) => {
-      let previous = sync.restoreBackup(ref, positions);
+      let previous = sync.restoreBackup(ref, positions), then = blockProjects(modelRef.current);
       requestFit(), setToast({
         id: Date.now(),
         message: "Earlier layout restored",
         action: "restore",
         layout: refKey(ref),
         undo: () => {
-          sync.restore(ref, previous), setToast(void 0), requestFit();
+          sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current))), setToast(void 0), requestFit();
         }
       });
     },
@@ -13853,7 +13875,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           {
             open: confirmRearrange && style2.savesLayout,
             viewLabel,
-            project: scopeProjectLabel === void 0 ? void 0 : { label: scopeProjectLabel, count: scopeIds?.length ?? 0 },
+            project: scopeProjectLabel === void 0 ? void 0 : { label: scopeProjectLabel, count: rearrangeCount },
             onClose: () => setConfirmRearrange(!1),
             onConfirm: onRearrange,
             onHistory: () => setHistoryOpen(!0)
