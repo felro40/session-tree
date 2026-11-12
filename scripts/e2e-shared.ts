@@ -48,6 +48,7 @@ import {
   portsFree,
   positionWrites,
   rowsOf,
+  setProfile,
   sleep,
   stored,
   suite,
@@ -576,6 +577,81 @@ async function main(): Promise<void> {
         return { count, ownDragged, what, restored: Object.keys(restored).length, writes }
       })
     }
+
+    await check('dense (review t_5e9be878 N4): each project\u2019s Re-arrange confirm counts exactly its undimmed blocks on the canvas; Cancel sends nothing', async () => {
+      await setScope(page, null)
+      const titles = (await page.$$eval('[data-testid="session-tree-scope"] button', buttons => buttons.map(button => button.getAttribute('title') ?? ''))).filter(title => title.startsWith('Project: '))
+      const counts: Record<string, [number, number]> = {}
+      const from = Date.now()
+
+      for (const title of titles) {
+        const label = title.replace(/^Project: /, '')
+
+        await setScope(page, label)
+        await fit(page)
+        const own = (await nodeBoxes(page)).filter(r => !r.dimmed).length
+
+        await dismissToast(page)
+        await page.locator('[data-testid="session-tree-rearrange"]').click()
+        const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
+        await dialog.waitFor({ timeout: 5000 })
+        const text = (await page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+        const count = Number(/^The (\d+) blocks? of /.exec(text)?.[1] ?? (text.startsWith('No block of') ? 0 : NaN))
+
+        await dialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+        await dialog.waitFor({ state: 'detached', timeout: 5000 })
+        counts[label] = [count, own]
+        assert(count === own, `${label}: the confirm counts ${count}, the canvas shows ${own} (${text})`)
+        assert(own === 0 || text.startsWith(own === 1 ? `The 1 block of ${label} goes back` : `The ${own} blocks of ${label} go back`), `${label}: ${text}`)
+      }
+
+      await setScope(page, null)
+      const writes = positionWrites(log, from).filter(entry => entry.path.startsWith('/state/layout'))
+
+      assert(writes.length === 0, `Cancel wrote: ${writes.map(entry => entry.path).join(', ')}`)
+
+      return counts
+    })
+
+    await check(`dense (review t_5e9be878 N4): a project with no block on the canvas (profile work: singles only, Show all off) says there is nothing to re-arrange; Re-arrange is disabled, Cancel has the focus, Layout history\u2026 still opens`, async () => {
+      await setProfile(page, 'work')
+      await page.waitForFunction(p => document.querySelector(p)?.getAttribute('data-canvas-count') === '0', PAGE, { timeout: 20_000 })
+      await setScope(page, PROJECT)
+      const from = Date.now()
+
+      await dismissToast(page)
+      await page.locator('[data-testid="session-tree-rearrange"]').click()
+      const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
+      await dialog.waitFor({ timeout: 5000 })
+      const text = (await page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+      const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null)
+      const disabled = await dialog.locator('[data-testid="session-tree-rearrange-confirm"]').isDisabled()
+
+      await page.keyboard.press('Enter') // on Cancel: closes, never confirms
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
+      await page.locator('[data-testid="session-tree-rearrange"]').click()
+      await dialog.waitFor({ timeout: 5000 })
+      await dialog.locator('[data-testid="session-tree-rearrange-history"]').click()
+      const history = page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+
+      await history.waitFor({ timeout: 10_000 })
+      await history.locator('[data-testid="session-tree-history-close"]').click()
+      await history.waitFor({ state: 'detached', timeout: 5000 })
+      await sleep(800)
+      const writes = positionWrites(log, from).filter(entry => entry.path.startsWith('/state/layout'))
+
+      await setScope(page, null)
+      await setProfile(page, 'default')
+      await page.locator(BLOCK('st-md-tip')).waitFor({ timeout: 20_000 })
+      assert(text === `No block of ${PROJECT} is on the canvas, so there is nothing to re-arrange.`, `confirm text: ${text}`)
+      assert(disabled, 'the Re-arrange button is enabled')
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}`)
+      assert(writes.length === 0, `writes: ${writes.map(entry => `${entry.method} ${entry.path}`).join(', ')}`)
+
+      return { text, disabled, focused }
+    })
 
     await check('no page errors from the plugin in either context', () => {
       const fromPlugin = stacks.filter(stack => /blob:|session-tree|desktop-plugins/.test(stack))

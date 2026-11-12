@@ -1,7 +1,8 @@
 /**
  * Card 10: one shared layout per style. The auto-layout of a project scope equals All's, byte
  * for byte, in Dense, Subway and Rich (A4); what a scoped Re-arrange resets (A5); the camera of a
- * scope (A9: `viewport.v2`, the first visit frames the project); Layout history labels (A8).
+ * scope (A9: `viewport.v2`, the first visit frames the project); Layout history labels (A8); the
+ * Re-arrange confirm text (review t_5e9be878 N4).
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
@@ -14,7 +15,7 @@ import { GROUP_PREFIX, groupKey, mergeLayout } from '../../src/model/layout.ts'
 import type { LayoutResult, LayoutSpec, Point } from '../../src/model/layout.ts'
 import { projectReset, scopeGroupKey } from '../../src/model/project-rearrange.ts'
 import { NO_PROJECT_ID } from '../../src/model/projects.ts'
-import { backupLabel, REMOVED_PROJECT } from '../../src/page/history-labels.ts'
+import { backupLabel, rearrangeText, REMOVED_PROJECT } from '../../src/page/history-labels.ts'
 import { denseLayoutSpec } from '../../src/styles/dense/spec.ts'
 import { layoutRich } from '../../src/styles/rich/layout.ts'
 import { richLayoutSpec } from '../../src/styles/rich/spec.ts'
@@ -203,5 +204,42 @@ describe('card 10 (A8): Layout history labels', () => {
     assert.equal(backupLabel({ reason: 'rearrange', project: '/repos/a' }, label), 'Before Re-arrange · alpha')
     assert.equal(backupLabel({ reason: 'rearrange', project: '/repos/gone' }, label), `Before Re-arrange · ${REMOVED_PROJECT}`)
     assert.equal(backupLabel({ reason: 'restore', project: null }, label), 'Before a restore')
+  })
+})
+
+describe('review t_5e9be878 N4: the Re-arrange confirm text', () => {
+  const kept = 'The current arrangement is kept in Layout history, so you can bring it back.'
+
+  it('a project scope: 0 (nothing to re-arrange, no confirm), 1 (singular) and N blocks', () => {
+    assert.deepEqual(rearrangeText('Dense', { label: 'mdesign', count: 0 }), {
+      text: 'No block of mdesign is on the canvas, so there is nothing to re-arrange.',
+      canConfirm: false
+    })
+    assert.deepEqual(rearrangeText('Dense', { label: 'mdesign', count: 1 }), {
+      text: `The 1 block of mdesign goes back to its automatic spot; other projects stay where they are. ${kept}`,
+      canConfirm: true
+    })
+    assert.deepEqual(rearrangeText('Dense', { label: 'mdesign', count: 7 }), {
+      text: `The 7 blocks of mdesign go back to their automatic spots; other projects stay where they are. ${kept}`,
+      canConfirm: true
+    })
+  })
+
+  it('All projects: unchanged', () => {
+    assert.deepEqual(rearrangeText('Dense + inspector · All projects'), {
+      text: `Every block in Dense + inspector · All projects goes back to the automatic layout. ${kept}`,
+      canConfirm: true
+    })
+  })
+
+  it('the count is the project\u2019s blocks the fresh layout places (Show all off: no singles), labels aside', () => {
+    const fixture = loadFixture('default')
+    const model = graph(fixture, 'default', '/e2e/projects/mdesign')
+    const fresh = mergeLayout(undefined, model, denseLayoutSpec({ showAll: false }))
+    const reset = projectReset(model, '/e2e/projects/mdesign', fresh, new Map(), layoutKeysOf(model))
+    const own = [...fresh.positions.keys()].filter(id => !id.startsWith(GROUP_PREFIX) && model.nodeById.get(id)?.outOfScope === false)
+
+    assert.equal(reset.blocks, own.length)
+    assert.ok(reset.blocks > 0 && reset.blocks < model.nodes.filter(node => !node.outOfScope).length, 'the singles are not counted')
   })
 })

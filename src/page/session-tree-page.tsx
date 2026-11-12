@@ -454,6 +454,16 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     })
   }, [sync, ref, style, scope, model, spec, keys, requestFit, setToast])
 
+  // Review t_5e9be878 N4: the confirm of a project scope counts the blocks the op moves on the
+  // canvas, from the same inputs `onRearrange` uses, while it is open.
+  const rearrangeCount = useMemo(
+    () =>
+      confirmRearrange && style.savesLayout && scope !== ALL_PROJECTS
+        ? projectReset(model, scope, style.layout(model, undefined, spec), sync.positions(ref), keys).blocks
+        : 0,
+    [confirmRearrange, style, scope, model, spec, sync, ref, keys]
+  )
+
   // A restore from Layout history: the backup becomes the layout (the server keeps the one it
   // replaces), with Undo like a Re-arrange.
   const onRestoreBackup = useCallback(
@@ -769,7 +779,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         <RearrangeConfirm
           open={confirmRearrange && style.savesLayout}
           viewLabel={viewLabel}
-          project={scopeProjectLabel === undefined ? undefined : { label: scopeProjectLabel, count: scopeIds?.length ?? 0 }}
+          project={scopeProjectLabel === undefined ? undefined : { label: scopeProjectLabel, count: rearrangeCount }}
           onClose={() => setConfirmRearrange(false)}
           onConfirm={onRearrange}
           onHistory={() => setHistoryOpen(true)}
