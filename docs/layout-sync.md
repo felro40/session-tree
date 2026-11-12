@@ -67,7 +67,12 @@ the other lanes in a scope.
   style layout in Layout history, written first under the same lock (`project` recorded with it).
   In a layout nobody dragged nothing moves (no backup, no new revision). **Undo** sends the same
   endpoint without `backup`: exactly that project's previous entries back, the keys the
-  Re-arrange added removed, no other block touched. A refused scoped Re-arrange removes its toast
+  Re-arrange added removed, no other block touched. Every Undo (this one, a Re-arrange in All
+  projects' and a restore's) skips a block moved to another project since (review t_5e9be878
+  N1): the page compares each block's project when the action ran with its project at Undo (its
+  graph model, which follows other devices too), and the moved block gets no entry and no
+  remove (in a whole-layout `PUT` it is left out), so it keeps the spot the auto-layout gave it in
+  its new band; group labels and every other entry come back exactly. A refused scoped Re-arrange removes its toast
   too (`onReplaceRefused`, with the `project`). Re-arrange in All projects is unchanged
   (`DELETE /state/layout`). Known limitation: a block of another project dragged into that
   project's area can overlap the reset blocks (README § Known limitations).
@@ -209,13 +214,17 @@ None of them touches `state.db`.
   recorded on mouse-up and goes out 300 ms later. Auto-layout placements go as `if_absent`.
 - **Re-arrange** asks first (a plain dialog naming what resets — in All projects "Every block in
   <style> goes back to the automatic layout", in a project "The N blocks of <project> go back to
-  their automatic spots; other projects stay where they are" — not the SDK's ConfirmDialog, which
+  their automatic spots; other projects stay where they are" (N: the project's blocks the op moves
+  on the canvas, labels aside; "The 1 block … goes back to its automatic spot"; with none, "No
+  block of <project> is on the canvas, so there is nothing to re-arrange." and Re-arrange is
+  disabled; review t_5e9be878 N4) — not the SDK's ConfirmDialog, which
   confirms on Enter and Space whichever button holds focus: Space is the pan key). The confirm
   opens with focus on Cancel and Layout history with focus on Close, so Space, Enter or Escape
   right after a misclick change nothing; only activating Re-arrange or Restore itself does (a
   click, or Tab to the button and Enter or Space). In All projects it then queues a delete of the
   style's layout and shows a toast with Undo, which queues a `PUT` of exactly what the window
-  showed before; in a project scope it queues the scoped op (One layout per style).
+  showed before, less any block moved to another project since; in a project scope it queues the
+  scoped op (One layout per style).
 - **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
   in Swimlanes; the toolbar has no room for a button of its own at the narrowest widths) sends this
   window's queue first, then lists the backups of the style (one list for every scope; each row
