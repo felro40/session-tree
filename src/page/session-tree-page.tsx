@@ -23,7 +23,8 @@ import { ALL_PROFILES, ALL_PROJECTS, buildGraph, layoutKeysOf } from '../model/g
 import type { GraphNode } from '../model/graph.ts'
 import { anyInView, laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
-import type { LayoutRef } from '../model/layout-sync.ts'
+import { layoutRefKey } from '../model/layout-sync.ts'
+import type { LayoutRef, ReplaceRefusal } from '../model/layout-sync.ts'
 import { EMPTY_SELECTION, canvasSelectable, keepShown, reduceSelection, singleSelected } from '../model/selection.ts'
 import type { Selection, SelectionAction } from '../model/selection.ts'
 import { visibleRows } from '../model/sessions.ts'
@@ -70,6 +71,12 @@ interface UndoToast {
   undo(): void
   /** The Re-arrange toast also opens Layout history. */
   history?: boolean
+  /**
+   * What the toast reports, on which layout (`layoutRefKey`): a refusal of that action on that
+   * layout removes it (review t_b632e3ac N2).
+   */
+  action: ReplaceRefusal['action']
+  layout: string
 }
 
 function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; services: Services }) {
@@ -403,6 +410,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       id,
       message: 'Layout re-arranged',
       history: true,
+      action: 'rearrange',
+      layout: layoutRefKey(ref),
       undo: () => {
         sync.restore(ref, previous)
         setToast(undefined)
@@ -421,6 +430,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       setToast({
         id: Date.now(),
         message: 'Earlier layout restored',
+        action: 'restore',
+        layout: layoutRefKey(ref),
         undo: () => {
           sync.restore(ref, previous)
           setToast(undefined)
@@ -431,6 +442,17 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     [sync, ref, requestFit, setToast]
   )
   const flushSync = useCallback(() => sync.flush(), [sync])
+
+  // Review t_b632e3ac N2: the server refused a Re-arrange or restore (the layout comes back, the
+  // notice shows once per kind): its toast claimed a success, so it goes, every time. Only a
+  // toast of that action on that layout; a later action's toast stays.
+  useEffect(
+    () =>
+      sync.onReplaceRefused(refusal =>
+        setToast(current => (current?.action === refusal.action && current.layout === layoutRefKey(refusal.ref) ? undefined : current))
+      ),
+    [sync, setToast]
+  )
 
   useEffect(() => {
     if (!toast) {

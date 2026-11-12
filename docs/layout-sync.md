@@ -158,6 +158,8 @@ None of them touches `state.db`.
   window's queue first, then lists the backups of the shown layout, refetched on every store
   revision. Restore fetches one backup and queues a `PUT` with `backup: true` (shown at once,
   with an Undo toast like Re-arrange); blocks the backup lacks are placed anew by the auto-layout.
+  A Re-arrange or restore the server refuses (dropped, e.g. 409 `layout_history_newer`) also
+  removes its toast, every time, not only with the first notice of that kind.
 - **Offline (transient failures):** a request with no answer (network, timeout), a 5xx, 408 or
   429 keeps the queue in `ctx.storage`, marks the profile offline ("offline: showing last saved
   layout" banner) and retries with a backoff (1, 2, 5, 5, 10 s). Nothing is notified. The page keeps
