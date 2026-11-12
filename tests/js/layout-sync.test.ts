@@ -5,6 +5,7 @@ import { ALL_PROJECTS, buildGraph, layoutKeysOf } from '../../src/model/graph.ts
 import { mergeLayout } from '../../src/model/layout.ts'
 import type { LayoutResult, Point } from '../../src/model/layout.ts'
 import { projectReset } from '../../src/model/project-rearrange.ts'
+import { blockProjects, undoPositions, undoProject } from '../../src/model/layout-undo.ts'
 import { denseLayoutSpec } from '../../src/styles/dense/spec.ts'
 import { loadFixture } from './fixtures.ts'
 import { CACHE_KEY, DROPS_KEY, isRefusal, layoutRef, LayoutSync, LEGACY_PENDING_KEY, NEWER_SCHEMA, ORPHAN_MS, PENDING_KEY, refusalKind, SHARED_SCOPE } from '../../src/model/layout-sync.ts'
@@ -1315,5 +1316,115 @@ describe('LayoutSync: one layout per style (card 10)', () => {
 
     assert.equal(typeof raw.slots.w.beat, 'number')
     assert.deepEqual(raw.slots.w.ops.map(op => [op.kind, op.ref.scope]), [['project', 'all']])
+  })
+})
+
+describe('LayoutSync: an Undo after a move to another project (review t_5e9be878 N1)', () => {
+  const fixture = loadFixture('default')
+  const spec = denseLayoutSpec({ showAll: false })
+  const MDESIGN = '/e2e/projects/mdesign'
+  const SYSCANVAS = '/e2e/projects/syscanvas'
+  const MOVED = 'st-split-child'
+  const before = () => buildGraph(fixture.rows, fixture.projects, { profile: 'default', showArchived: false, scope: MDESIGN })
+  /** The graph after "Move to project" put `MOVED` in syscanvas. */
+  const after = () =>
+    buildGraph(
+      fixture.rows.map(row => (row.id === MOVED ? { ...row, cwd: SYSCANVAS, git_repo_root: SYSCANVAS } : row)),
+      fixture.projects.map(project => ({ ...project, sessionIds: project.id === SYSCANVAS ? [...project.sessionIds, MOVED] : project.sessionIds.filter(id => id !== MOVED) })),
+      { profile: 'default', showArchived: false, scope: MDESIGN }
+    )
+  const place = (sync: LayoutSync, model: ReturnType<typeof before>) => sync.place(REF, previous => mergeLayout(previous, model, spec), { keys: layoutKeysOf(model) })
+
+  it('a project Undo sends no entry or remove for the moved block; the rest comes back exactly', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    const model = before()
+    const keys = layoutKeysOf(model)
+    place(sync, model)
+    await timers.advance(300)
+    sync.drop(REF, new Map([[MOVED, { x: 295.76, y: 229.82 }], ['st-md-katex', { x: 4000, y: 10 }]]))
+    await timers.advance(300)
+    const dragged = structuredClone(server.layouts.default.dense.all)
+    const reset = projectReset(model, MDESIGN, mergeLayout(undefined, model, spec), sync.positions(REF), keys)
+    const undo = sync.rearrangeProject(REF, MDESIGN, reset.keys, reset.spots)
+    const then = blockProjects(model)
+
+    await timers.advance(300)
+    // Move to project: forget, then the page's next layout places it in syscanvas's band.
+    sync.forget('default', MOVED)
+    await timers.advance(300)
+    const moved = after()
+    place(sync, moved)
+    await timers.advance(300)
+    const placed = server.layouts.default.dense.all[MOVED]
+    assert.ok(placed && (placed.x !== 295.76 || placed.y !== 229.82))
+    const calls = server.calls.length
+    const sent: ProjectBlocksBody[] = []
+    const putProjectBlocks = server.putProjectBlocks.bind(server)
+    server.putProjectBlocks = async (profile, body) => {
+      sent.push(structuredClone(body))
+      return putProjectBlocks(profile, body)
+    }
+
+    sync.restoreProject(REF, undoProject(undo, then, blockProjects(moved)))
+    await timers.advance(300)
+    assert.equal(sent.length, 1, `calls ${server.calls.slice(calls).join(', ')}`)
+    assert.ok(!sent[0].positions.some(entry => entry.id === MOVED) && !sent[0].remove.includes(MOVED), 'the Undo names the moved block')
+    const undone = server.layouts.default.dense.all
+    assert.deepEqual(undone[MOVED], placed, 'the moved block kept its new spot')
+    for (const key of Object.keys(dragged).filter(key => key !== MOVED)) {
+      assert.deepEqual([undone[key]?.x, undone[key]?.y], [dragged[key].x, dragged[key].y], `${key} is not back`)
+    }
+  })
+
+  it('a whole-layout Undo (All Re-arrange, restore from history) leaves the moved block out of the PUT; place() puts it in its new band', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    const model = before()
+    place(sync, model)
+    await timers.advance(300)
+    sync.drop(REF, new Map([[MOVED, { x: 295.76, y: 229.82 }], ['st-md-katex', { x: 4000, y: 10 }]]))
+    await timers.advance(300)
+    const dragged = structuredClone(server.layouts.default.dense.all)
+
+    for (const action of ['rearrange', 'restore'] as const) {
+      const previous = action === 'rearrange' ? sync.rearrange(REF) : sync.restoreBackup(REF, new Map([['st-md-katex', { x: 1, y: 1 }]]))
+      const then = blockProjects(model)
+
+      await timers.advance(300)
+      place(sync, model)
+      await timers.advance(300)
+      sync.forget('default', MOVED)
+      await timers.advance(300)
+      const moved = after()
+      const sent: { id: string }[][] = []
+      const putLayout = server.putLayout.bind(server)
+      server.putLayout = async (profile, body) => {
+        sent.push(structuredClone(body.positions))
+        return putLayout(profile, body)
+      }
+
+      sync.restore(REF, undoPositions(previous, then, blockProjects(moved)))
+      await timers.advance(300)
+      server.putLayout = putLayout
+      assert.equal(sent.length, 1, action)
+      assert.ok(!sent[0].some(entry => entry.id === MOVED), `${action}: the PUT names the moved block`)
+      assert.equal(server.layouts.default.dense.all[MOVED], undefined, `${action}: the moved block is stored`)
+      place(sync, moved)
+      await timers.advance(300)
+      const undone = server.layouts.default.dense.all
+      const spot = undone[MOVED]
+      assert.ok(spot && (spot.x !== 295.76 || spot.y !== 229.82), `${action}: the old spot came back`)
+      for (const key of Object.keys(dragged).filter(key => key !== MOVED)) {
+        assert.deepEqual([undone[key]?.x, undone[key]?.y], [dragged[key].x, dragged[key].y], `${action}: ${key} is not back`)
+      }
+      // Next round: the moved block back in mdesign at its dragged spot.
+      sync.drop(REF, new Map([[MOVED, { x: 295.76, y: 229.82 }]]))
+      await timers.advance(300)
+    }
   })
 })

@@ -28,6 +28,7 @@ import { laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
 import { layoutRef, layoutRefKey } from '../model/layout-sync.ts'
 import type { LayoutRef, ProjectUndo, ReplaceRefusal } from '../model/layout-sync.ts'
+import { blockProjects, undoPositions, undoProject } from '../model/layout-undo.ts'
 import { projectReset } from '../model/project-rearrange.ts'
 import { EMPTY_SELECTION, canvasSelectable, keepShown, reduceSelection, singleSelected } from '../model/selection.ts'
 import type { Selection, SelectionAction } from '../model/selection.ts'
@@ -406,6 +407,15 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   const dismissToast = useCallback(() => setToast(undefined), [setToast])
 
+  // Review t_5e9be878 N1: an Undo compares each block's project when the action ran with its
+  // project now (this model follows the other device's changes too), and never puts back the
+  // spot of a block moved to another project since.
+  const modelRef = useRef(model)
+
+  useEffect(() => {
+    modelRef.current = model
+  })
+
   const onRearrange = useCallback(() => {
     if (!style.savesLayout) {
       // Swimlanes has no saved positions to reset (R12): Re-arrange is hidden there.
@@ -417,6 +427,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       // a fresh full layout, All order); every other block stays where it is.
       const reset = projectReset(model, scope, style.layout(model, undefined, spec), sync.positions(ref), keys)
       const undo: ProjectUndo = sync.rearrangeProject(ref, scope, reset.keys, reset.spots)
+      const then = blockProjects(model)
 
       requestFit()
       setToast({
@@ -427,7 +438,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         layout: layoutRefKey(ref),
         project: scope,
         undo: () => {
-          sync.restoreProject(ref, undo)
+          sync.restoreProject(ref, undoProject(undo, then, blockProjects(modelRef.current)))
           setToast(undefined)
           requestFit()
         }
@@ -437,6 +448,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     }
 
     const previous = sync.rearrange(ref)
+    const then = blockProjects(model)
     const id = Date.now()
 
     requestFit()
@@ -447,7 +459,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       action: 'rearrange',
       layout: layoutRefKey(ref),
       undo: () => {
-        sync.restore(ref, previous)
+        // The moved blocks are left out of the PUT: the auto-layout places them (`if_absent`).
+        sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current)))
         setToast(undefined)
         requestFit()
       }
@@ -469,6 +482,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const onRestoreBackup = useCallback(
     (positions: Map<string, Point>) => {
       const previous = sync.restoreBackup(ref, positions)
+      const then = blockProjects(modelRef.current)
 
       requestFit()
       setToast({
@@ -477,7 +491,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         action: 'restore',
         layout: layoutRefKey(ref),
         undo: () => {
-          sync.restore(ref, previous)
+          sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current)))
           setToast(undefined)
           requestFit()
         }
