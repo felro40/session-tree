@@ -8286,6 +8286,482 @@ function mergeLayout(previous, model, spec) {
   return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 
+// src/model/layout-sync.ts
+init_define_import_meta_env();
+var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
+function refusalKind(error) {
+  let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
+  if (!match)
+    return null;
+  let status = Number(match[1]);
+  return status < 400 || status > 499 || status === 401 || status === 403 || status === 408 || status === 429 ? null : status === 409 && match[2].includes(NEWER_SCHEMA) ? NEWER_SCHEMA : match[1];
+}
+function randomId() {
+  return globalThis.crypto?.randomUUID?.() ?? `w${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+}
+var LayoutSync = class {
+  profiles = /* @__PURE__ */ new Map();
+  pending = [];
+  /** Changes made while the store is read-only: shown here, never sent, never persisted. */
+  localOnly = [];
+  listeners = /* @__PURE__ */ new Set();
+  replaceRefusedListeners = /* @__PURE__ */ new Set();
+  watched = /* @__PURE__ */ new Map();
+  dragging = /* @__PURE__ */ new Set();
+  cancelFlush;
+  flushing = !1;
+  failures = 0;
+  /** Bumps when an acknowledged write changes the snapshot: a fetch begun before it is stale. */
+  writeSeq = 0;
+  disposed = !1;
+  version = 0;
+  readOnly = !1;
+  /** `layout + key` of auto-layout placements the backend refused: never queued again. */
+  refusedPlacements = /* @__PURE__ */ new Set();
+  notified = /* @__PURE__ */ new Set();
+  /** The ops in this window's slot as last written (to tell an adoption by another window). */
+  persistedOps = /* @__PURE__ */ new Set();
+  ownsSlot = !1;
+  lastDropAt = 0;
+  transport;
+  storage;
+  timers;
+  options;
+  windowId;
+  now;
+  constructor(transport, storage, timers, options = {}) {
+    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.windowId = options.windowId ?? randomId(), this.now = options.now ?? Date.now, this.adoptOrphans() && this.schedule(0);
+  }
+  // --- subscription -------------------------------------------------------------------------
+  /** Called after every change a reader can see (positions, settings, status). */
+  subscribe(listener) {
+    return this.listeners.add(listener), () => this.listeners.delete(listener);
+  }
+  /**
+   * Called every time a Re-arrange or a restore from Layout history is refused and dropped (not
+   * only the first time, unlike `onRefused`); never for an Undo `PUT`, nor on the read-only
+   * `newer_schema` path, which keeps the op (review t_b632e3ac N2).
+   */
+  onReplaceRefused(listener) {
+    return this.replaceRefusedListeners.add(listener), () => this.replaceRefusedListeners.delete(listener);
+  }
+  /** Bumps on every visible change: a cheap memo key for React. */
+  get changeVersion() {
+    return this.version;
+  }
+  emit() {
+    this.version += 1;
+    for (let listener of [...this.listeners])
+      listener();
+  }
+  // --- reads --------------------------------------------------------------------------------
+  profile(profile) {
+    let state = this.profiles.get(profile);
+    if (!state) {
+      let cached = this.storage.get(`${CACHE_KEY}:${profile}`, null);
+      state = { server: isSnapshot(cached) ? cached : null, settled: !1, status: "loading" }, this.profiles.set(profile, state);
+    }
+    return state;
+  }
+  status(profile) {
+    return this.profile(profile).status;
+  }
+  /** The store revision of this window's snapshot of `profile` (`null`: none yet). */
+  revision(profile) {
+    return this.profile(profile).server?.rev ?? null;
+  }
+  /** Whether the page may lay out: a fetch answered or failed (then the cache, or nothing). */
+  settled(profile) {
+    return this.profile(profile).settled;
+  }
+  /** Whether this profile's layouts come from the cache because the backend is unreachable. */
+  offline(profile) {
+    return this.profile(profile).status === "offline";
+  }
+  /** The store was written by a newer Session Tree: nothing is saved from this page (B1). */
+  get storeReadOnly() {
+    return this.readOnly;
+  }
+  /** This window's ops a reader sees: the unsent queue, then the read-only local changes. */
+  overlay() {
+    return this.localOnly.length > 0 ? [...this.pending, ...this.localOnly] : this.pending;
+  }
+  /** The synced settings as this window has them (its own unsent changes included). */
+  settings(profile) {
+    let base = { ...this.profile(profile).server?.settings ?? this.anySettings() };
+    for (let op of this.overlay())
+      op.kind === "settings" && Object.assign(base, op.patch);
+    return base;
+  }
+  /** Settings are global: any profile's snapshot holds them. */
+  anySettings() {
+    let best = null;
+    for (let state of this.profiles.values())
+      state.server && (!best || state.server.rev > best.rev) && (best = state.server);
+    return best?.settings ?? EMPTY_SETTINGS;
+  }
+  /** The positions of one layout, by layout key: the server's, this window's unsent changes on top. */
+  positions(ref) {
+    let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+    for (let op of this.overlay())
+      (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
+    return out;
+  }
+  // --- local changes ------------------------------------------------------------------------
+  /**
+   * Lay out against the stored positions and keep what the layout placed. Called while the page
+   * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
+   * style that saves nothing, Swimlanes). `keys` maps the layout's block ids to layout keys;
+   * `compute` and the answer speak block ids.
+   */
+  place(ref, compute, { save = !0, keys = IDENTITY_KEYS } = {}) {
+    let stored = this.positions(ref), previous = keys === IDENTITY_KEYS ? stored : new Map([...stored].map(([key, point]) => [keys.fromStore(key), point])), result = compute(previous.size > 0 ? previous : void 0);
+    if (!save)
+      return result;
+    let placed = [];
+    for (let [id2, point] of result.positions) {
+      let key = keys.toStore(id2);
+      !stored.has(key) && !this.refusedPlacements.has(entryKey(ref, key)) && placed.push([key, { x: point.x, y: point.y }]);
+    }
+    return placed.length > 0 && this.queue({ kind: "upsert", ref, mode: "if_absent", entries: placed }, !1), result;
+  }
+  /** A drop: these blocks (by layout key) now sit here. */
+  drop(ref, moves) {
+    if (moves.size === 0)
+      return;
+    let at = Math.max(this.now(), this.lastDropAt + 1);
+    this.lastDropAt = at, this.readOnly || this.recordDrops(ref, [...moves.keys()], at), this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), at }, !0);
+  }
+  /** Re-arrange: forget this layout. Answers what was shown (by layout key), for Undo. */
+  rearrange(ref) {
+    let previous = this.positions(ref);
+    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: null }, !0), previous;
+  }
+  /** Forgets the refused auto-layout placements of one layout (a Re-arrange, a stored PUT). */
+  clearRefused(ref) {
+    let prefix = `${refKey(ref)}\0`;
+    for (let key of [...this.refusedPlacements])
+      key.startsWith(prefix) && this.refusedPlacements.delete(key);
+  }
+  /** Undo of a Re-arrange: the layout becomes `previous` again. */
+  restore(ref, previous) {
+    this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
+  }
+  /**
+   * A restore from Layout history: the layout becomes a backup's positions (by layout key); the
+   * server keeps the layout it replaces as a backup first. Answers what was shown, for Undo.
+   */
+  restoreBackup(ref, positions) {
+    let previous = this.positions(ref);
+    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: [...positions].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), backup: !0 }, !0), previous;
+  }
+  /**
+   * A block moved to another project: forget its stored spot (by layout key) in every layout of
+   * the profile (here and on the server), so each layout places it anew in its new band.
+   */
+  forget(profile, key) {
+    this.queue({ kind: "forget", profile, ids: [key] }, !0);
+  }
+  setSettings(profile, patch) {
+    this.queue({ kind: "settings", profile, patch }, !0);
+  }
+  /** While blocks are dragged nothing is sent, and a refresh keeps their spots. */
+  setDragging(ids) {
+    let was = this.dragging.size > 0;
+    this.dragging = new Set(ids ?? []), was && this.dragging.size === 0 && this.pending.length > 0 && this.schedule(this.options.debounceMs ?? 300);
+  }
+  get isDragging() {
+    return this.dragging.size > 0;
+  }
+  queue(op, notify) {
+    this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit();
+  }
+  // --- the device's pending queue (NB1) ------------------------------------------------------
+  readSlots() {
+    let raw = this.storage.get(PENDING_KEY, null), slots = {};
+    if (raw && typeof raw == "object" && raw.slots && typeof raw.slots == "object")
+      for (let [owner, value2] of Object.entries(raw.slots)) {
+        let slot = value2;
+        slot && typeof slot.beat == "number" && Array.isArray(slot.ops) && (slots[owner] = { beat: slot.beat, ops: slot.ops.filter(isOp) });
+      }
+    return slots;
+  }
+  writeSlots(slots) {
+    this.storage.set(PENDING_KEY, { slots });
+  }
+  /**
+   * Another window adopted this window's slot (it looked orphaned, e.g. a long-hidden tab): it
+   * sends those ops, so this window keeps only what it queued since.
+   */
+  reconcileSlot(slots) {
+    this.ownsSlot && !(this.windowId in slots) && (this.pending = this.pending.filter((op) => !this.persistedOps.has(op)), this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set());
+  }
+  /** Rewrites this window's slot only (and refreshes its heartbeat). */
+  persistPending(beat = this.now()) {
+    let slots = this.readSlots();
+    this.reconcileSlot(slots), this.pending.length > 0 ? (slots[this.windowId] = { beat, ops: this.pending }, this.ownsSlot = !0, this.persistedOps = new Set(this.pending)) : (delete slots[this.windowId], this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set()), this.writeSlots(slots);
+  }
+  /** Takes over the slots of closed windows (and the card-4 shared queue). True: adopted some. */
+  adoptOrphans() {
+    let slots = this.readSlots(), now2 = this.now(), adopted = [], legacy = this.storage.get(LEGACY_PENDING_KEY, null);
+    Array.isArray(legacy) && (adopted.push(...legacy.filter(isOp)), this.storage.set(LEGACY_PENDING_KEY, null));
+    for (let [owner, slot] of Object.entries(slots))
+      owner !== this.windowId && now2 - slot.beat > ORPHAN_MS && (adopted.push(...slot.ops), delete slots[owner]);
+    return adopted.length === 0 ? !1 : (this.writeSlots(slots), this.pending = [...adopted, ...this.pending], this.persistPending(), !0);
+  }
+  recordDrops(ref, keys, at) {
+    let record = { ...this.storage.get(DROPS_KEY, {}) };
+    for (let key of keys) {
+      let name = entryKey(ref, key);
+      record[name] = Math.max(typeof record[name] == "number" ? record[name] : 0, at);
+    }
+    let kept = Object.entries(record).filter(([, when]) => typeof when == "number" && at - when < DROP_RECORD_MS).sort((a, b) => b[1] - a[1]).slice(0, DROP_RECORD_MAX);
+    this.storage.set(DROPS_KEY, Object.fromEntries(kept));
+  }
+  /**
+   * Discards queued drops that a newer drop of the same block on this device (any window)
+   * supersedes, before anything is sent: last write wins per block on the server, so an older
+   * drop sent late would overwrite the newer one.
+   */
+  supersede() {
+    let record = this.storage.get(DROPS_KEY, {}), changed = !1;
+    this.pending = this.pending.flatMap((op) => {
+      if (op.kind !== "upsert" || op.mode !== "set" || typeof op.at != "number")
+        return [op];
+      let at = op.at, entries = op.entries.filter(([key]) => !((record[entryKey(op.ref, key)] ?? 0) > at));
+      return entries.length === op.entries.length ? [op] : (changed = !0, entries.length > 0 ? [{ ...op, entries }] : []);
+    }), changed && (this.persistPending(), this.emit());
+  }
+  /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
+  schedule(ms) {
+    this.disposed || this.readOnly || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
+      this.cancelFlush = void 0, this.flush();
+    }, ms));
+  }
+  // --- sending ------------------------------------------------------------------------------
+  /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
+  async flush() {
+    if (!(this.flushing || this.disposed || this.readOnly) && !(this.dragging.size > 0)) {
+      this.flushing = !0;
+      try {
+        for (this.pending.length > 0 && this.persistPending(); this.pending.length > 0 && this.dragging.size === 0 && !this.disposed && !this.readOnly && (this.supersede(), this.pending.length !== 0); ) {
+          let [op, count] = this.nextBatch(), batch = this.pending.slice(0, count);
+          try {
+            await this.send(op), this.ack(op), this.dequeue(batch), this.failures = 0, this.markOnline(opProfile(op)), op.kind === "replace" && this.clearRefused(op.ref);
+          } catch (error) {
+            let kind = refusalKind(error);
+            if (kind === NEWER_SCHEMA) {
+              this.enterReadOnly(error);
+              return;
+            }
+            if (kind !== null) {
+              if (this.dequeue(batch), op.kind === "upsert" && op.mode === "if_absent")
+                for (let [key] of op.entries)
+                  this.refusedPlacements.add(entryKey(op.ref, key));
+              this.notifyOnce(kind, error), this.emit(), this.replaceRefused(op);
+              continue;
+            }
+            this.markOffline(opProfile(op)), this.retry();
+            return;
+          }
+        }
+      } finally {
+        this.flushing = !1;
+      }
+      this.pending.length > 0 && this.dragging.size === 0 && this.schedule(0);
+    }
+  }
+  /** Removes these ops (sent or refused); gone already if another window took them over. */
+  dequeue(batch) {
+    let sent = new Set(batch);
+    this.pending = this.pending.filter((op) => !sent.has(op)), this.persistPending();
+  }
+  /** A dropped Re-arrange or restore from Layout history: tells the page (review t_b632e3ac N2). */
+  replaceRefused(op) {
+    if (op.kind !== "replace")
+      return;
+    let action = op.entries === null ? "rearrange" : op.backup === !0 ? "restore" : null;
+    if (action !== null)
+      for (let listener of [...this.replaceRefusedListeners])
+        listener({ ref: { profile: op.ref.profile, style: op.ref.style, scope: op.ref.scope }, action });
+  }
+  notifyOnce(kind, error) {
+    this.notified.has(kind) || (this.notified.add(kind), this.options.onRefused?.(error, kind));
+  }
+  /** B1: a newer Session Tree wrote the store. Send nothing more; keep changes local. */
+  enterReadOnly(error) {
+    this.readOnly || (this.readOnly = !0, this.cancelFlush?.(), this.cancelFlush = void 0, this.notifyOnce(NEWER_SCHEMA, error ?? new Error(`409: ${NEWER_SCHEMA}`)), this.emit());
+  }
+  leaveReadOnly() {
+    this.readOnly && (this.readOnly = !1, this.localOnly = [], this.failures = 0, this.pending.length > 0 && this.schedule(0));
+  }
+  /** The first pending op merged with the consecutive upserts of the same layout and mode. */
+  nextBatch() {
+    let first = this.pending[0];
+    if (first.kind !== "upsert")
+      return [first, 1];
+    let merged = new Map(first.entries), count = 1;
+    for (; count < this.pending.length; ) {
+      let next = this.pending[count];
+      if (next.kind !== "upsert" || next.mode !== first.mode || !sameRef(next.ref, first.ref) || merged.size + next.entries.length > BATCH_LIMIT)
+        break;
+      for (let [id2, point] of next.entries)
+        (first.mode === "set" || !merged.has(id2)) && merged.set(id2, point);
+      count += 1;
+    }
+    return [{ ...first, entries: [...merged] }, count];
+  }
+  async send(op) {
+    if (op.kind === "settings")
+      await this.transport.patchSettings(op.profile, op.patch);
+    else if (op.kind === "forget")
+      await this.transport.forgetBlocks(op.profile, op.ids);
+    else if (op.kind === "upsert")
+      for (let start2 = 0; start2 < op.entries.length; start2 += BATCH_LIMIT)
+        await this.transport.patchPositions(op.ref.profile, {
+          style: op.ref.style,
+          scope: op.ref.scope,
+          mode: op.mode,
+          positions: op.entries.slice(start2, start2 + BATCH_LIMIT).map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
+        });
+    else op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
+      style: op.ref.style,
+      scope: op.ref.scope,
+      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
+      ...op.backup ? { backup: !0 } : {}
+    });
+  }
+  /** The server applied `op`: fold it into the snapshot this window keeps (the next fetch corrects it). */
+  ack(op) {
+    let now2 = Date.now() / 1e3;
+    if (this.writeSeq += 1, op.kind === "settings") {
+      for (let state2 of this.profiles.values())
+        state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
+      return;
+    }
+    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes2]) => Object.keys(scopes2).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
+    for (let ref of refs) {
+      let scopes2 = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes2[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+      applyOp(current, op), current.size === 0 ? delete scopes2[ref.scope] : scopes2[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes2).length === 0 && delete server.layouts[ref.style];
+    }
+    state.server = server, this.cache(opProfile(op));
+  }
+  retry() {
+    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+    this.failures += 1, this.schedule(ms);
+  }
+  markOnline(profile) {
+    let state = this.profile(profile);
+    state.status !== "online" && (state.status = "online", state.settled = !0, this.emit());
+  }
+  markOffline(profile) {
+    let state = this.profile(profile);
+    (state.status !== "offline" || !state.settled) && (state.status = "offline", state.settled = !0, this.emit());
+  }
+  cache(profile) {
+    let server = this.profile(profile).server;
+    server && !server.read_only && this.storage.set(`${CACHE_KEY}:${profile}`, server);
+  }
+  // --- fetching -----------------------------------------------------------------------------
+  /** Fetch (or re-check) one profile's state. A failure leaves the cache in place, offline. */
+  async refresh(profile) {
+    if (this.disposed)
+      return;
+    let state = this.profile(profile), server = state.server, known = state.settled && state.status === "online" && server?.epoch ? { rev: server.rev, epoch: server.epoch } : void 0, seq = this.writeSeq;
+    try {
+      let answer = await this.transport.getState(profile, known);
+      if (seq !== this.writeSeq) {
+        this.refresh(profile);
+        return;
+      }
+      let full = !("unchanged" in answer);
+      full && (state.server = answer, this.cache(profile));
+      let wasOnline = state.status === "online", changed = full || !wasOnline || !state.settled;
+      state.status = "online", state.settled = !0, full && answer.read_only ? this.enterReadOnly(null) : full && this.leaveReadOnly(), !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
+    } catch {
+      this.markOffline(profile), this.watched.has(profile) && this.retryRefresh(profile);
+    }
+  }
+  refreshTimers = /* @__PURE__ */ new Map();
+  retryRefresh(profile) {
+    if (this.refreshTimers.has(profile) || this.disposed)
+      return;
+    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+    this.refreshTimers.set(
+      profile,
+      this.timers.setTimeout(() => {
+        this.refreshTimers.delete(profile), this.refresh(profile);
+      }, ms)
+    );
+  }
+  /** A page or settings view shows `profile`: load it now, and poll / follow pushes for it. */
+  watch(profile) {
+    return this.watched.set(profile, (this.watched.get(profile) ?? 0) + 1), (!this.profile(profile).settled || this.profile(profile).status !== "online") && this.refresh(profile), () => {
+      let count = (this.watched.get(profile) ?? 1) - 1;
+      count <= 0 ? this.watched.delete(profile) : this.watched.set(profile, count);
+    };
+  }
+  /** The poll: every watched profile, cheaply (`since_rev` + `epoch`); closed windows' queues. */
+  poll() {
+    this.adoptOrphans() ? this.schedule(0) : this.pending.length > 0 && !this.flushing && this.persistPending();
+    for (let profile of this.watched.keys())
+      this.refresh(profile);
+  }
+  /** A push from the backend: refresh what it touched, unless this window already has it. */
+  onRemoteChange(payload) {
+    let { rev, epoch, profile } = payload ?? {};
+    for (let name of this.watched.keys()) {
+      let server = this.profile(name).server, sameFile = typeof epoch == "string" && server?.epoch === epoch;
+      typeof rev == "number" && sameFile && rev <= (server?.rev ?? -1) || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
+    }
+  }
+  /**
+   * The page is going away (`pagehide`: a reload, a closed tab): mark this window's slot as
+   * orphaned, so the next window (the reloaded page) adopts the queue at once instead of after
+   * `ORPHAN_MS`. If the page comes back (the back/forward cache), its next write reclaims the slot
+   * unless another window adopted it meanwhile.
+   */
+  release() {
+    this.pending.length > 0 && this.persistPending(0);
+  }
+  dispose() {
+    this.disposed = !0, this.cancelFlush?.(), this.release();
+    for (let cancel of this.refreshTimers.values())
+      cancel();
+    this.refreshTimers.clear(), this.listeners.clear(), this.replaceRefusedListeners.clear();
+  }
+  /** Test and debug view: what is still waiting to be sent. */
+  get pendingCount() {
+    return this.pending.length;
+  }
+};
+function applyOp(target, op) {
+  if (op.kind === "forget") {
+    for (let id2 of op.ids)
+      target.delete(id2);
+    return;
+  }
+  if (op.kind === "replace") {
+    target.clear();
+    for (let [id2, point] of op.entries ?? [])
+      target.set(id2, point);
+    return;
+  }
+  for (let [id2, point] of op.entries)
+    (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
+}
+function opProfile(op) {
+  return op.kind === "settings" || op.kind === "forget" ? op.profile : op.ref.profile;
+}
+function isSnapshot(value2) {
+  let snapshot = value2;
+  return !!(snapshot && typeof snapshot.rev == "number" && snapshot.settings && typeof snapshot.layouts == "object" && snapshot.layouts);
+}
+function isOp(value2) {
+  let op = value2;
+  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
+}
+
 // src/model/selection.ts
 init_define_import_meta_env();
 var EMPTY_SELECTION = Object.freeze({ ids: Object.freeze([]), primary: null }), make = (ids, primary) => ids.length === 0 ? EMPTY_SELECTION : { ids, primary: primary !== null && ids.includes(primary) ? primary : ids[ids.length - 1] };
@@ -12495,464 +12971,6 @@ init_define_import_meta_env();
 import { host as host3 } from "@hermes/plugin-sdk";
 import { useCallback as useCallback5, useSyncExternalStore as useSyncExternalStore3 } from "react";
 
-// src/model/layout-sync.ts
-init_define_import_meta_env();
-var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
-function refusalKind(error) {
-  let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
-  if (!match)
-    return null;
-  let status = Number(match[1]);
-  return status < 400 || status > 499 || status === 401 || status === 403 || status === 408 || status === 429 ? null : status === 409 && match[2].includes(NEWER_SCHEMA) ? NEWER_SCHEMA : match[1];
-}
-function randomId() {
-  return globalThis.crypto?.randomUUID?.() ?? `w${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-}
-var LayoutSync = class {
-  profiles = /* @__PURE__ */ new Map();
-  pending = [];
-  /** Changes made while the store is read-only: shown here, never sent, never persisted. */
-  localOnly = [];
-  listeners = /* @__PURE__ */ new Set();
-  watched = /* @__PURE__ */ new Map();
-  dragging = /* @__PURE__ */ new Set();
-  cancelFlush;
-  flushing = !1;
-  failures = 0;
-  /** Bumps when an acknowledged write changes the snapshot: a fetch begun before it is stale. */
-  writeSeq = 0;
-  disposed = !1;
-  version = 0;
-  readOnly = !1;
-  /** `layout + key` of auto-layout placements the backend refused: never queued again. */
-  refusedPlacements = /* @__PURE__ */ new Set();
-  notified = /* @__PURE__ */ new Set();
-  /** The ops in this window's slot as last written (to tell an adoption by another window). */
-  persistedOps = /* @__PURE__ */ new Set();
-  ownsSlot = !1;
-  lastDropAt = 0;
-  transport;
-  storage;
-  timers;
-  options;
-  windowId;
-  now;
-  constructor(transport, storage, timers, options = {}) {
-    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.windowId = options.windowId ?? randomId(), this.now = options.now ?? Date.now, this.adoptOrphans() && this.schedule(0);
-  }
-  // --- subscription -------------------------------------------------------------------------
-  /** Called after every change a reader can see (positions, settings, status). */
-  subscribe(listener) {
-    return this.listeners.add(listener), () => this.listeners.delete(listener);
-  }
-  /** Bumps on every visible change: a cheap memo key for React. */
-  get changeVersion() {
-    return this.version;
-  }
-  emit() {
-    this.version += 1;
-    for (let listener of [...this.listeners])
-      listener();
-  }
-  // --- reads --------------------------------------------------------------------------------
-  profile(profile) {
-    let state = this.profiles.get(profile);
-    if (!state) {
-      let cached = this.storage.get(`${CACHE_KEY}:${profile}`, null);
-      state = { server: isSnapshot(cached) ? cached : null, settled: !1, status: "loading" }, this.profiles.set(profile, state);
-    }
-    return state;
-  }
-  status(profile) {
-    return this.profile(profile).status;
-  }
-  /** The store revision of this window's snapshot of `profile` (`null`: none yet). */
-  revision(profile) {
-    return this.profile(profile).server?.rev ?? null;
-  }
-  /** Whether the page may lay out: a fetch answered or failed (then the cache, or nothing). */
-  settled(profile) {
-    return this.profile(profile).settled;
-  }
-  /** Whether this profile's layouts come from the cache because the backend is unreachable. */
-  offline(profile) {
-    return this.profile(profile).status === "offline";
-  }
-  /** The store was written by a newer Session Tree: nothing is saved from this page (B1). */
-  get storeReadOnly() {
-    return this.readOnly;
-  }
-  /** This window's ops a reader sees: the unsent queue, then the read-only local changes. */
-  overlay() {
-    return this.localOnly.length > 0 ? [...this.pending, ...this.localOnly] : this.pending;
-  }
-  /** The synced settings as this window has them (its own unsent changes included). */
-  settings(profile) {
-    let base = { ...this.profile(profile).server?.settings ?? this.anySettings() };
-    for (let op of this.overlay())
-      op.kind === "settings" && Object.assign(base, op.patch);
-    return base;
-  }
-  /** Settings are global: any profile's snapshot holds them. */
-  anySettings() {
-    let best = null;
-    for (let state of this.profiles.values())
-      state.server && (!best || state.server.rev > best.rev) && (best = state.server);
-    return best?.settings ?? EMPTY_SETTINGS;
-  }
-  /** The positions of one layout, by layout key: the server's, this window's unsent changes on top. */
-  positions(ref) {
-    let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
-    for (let op of this.overlay())
-      (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
-    return out;
-  }
-  // --- local changes ------------------------------------------------------------------------
-  /**
-   * Lay out against the stored positions and keep what the layout placed. Called while the page
-   * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
-   * style that saves nothing, Swimlanes). `keys` maps the layout's block ids to layout keys;
-   * `compute` and the answer speak block ids.
-   */
-  place(ref, compute, { save = !0, keys = IDENTITY_KEYS } = {}) {
-    let stored = this.positions(ref), previous = keys === IDENTITY_KEYS ? stored : new Map([...stored].map(([key, point]) => [keys.fromStore(key), point])), result = compute(previous.size > 0 ? previous : void 0);
-    if (!save)
-      return result;
-    let placed = [];
-    for (let [id2, point] of result.positions) {
-      let key = keys.toStore(id2);
-      !stored.has(key) && !this.refusedPlacements.has(entryKey(ref, key)) && placed.push([key, { x: point.x, y: point.y }]);
-    }
-    return placed.length > 0 && this.queue({ kind: "upsert", ref, mode: "if_absent", entries: placed }, !1), result;
-  }
-  /** A drop: these blocks (by layout key) now sit here. */
-  drop(ref, moves) {
-    if (moves.size === 0)
-      return;
-    let at = Math.max(this.now(), this.lastDropAt + 1);
-    this.lastDropAt = at, this.readOnly || this.recordDrops(ref, [...moves.keys()], at), this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), at }, !0);
-  }
-  /** Re-arrange: forget this layout. Answers what was shown (by layout key), for Undo. */
-  rearrange(ref) {
-    let previous = this.positions(ref);
-    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: null }, !0), previous;
-  }
-  /** Forgets the refused auto-layout placements of one layout (a Re-arrange, a stored PUT). */
-  clearRefused(ref) {
-    let prefix = `${refKey(ref)}\0`;
-    for (let key of [...this.refusedPlacements])
-      key.startsWith(prefix) && this.refusedPlacements.delete(key);
-  }
-  /** Undo of a Re-arrange: the layout becomes `previous` again. */
-  restore(ref, previous) {
-    this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
-  }
-  /**
-   * A restore from Layout history: the layout becomes a backup's positions (by layout key); the
-   * server keeps the layout it replaces as a backup first. Answers what was shown, for Undo.
-   */
-  restoreBackup(ref, positions) {
-    let previous = this.positions(ref);
-    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: [...positions].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), backup: !0 }, !0), previous;
-  }
-  /**
-   * A block moved to another project: forget its stored spot (by layout key) in every layout of
-   * the profile (here and on the server), so each layout places it anew in its new band.
-   */
-  forget(profile, key) {
-    this.queue({ kind: "forget", profile, ids: [key] }, !0);
-  }
-  setSettings(profile, patch) {
-    this.queue({ kind: "settings", profile, patch }, !0);
-  }
-  /** While blocks are dragged nothing is sent, and a refresh keeps their spots. */
-  setDragging(ids) {
-    let was = this.dragging.size > 0;
-    this.dragging = new Set(ids ?? []), was && this.dragging.size === 0 && this.pending.length > 0 && this.schedule(this.options.debounceMs ?? 300);
-  }
-  get isDragging() {
-    return this.dragging.size > 0;
-  }
-  queue(op, notify) {
-    this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit();
-  }
-  // --- the device's pending queue (NB1) ------------------------------------------------------
-  readSlots() {
-    let raw = this.storage.get(PENDING_KEY, null), slots = {};
-    if (raw && typeof raw == "object" && raw.slots && typeof raw.slots == "object")
-      for (let [owner, value2] of Object.entries(raw.slots)) {
-        let slot = value2;
-        slot && typeof slot.beat == "number" && Array.isArray(slot.ops) && (slots[owner] = { beat: slot.beat, ops: slot.ops.filter(isOp) });
-      }
-    return slots;
-  }
-  writeSlots(slots) {
-    this.storage.set(PENDING_KEY, { slots });
-  }
-  /**
-   * Another window adopted this window's slot (it looked orphaned, e.g. a long-hidden tab): it
-   * sends those ops, so this window keeps only what it queued since.
-   */
-  reconcileSlot(slots) {
-    this.ownsSlot && !(this.windowId in slots) && (this.pending = this.pending.filter((op) => !this.persistedOps.has(op)), this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set());
-  }
-  /** Rewrites this window's slot only (and refreshes its heartbeat). */
-  persistPending(beat = this.now()) {
-    let slots = this.readSlots();
-    this.reconcileSlot(slots), this.pending.length > 0 ? (slots[this.windowId] = { beat, ops: this.pending }, this.ownsSlot = !0, this.persistedOps = new Set(this.pending)) : (delete slots[this.windowId], this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set()), this.writeSlots(slots);
-  }
-  /** Takes over the slots of closed windows (and the card-4 shared queue). True: adopted some. */
-  adoptOrphans() {
-    let slots = this.readSlots(), now2 = this.now(), adopted = [], legacy = this.storage.get(LEGACY_PENDING_KEY, null);
-    Array.isArray(legacy) && (adopted.push(...legacy.filter(isOp)), this.storage.set(LEGACY_PENDING_KEY, null));
-    for (let [owner, slot] of Object.entries(slots))
-      owner !== this.windowId && now2 - slot.beat > ORPHAN_MS && (adopted.push(...slot.ops), delete slots[owner]);
-    return adopted.length === 0 ? !1 : (this.writeSlots(slots), this.pending = [...adopted, ...this.pending], this.persistPending(), !0);
-  }
-  recordDrops(ref, keys, at) {
-    let record = { ...this.storage.get(DROPS_KEY, {}) };
-    for (let key of keys) {
-      let name = entryKey(ref, key);
-      record[name] = Math.max(typeof record[name] == "number" ? record[name] : 0, at);
-    }
-    let kept = Object.entries(record).filter(([, when]) => typeof when == "number" && at - when < DROP_RECORD_MS).sort((a, b) => b[1] - a[1]).slice(0, DROP_RECORD_MAX);
-    this.storage.set(DROPS_KEY, Object.fromEntries(kept));
-  }
-  /**
-   * Discards queued drops that a newer drop of the same block on this device (any window)
-   * supersedes, before anything is sent: last write wins per block on the server, so an older
-   * drop sent late would overwrite the newer one.
-   */
-  supersede() {
-    let record = this.storage.get(DROPS_KEY, {}), changed = !1;
-    this.pending = this.pending.flatMap((op) => {
-      if (op.kind !== "upsert" || op.mode !== "set" || typeof op.at != "number")
-        return [op];
-      let at = op.at, entries = op.entries.filter(([key]) => !((record[entryKey(op.ref, key)] ?? 0) > at));
-      return entries.length === op.entries.length ? [op] : (changed = !0, entries.length > 0 ? [{ ...op, entries }] : []);
-    }), changed && (this.persistPending(), this.emit());
-  }
-  /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
-  schedule(ms) {
-    this.disposed || this.readOnly || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
-      this.cancelFlush = void 0, this.flush();
-    }, ms));
-  }
-  // --- sending ------------------------------------------------------------------------------
-  /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
-  async flush() {
-    if (!(this.flushing || this.disposed || this.readOnly) && !(this.dragging.size > 0)) {
-      this.flushing = !0;
-      try {
-        for (this.pending.length > 0 && this.persistPending(); this.pending.length > 0 && this.dragging.size === 0 && !this.disposed && !this.readOnly && (this.supersede(), this.pending.length !== 0); ) {
-          let [op, count] = this.nextBatch(), batch = this.pending.slice(0, count);
-          try {
-            await this.send(op), this.ack(op), this.dequeue(batch), this.failures = 0, this.markOnline(opProfile(op)), op.kind === "replace" && this.clearRefused(op.ref);
-          } catch (error) {
-            let kind = refusalKind(error);
-            if (kind === NEWER_SCHEMA) {
-              this.enterReadOnly(error);
-              return;
-            }
-            if (kind !== null) {
-              if (this.dequeue(batch), op.kind === "upsert" && op.mode === "if_absent")
-                for (let [key] of op.entries)
-                  this.refusedPlacements.add(entryKey(op.ref, key));
-              this.notifyOnce(kind, error), this.emit();
-              continue;
-            }
-            this.markOffline(opProfile(op)), this.retry();
-            return;
-          }
-        }
-      } finally {
-        this.flushing = !1;
-      }
-      this.pending.length > 0 && this.dragging.size === 0 && this.schedule(0);
-    }
-  }
-  /** Removes these ops (sent or refused); gone already if another window took them over. */
-  dequeue(batch) {
-    let sent = new Set(batch);
-    this.pending = this.pending.filter((op) => !sent.has(op)), this.persistPending();
-  }
-  notifyOnce(kind, error) {
-    this.notified.has(kind) || (this.notified.add(kind), this.options.onRefused?.(error, kind));
-  }
-  /** B1: a newer Session Tree wrote the store. Send nothing more; keep changes local. */
-  enterReadOnly(error) {
-    this.readOnly || (this.readOnly = !0, this.cancelFlush?.(), this.cancelFlush = void 0, this.notifyOnce(NEWER_SCHEMA, error ?? new Error(`409: ${NEWER_SCHEMA}`)), this.emit());
-  }
-  leaveReadOnly() {
-    this.readOnly && (this.readOnly = !1, this.localOnly = [], this.failures = 0, this.pending.length > 0 && this.schedule(0));
-  }
-  /** The first pending op merged with the consecutive upserts of the same layout and mode. */
-  nextBatch() {
-    let first = this.pending[0];
-    if (first.kind !== "upsert")
-      return [first, 1];
-    let merged = new Map(first.entries), count = 1;
-    for (; count < this.pending.length; ) {
-      let next = this.pending[count];
-      if (next.kind !== "upsert" || next.mode !== first.mode || !sameRef(next.ref, first.ref) || merged.size + next.entries.length > BATCH_LIMIT)
-        break;
-      for (let [id2, point] of next.entries)
-        (first.mode === "set" || !merged.has(id2)) && merged.set(id2, point);
-      count += 1;
-    }
-    return [{ ...first, entries: [...merged] }, count];
-  }
-  async send(op) {
-    if (op.kind === "settings")
-      await this.transport.patchSettings(op.profile, op.patch);
-    else if (op.kind === "forget")
-      await this.transport.forgetBlocks(op.profile, op.ids);
-    else if (op.kind === "upsert")
-      for (let start2 = 0; start2 < op.entries.length; start2 += BATCH_LIMIT)
-        await this.transport.patchPositions(op.ref.profile, {
-          style: op.ref.style,
-          scope: op.ref.scope,
-          mode: op.mode,
-          positions: op.entries.slice(start2, start2 + BATCH_LIMIT).map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
-        });
-    else op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
-      style: op.ref.style,
-      scope: op.ref.scope,
-      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
-      ...op.backup ? { backup: !0 } : {}
-    });
-  }
-  /** The server applied `op`: fold it into the snapshot this window keeps (the next fetch corrects it). */
-  ack(op) {
-    let now2 = Date.now() / 1e3;
-    if (this.writeSeq += 1, op.kind === "settings") {
-      for (let state2 of this.profiles.values())
-        state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
-      return;
-    }
-    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes2]) => Object.keys(scopes2).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
-    for (let ref of refs) {
-      let scopes2 = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes2[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
-      applyOp(current, op), current.size === 0 ? delete scopes2[ref.scope] : scopes2[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes2).length === 0 && delete server.layouts[ref.style];
-    }
-    state.server = server, this.cache(opProfile(op));
-  }
-  retry() {
-    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
-    this.failures += 1, this.schedule(ms);
-  }
-  markOnline(profile) {
-    let state = this.profile(profile);
-    state.status !== "online" && (state.status = "online", state.settled = !0, this.emit());
-  }
-  markOffline(profile) {
-    let state = this.profile(profile);
-    (state.status !== "offline" || !state.settled) && (state.status = "offline", state.settled = !0, this.emit());
-  }
-  cache(profile) {
-    let server = this.profile(profile).server;
-    server && !server.read_only && this.storage.set(`${CACHE_KEY}:${profile}`, server);
-  }
-  // --- fetching -----------------------------------------------------------------------------
-  /** Fetch (or re-check) one profile's state. A failure leaves the cache in place, offline. */
-  async refresh(profile) {
-    if (this.disposed)
-      return;
-    let state = this.profile(profile), server = state.server, known = state.settled && state.status === "online" && server?.epoch ? { rev: server.rev, epoch: server.epoch } : void 0, seq = this.writeSeq;
-    try {
-      let answer = await this.transport.getState(profile, known);
-      if (seq !== this.writeSeq) {
-        this.refresh(profile);
-        return;
-      }
-      let full = !("unchanged" in answer);
-      full && (state.server = answer, this.cache(profile));
-      let wasOnline = state.status === "online", changed = full || !wasOnline || !state.settled;
-      state.status = "online", state.settled = !0, full && answer.read_only ? this.enterReadOnly(null) : full && this.leaveReadOnly(), !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
-    } catch {
-      this.markOffline(profile), this.watched.has(profile) && this.retryRefresh(profile);
-    }
-  }
-  refreshTimers = /* @__PURE__ */ new Map();
-  retryRefresh(profile) {
-    if (this.refreshTimers.has(profile) || this.disposed)
-      return;
-    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
-    this.refreshTimers.set(
-      profile,
-      this.timers.setTimeout(() => {
-        this.refreshTimers.delete(profile), this.refresh(profile);
-      }, ms)
-    );
-  }
-  /** A page or settings view shows `profile`: load it now, and poll / follow pushes for it. */
-  watch(profile) {
-    return this.watched.set(profile, (this.watched.get(profile) ?? 0) + 1), (!this.profile(profile).settled || this.profile(profile).status !== "online") && this.refresh(profile), () => {
-      let count = (this.watched.get(profile) ?? 1) - 1;
-      count <= 0 ? this.watched.delete(profile) : this.watched.set(profile, count);
-    };
-  }
-  /** The poll: every watched profile, cheaply (`since_rev` + `epoch`); closed windows' queues. */
-  poll() {
-    this.adoptOrphans() ? this.schedule(0) : this.pending.length > 0 && !this.flushing && this.persistPending();
-    for (let profile of this.watched.keys())
-      this.refresh(profile);
-  }
-  /** A push from the backend: refresh what it touched, unless this window already has it. */
-  onRemoteChange(payload) {
-    let { rev, epoch, profile } = payload ?? {};
-    for (let name of this.watched.keys()) {
-      let server = this.profile(name).server, sameFile = typeof epoch == "string" && server?.epoch === epoch;
-      typeof rev == "number" && sameFile && rev <= (server?.rev ?? -1) || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
-    }
-  }
-  /**
-   * The page is going away (`pagehide`: a reload, a closed tab): mark this window's slot as
-   * orphaned, so the next window (the reloaded page) adopts the queue at once instead of after
-   * `ORPHAN_MS`. If the page comes back (the back/forward cache), its next write reclaims the slot
-   * unless another window adopted it meanwhile.
-   */
-  release() {
-    this.pending.length > 0 && this.persistPending(0);
-  }
-  dispose() {
-    this.disposed = !0, this.cancelFlush?.(), this.release();
-    for (let cancel of this.refreshTimers.values())
-      cancel();
-    this.refreshTimers.clear(), this.listeners.clear();
-  }
-  /** Test and debug view: what is still waiting to be sent. */
-  get pendingCount() {
-    return this.pending.length;
-  }
-};
-function applyOp(target, op) {
-  if (op.kind === "forget") {
-    for (let id2 of op.ids)
-      target.delete(id2);
-    return;
-  }
-  if (op.kind === "replace") {
-    target.clear();
-    for (let [id2, point] of op.entries ?? [])
-      target.set(id2, point);
-    return;
-  }
-  for (let [id2, point] of op.entries)
-    (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
-}
-function opProfile(op) {
-  return op.kind === "settings" || op.kind === "forget" ? op.profile : op.ref.profile;
-}
-function isSnapshot(value2) {
-  let snapshot = value2;
-  return !!(snapshot && typeof snapshot.rev == "number" && snapshot.settings && typeof snapshot.layouts == "object" && snapshot.layouts);
-}
-function isOp(value2) {
-  let op = value2;
-  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
-}
-
 // src/settings/notes.ts
 init_define_import_meta_env();
 var READ_ONLY_MESSAGE = "Layout saved by a newer Session Tree version — changes here are not saved", SETTINGS_OFFLINE_NOTE = "The Session Tree backend is unreachable: changes are kept here and saved when it is back.";
@@ -13497,6 +13515,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       id: id2,
       message: "Layout re-arranged",
       history: !0,
+      action: "rearrange",
+      layout: refKey(ref),
       undo: () => {
         sync.restore(ref, previous), setToast(void 0), requestFit();
       }
@@ -13507,6 +13527,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       requestFit(), setToast({
         id: Date.now(),
         message: "Earlier layout restored",
+        action: "restore",
+        layout: refKey(ref),
         undo: () => {
           sync.restore(ref, previous), setToast(void 0), requestFit();
         }
@@ -13514,7 +13536,12 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     },
     [sync, ref, requestFit, setToast]
   ), flushSync = useCallback6(() => sync.flush(), [sync]);
-  useEffect8(() => {
+  useEffect8(
+    () => sync.onReplaceRefused(
+      (refusal) => setToast((current) => current?.action === refusal.action && current.layout === refKey(refusal.ref) ? void 0 : current)
+    ),
+    [sync, setToast]
+  ), useEffect8(() => {
     if (toast)
       return ctx.setTimeout(() => setToast((current) => current?.id === toast.id ? void 0 : current), UNDO_TOAST_MS);
   }, [ctx, toast]);

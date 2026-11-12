@@ -10,8 +10,9 @@
  * has focus: Space is the pan key, and a misclick followed by Space must not re-arrange. Both
  * dialogs open with focus on their harmless button (Cancel, Close): a key pressed after a
  * misclick never re-arranges or restores (review t_c044054d B1: Layout history opened from a
- * focused "Layout history…" with a cached list put focus on the first Restore). Only a click on
- * Re-arrange or Restore changes the layout.
+ * focused "Layout history…" with a cached list put focus on the first Restore). Only activating
+ * Re-arrange or Restore itself changes the layout: a click, or Tab to the button and Enter or
+ * Space (keyboard access stays).
  */
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'

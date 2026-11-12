@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 
 import type { LayoutResult, Point } from '../../src/model/layout.ts'
 import { CACHE_KEY, DROPS_KEY, isRefusal, LayoutSync, LEGACY_PENDING_KEY, NEWER_SCHEMA, ORPHAN_MS, PENDING_KEY, refusalKind } from '../../src/model/layout-sync.ts'
-import type { KnownState, LayoutRef, PositionsBody, StateAnswer, StateSnapshot, StoredLayouts, SyncedSettings, SyncOptions, SyncTransport } from '../../src/model/layout-sync.ts'
+import type { KnownState, LayoutRef, PositionsBody, ReplaceRefusal, StateAnswer, StateSnapshot, StoredLayouts, SyncedSettings, SyncOptions, SyncTransport } from '../../src/model/layout-sync.ts'
 
 /** An in-memory backend with the store's semantics (set / if_absent / delete / put / forget). */
 class FakeServer implements SyncTransport {
@@ -464,6 +464,9 @@ describe('LayoutSync: offline', () => {
   })
 })
 
+/** The backend's refusal of a Re-arrange or restore while `backups.json` has a newer schema. */
+const HISTORY_NEWER_409 = '409: {"detail":"layout_history_newer: Layout history (backups.json, schema 2) was written by a newer Session Tree"}'
+
 describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
   it('Re-arrange clears the layout and Undo restores exactly what was shown', async () => {
     const { server, timers, sync } = setup()
@@ -525,7 +528,7 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     sync.place(REF, autoLayout(['a']))
     sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
     await timers.advance(300)
-    server.refuse = '409: {"detail":"layout_history_newer: Layout history (backups.json, schema 2) was written by a newer Session Tree"}'
+    server.refuse = HISTORY_NEWER_409
     sync.rearrange(REF)
     assert.equal(sync.positions(REF).size, 0)
     await timers.advance(300)
@@ -539,6 +542,92 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     await timers.advance(300)
     assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [9, 9] })
     assert.equal(server.calls.filter(call => call === 'delete').length, 1)
+  })
+
+  it('review t_b632e3ac N2: every refused and dropped Re-arrange or restore from Layout history tells onReplaceRefused (ref and action), not only the first; the notice stays once per kind', async () => {
+    const { server, timers, sync, kinds } = setup()
+    const signals: ReplaceRefusal[] = []
+    const P1 = { ...REF, scope: 'p1' }
+
+    sync.onReplaceRefused(refusal => signals.push(refusal))
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    server.refuse = HISTORY_NEWER_409
+    sync.rearrange(REF)
+    await timers.advance(300)
+    assert.deepEqual(signals, [{ ref: REF, action: 'rearrange' }])
+    assert.deepEqual(kinds, ['409'])
+    // A second refused Re-arrange: the once-per-kind notice is used up, the signal is not.
+    sync.rearrange(P1)
+    await timers.advance(300)
+    assert.deepEqual(signals, [
+      { ref: REF, action: 'rearrange' },
+      { ref: P1, action: 'rearrange' }
+    ])
+    // A refused restore from Layout history (PUT with backup: true).
+    sync.restoreBackup(P1, new Map([['a', { x: 1, y: 2 }]]))
+    await timers.advance(300)
+    assert.deepEqual(signals.at(-1), { ref: P1, action: 'restore' })
+    assert.equal(signals.length, 3)
+    assert.deepEqual(kinds, ['409'])
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [7, 8] })
+    // A refused Undo (a plain PUT) and a refused drop showed no toast of their own: no signal.
+    sync.restore(REF, new Map([['a', { x: 3, y: 3 }]]))
+    sync.drop(REF, new Map([['a', { x: 4, y: 4 }]]))
+    await timers.advance(300)
+    assert.equal(signals.length, 3)
+    assert.equal(sync.pendingCount, 0)
+    assert.deepEqual(kinds, ['409'])
+  })
+
+  it('review t_b632e3ac N2: no onReplaceRefused for a saved Re-arrange, restore or Undo, nor on the newer_schema read-only path (the op is kept there)', async () => {
+    const { server, timers, sync, kinds } = setup()
+    const signals: ReplaceRefusal[] = []
+
+    sync.onReplaceRefused(refusal => signals.push(refusal))
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    const previous = sync.rearrange(REF)
+
+    await timers.advance(300)
+    sync.restore(REF, previous)
+    await timers.advance(300)
+    sync.restoreBackup(REF, new Map([['a', { x: 1, y: 2 }]]))
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [1, 2] })
+    assert.deepEqual(signals, [])
+    // 409 newer_schema on a Re-arrange: read-only, the op stays queued, no signal.
+    server.refuse = NEWER_409
+    server.readOnly = true
+    sync.rearrange(REF)
+    await timers.advance(300)
+    assert.equal(sync.storeReadOnly, true)
+    assert.equal(sync.pendingCount, 1)
+    sync.restoreBackup(REF, new Map([['a', { x: 5, y: 5 }]]))
+    await timers.advance(2000)
+    assert.deepEqual(signals, [])
+    assert.deepEqual(kinds, [NEWER_SCHEMA])
+  })
+
+  it('review t_b632e3ac N2: an unsubscribed onReplaceRefused listener is not called', async () => {
+    const { server, timers, sync } = setup()
+    const signals: ReplaceRefusal[] = []
+    const stop = sync.onReplaceRefused(refusal => signals.push(refusal))
+
+    sync.watch('default')
+    await settle()
+    stop()
+    server.refuse = HISTORY_NEWER_409
+    sync.rearrange(REF)
+    await timers.advance(300)
+    assert.equal(sync.pendingCount, 0)
+    assert.deepEqual(signals, [])
   })
 
   it('forget drops a block from every layout of the profile, so the next layout re-places it', async () => {

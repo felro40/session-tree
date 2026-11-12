@@ -15,7 +15,7 @@
  * state file on disk. Input is real (page.mouse / page.keyboard → CDP Input.*).
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Page, Request } from 'playwright-core'
@@ -728,6 +728,76 @@ async function main(): Promise<void> {
       assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'keys after a misclick changed the layout')
 
       return { fromToast, listedOnB: listed, listedOnA: listedA, keyFocus, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+    })
+
+    await check('review t_b632e3ac N2: a Re-arrange refused for a newer Layout history (backups.json schema 2) removes its toast; the error notice shows, the layout comes back, the page stays writable and a later drag saves', async () => {
+      const historyFile = join(t.home, 'session-tree', 'backups.json')
+      const kept = existsSync(historyFile) ? readFileSync(historyFile, 'utf8') : null
+      const toast = a.page.locator('[data-testid="session-tree-toast"]')
+      const isError = (entry: { kind?: string; title?: string }) => entry.kind === 'error' && entry.title === 'Session Tree could not save the layout'
+
+      // No toast left from an earlier check.
+      await toast.waitFor({ state: 'detached', timeout: 15_000 })
+      const before = layoutOf(await stored(a))
+      const shown = await flowPos(a.page, 'st-sys-tip')
+      const noticesBefore = (await notices(a.page)).filter(isError).length
+
+      writeFileSync(historyFile, JSON.stringify({ schema: 2, backups: [] }))
+
+      try {
+        const from = Date.now()
+
+        await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+        await a.page.locator('[data-testid="session-tree-rearrange-confirm"]').click()
+        const notified = await waitFor('the error notice', () => notices(a.page), list => list.filter(isError).length > noticesBefore, 10_000)
+        const notice = notified.filter(isError).at(-1)
+
+        assert(/layout_history_newer|Layout history/.test(notice?.message ?? ''), `notice: ${JSON.stringify(notice)}`)
+        // The toast claimed a Re-arrange that did not happen: it goes with the refusal, well
+        // before its 10 s are up.
+        await toast.waitFor({ state: 'detached', timeout: 3000 }).catch(async () => {
+          throw new Error(`the toast is still shown ${Date.now() - from} ms after the click: "${(await toast.allInnerTexts().catch(() => [])).join(' | ')}"`)
+        })
+        const goneMs = Date.now() - from
+
+        await waitFor('the layout back on A', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, shown), 8000)
+        const after = layoutOf(await stored(a))
+        const changed = Object.entries(before).filter(([id, point]) => !near(after[id], point))
+
+        assert(changed.length === 0, `the refused Re-arrange changed the store: ${JSON.stringify(changed.slice(0, 5))}`)
+        assert((await a.page.locator('[data-testid="session-tree-read-only"]').count()) === 0, 'the page went read-only')
+        assert((await queuedOps(a.page)) <= 0, 'the refused Re-arrange is still queued')
+        assert(saves(logA, from).filter(entry => entry.method === 'DELETE').length === 1, `DELETEs: ${JSON.stringify(saves(logA, from).map(entry => `${entry.method} ${entry.path}`))}`)
+        // Saves still go out: a drag after the refusal is stored.
+        await fit(a.page)
+        // A block whose grab point (`dragBlock`: 40 px in, half-way down) no other block covers.
+        const target = await a.page.evaluate(ids => {
+          return ids.find(id => {
+            const el = document.querySelector(`[data-testid="session-tree-block"][data-session-id="${id}"]`)
+            const box = el?.getBoundingClientRect()
+            const hit = box ? document.elementFromPoint(box.x + 40, box.y + box.height / 2) : null
+
+            return Boolean(el && hit && el.contains(hit))
+          })
+        }, ['st-hp-root', 'st-md-tip', 'st-sys-mcp', 'st-sys-tip'])
+
+        assert(target, 'no block free to drag')
+        const dragFrom = await flowPos(a.page, target)
+
+        await dragBlock(a.page, target, { x: 60, y: 40 })
+        const dropped = await flowPos(a.page, target)
+
+        assert(!near(dropped, dragFrom), `the drag did not move ${target}`)
+        await waitFor('the drag stored', () => stored(a), value => near(layoutOf(value)[key(target)], dropped))
+
+        return { noticeMessage: notice?.message, toastGoneAfterMs: goneMs, dragged: target, dropped }
+      } finally {
+        if (kept === null) {
+          rmSync(historyFile, { force: true })
+        } else {
+          writeFileSync(historyFile, kept)
+        }
+      }
     })
 
     await check('closing and reopening the page keeps this device\'s project scope, view and Singles list (per profile filter); the other device keeps its own', async () => {

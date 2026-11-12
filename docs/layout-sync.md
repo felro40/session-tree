@@ -149,8 +149,8 @@ None of them touches `state.db`.
 - **Re-arrange** asks first (a plain dialog naming the view, not the SDK's ConfirmDialog, which
   confirms on Enter and Space whichever button holds focus: Space is the pan key). The confirm
   opens with focus on Cancel and Layout history with focus on Close, so Space, Enter or Escape
-  after a misclick change nothing; only a click on Re-arrange or Restore does. Then it
-  queues a delete of the
+  right after a misclick change nothing; only activating Re-arrange or Restore itself does (a
+  click, or Tab to the button and Enter or Space). Then it queues a delete of the
   current style + scope layout and shows a toast with Undo, which queues a `PUT` of exactly what
   the window showed before.
 - **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
@@ -158,6 +158,8 @@ None of them touches `state.db`.
   window's queue first, then lists the backups of the shown layout, refetched on every store
   revision. Restore fetches one backup and queues a `PUT` with `backup: true` (shown at once,
   with an Undo toast like Re-arrange); blocks the backup lacks are placed anew by the auto-layout.
+  A Re-arrange or restore the server refuses (dropped, e.g. 409 `layout_history_newer`) also
+  removes its toast, every time, not only with the first notice of that kind.
 - **Offline (transient failures):** a request with no answer (network, timeout), a 5xx, 408 or
   429 keeps the queue in `ctx.storage`, marks the profile offline ("offline: showing last saved
   layout" banner) and retries with a backoff (1, 2, 5, 5, 10 s). Nothing is notified. The page keeps

@@ -27,7 +27,9 @@
  *   - *other refusals* (any other 4xx: caps, validation): that op is dropped; an auto-layout's
  *     refused placements are remembered so `place()` never queues them again, until that layout
  *     is re-arranged or replaced (card-4 review carry-forward 3); one notice per refusal kind
- *     (status) per page lifetime. 401 / 403 (signed out) are transient (carry-forward 2).
+ *     (status) per page lifetime. A dropped Re-arrange or restore from Layout history also
+ *     calls `onReplaceRefused` listeners, every time (review t_b632e3ac N2). 401 / 403 (signed
+ *     out) are transient (carry-forward 2).
  * - **Pending queue** (card-4 review NB1): each window owns one slot of the device's queue
  *   (`layoutPending.v2`: `{slots: {<window id>: {beat, ops}}}`) and rewrites only its own slot.
  *   A slot whose heartbeat is older than `ORPHAN_MS` (its window closed, or a plugin reload
@@ -126,6 +128,15 @@ export interface LayoutKeys {
 
 /** What a refusal notice is about: `newer_schema`, or the refusing HTTP status (`'413'`, …). */
 export type RefusalKind = string
+
+/**
+ * A Re-arrange (`rearrange`) or a restore from Layout history (`restore`) that the server
+ * refused and that was dropped (review t_b632e3ac N2): the page removes the toast it showed.
+ */
+export interface ReplaceRefusal {
+  ref: LayoutRef
+  action: 'rearrange' | 'restore'
+}
 
 export interface SyncOptions {
   debounceMs?: number
@@ -228,6 +239,7 @@ export class LayoutSync {
   /** Changes made while the store is read-only: shown here, never sent, never persisted. */
   private localOnly: Op[] = []
   private readonly listeners = new Set<() => void>()
+  private readonly replaceRefusedListeners = new Set<(refusal: ReplaceRefusal) => void>()
   private readonly watched = new Map<string, number>()
   private dragging: ReadonlySet<string> = new Set()
   private cancelFlush?: () => void
@@ -273,6 +285,17 @@ export class LayoutSync {
     this.listeners.add(listener)
 
     return () => this.listeners.delete(listener)
+  }
+
+  /**
+   * Called every time a Re-arrange or a restore from Layout history is refused and dropped (not
+   * only the first time, unlike `onRefused`); never for an Undo `PUT`, nor on the read-only
+   * `newer_schema` path, which keeps the op (review t_b632e3ac N2).
+   */
+  onReplaceRefused(listener: (refusal: ReplaceRefusal) => void): () => void {
+    this.replaceRefusedListeners.add(listener)
+
+    return () => this.replaceRefusedListeners.delete(listener)
   }
 
   /** Bumps on every visible change: a cheap memo key for React. */
@@ -721,6 +744,7 @@ export class LayoutSync {
 
             this.notifyOnce(kind, error)
             this.emit()
+            this.replaceRefused(op)
             continue
           }
 
@@ -745,6 +769,25 @@ export class LayoutSync {
 
     this.pending = this.pending.filter(op => !sent.has(op))
     this.persistPending()
+  }
+
+  /** A dropped Re-arrange or restore from Layout history: tells the page (review t_b632e3ac N2). */
+  private replaceRefused(op: Op): void {
+    if (op.kind !== 'replace') {
+      return
+    }
+
+    // Re-arrange queues no entries; a restore from Layout history asks for a backup. An Undo
+    // (a plain PUT) showed no toast of its own.
+    const action = op.entries === null ? 'rearrange' : op.backup === true ? 'restore' : null
+
+    if (action === null) {
+      return
+    }
+
+    for (const listener of [...this.replaceRefusedListeners]) {
+      listener({ ref: { profile: op.ref.profile, style: op.ref.style, scope: op.ref.scope }, action })
+    }
   }
 
   private notifyOnce(kind: RefusalKind, error: unknown): void {
@@ -1075,6 +1118,7 @@ export class LayoutSync {
 
     this.refreshTimers.clear()
     this.listeners.clear()
+    this.replaceRefusedListeners.clear()
   }
 
   /** Test and debug view: what is still waiting to be sent. */
