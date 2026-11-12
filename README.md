@@ -38,8 +38,9 @@ user (below).
   snapped spot); dragging an unselected block selects and moves just that one. Links follow the
   dragged blocks and re-route around other blocks on drop, and the whole group is saved in one
   request. A group move has no Undo. **Snap** shows a dot grid and snaps dragged blocks to it.
-  **Re-arrange** resets the current style + scope layout. It asks first (Space and Enter never
-  confirm it or restore anything, only a click on Re-arrange or Restore does), the toast offers
+  **Re-arrange** resets the current style + scope layout. It asks first (Space, Enter or Escape
+  right after a misclick never confirm it or restore anything; only activating Re-arrange or
+  Restore itself does: a click, or Tab to the button and Enter or Space), the toast offers
   Undo for 10 s, and the arrangement it replaced is kept in **Layout history**, opened from the
   Re-arrange confirm or its toast: up to the last 10 arrangements of each style + scope layout,
   shared by every device of the gateway (with very many re-arranged views, the oldest extra

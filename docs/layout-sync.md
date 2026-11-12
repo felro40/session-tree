@@ -149,8 +149,8 @@ None of them touches `state.db`.
 - **Re-arrange** asks first (a plain dialog naming the view, not the SDK's ConfirmDialog, which
   confirms on Enter and Space whichever button holds focus: Space is the pan key). The confirm
   opens with focus on Cancel and Layout history with focus on Close, so Space, Enter or Escape
-  after a misclick change nothing; only a click on Re-arrange or Restore does. Then it
-  queues a delete of the
+  right after a misclick change nothing; only activating Re-arrange or Restore itself does (a
+  click, or Tab to the button and Enter or Space). Then it queues a delete of the
   current style + scope layout and shows a toast with Undo, which queues a `PUT` of exactly what
   the window showed before.
 - **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
