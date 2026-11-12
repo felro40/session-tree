@@ -54,6 +54,9 @@ const result = await build({
   platform: 'browser',
   target: 'es2022',
   jsx: 'automatic',
+  // Worktrees share node_modules by symlink. Keeping the link's own path (not
+  // its target) makes every checkout write byte-identical module comments.
+  preserveSymlinks: true,
   external: ALLOWED_EXTERNALS,
   // Pre-check 1, path (a): React Flow's `createPortal` comes from a local
   // shim, so the bundle never imports react-dom (not in the loader's map).

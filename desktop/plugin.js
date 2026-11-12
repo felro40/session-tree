@@ -57,9 +57,9 @@ var react_default, init_react = __esm({
   }
 });
 
-// ../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js
+// node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js
 var require_use_sync_external_store_shim_production = __commonJS({
-  "../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js"(exports) {
+  "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js"(exports) {
     "use strict";
     init_define_import_meta_env();
     var React2 = (init_react(), __toCommonJS(react_exports));
@@ -101,18 +101,18 @@ var require_use_sync_external_store_shim_production = __commonJS({
   }
 });
 
-// ../../session-tree/node_modules/use-sync-external-store/shim/index.js
+// node_modules/use-sync-external-store/shim/index.js
 var require_shim = __commonJS({
-  "../../session-tree/node_modules/use-sync-external-store/shim/index.js"(exports, module) {
+  "node_modules/use-sync-external-store/shim/index.js"(exports, module) {
     "use strict";
     init_define_import_meta_env();
     module.exports = require_use_sync_external_store_shim_production();
   }
 });
 
-// ../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js
+// node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js
 var require_with_selector_production = __commonJS({
-  "../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js"(exports) {
+  "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js"(exports) {
     "use strict";
     init_define_import_meta_env();
     var React2 = (init_react(), __toCommonJS(react_exports)), shim = require_shim();
@@ -164,9 +164,9 @@ var require_with_selector_production = __commonJS({
   }
 });
 
-// ../../session-tree/node_modules/use-sync-external-store/shim/with-selector.js
+// node_modules/use-sync-external-store/shim/with-selector.js
 var require_with_selector = __commonJS({
-  "../../session-tree/node_modules/use-sync-external-store/shim/with-selector.js"(exports, module) {
+  "node_modules/use-sync-external-store/shim/with-selector.js"(exports, module) {
     "use strict";
     init_define_import_meta_env();
     module.exports = require_with_selector_production();
@@ -177,7 +177,7 @@ var require_with_selector = __commonJS({
 init_define_import_meta_env();
 import { host as host6, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
-// ../../session-tree/node_modules/@xyflow/react/dist/base.css
+// node_modules/@xyflow/react/dist/base.css
 var base_default = `/* this will be exported as base.css and can be used for a basic styling */
 /* these are the necessary styles for React/Svelte Flow, they get used by base.css and style.css */
 .react-flow {
@@ -689,12 +689,12 @@ svg.react-flow__connectionline {
 init_define_import_meta_env();
 import { Button as Button3, EmptyState, ErrorState, host as host4, useQuery as useQuery2, useValue } from "@hermes/plugin-sdk";
 
-// ../../session-tree/node_modules/@xyflow/react/dist/esm/index.js
+// node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
 import { jsxs, Fragment, jsx } from "react/jsx-runtime";
 import { createContext, useContext, useMemo, forwardRef, useEffect, useRef, useState, useLayoutEffect, useCallback, memo } from "react";
 
-// ../../session-tree/node_modules/classcat/index.js
+// node_modules/classcat/index.js
 init_define_import_meta_env();
 function cc(names) {
   if (typeof names == "string" || typeof names == "number") return "" + names;
@@ -708,13 +708,13 @@ function cc(names) {
   return out;
 }
 
-// ../../session-tree/node_modules/@xyflow/system/dist/esm/index.js
+// node_modules/@xyflow/system/dist/esm/index.js
 init_define_import_meta_env();
 
-// ../../session-tree/node_modules/d3-drag/dist/d3-drag.mjs
+// node_modules/d3-drag/dist/d3-drag.mjs
 init_define_import_meta_env();
 
-// ../../session-tree/node_modules/d3-dispatch/dist/d3-dispatch.mjs
+// node_modules/d3-dispatch/dist/d3-dispatch.mjs
 init_define_import_meta_env();
 var noop = { value: () => {
 } };
@@ -778,7 +778,7 @@ function set(type, name, callback) {
   return callback != null && type.push({ name, value: callback }), type;
 }
 
-// ../../session-tree/node_modules/d3-selection/dist/d3-selection.mjs
+// node_modules/d3-selection/dist/d3-selection.mjs
 init_define_import_meta_env();
 var xhtml = "http://www.w3.org/1999/xhtml", namespaces = {
   svg: "http://www.w3.org/2000/svg",
@@ -1396,7 +1396,7 @@ function pointer(event, node) {
   return [event.pageX, event.pageY];
 }
 
-// ../../session-tree/node_modules/d3-drag/dist/d3-drag.mjs
+// node_modules/d3-drag/dist/d3-drag.mjs
 var nonpassive = { passive: !1 }, nonpassivecapture = { capture: !0, passive: !1 };
 function nopropagation(event) {
   event.stopImmediatePropagation();
@@ -1558,13 +1558,13 @@ function drag() {
   }, drag2;
 }
 
-// ../../session-tree/node_modules/d3-zoom/dist/d3-zoom.mjs
+// node_modules/d3-zoom/dist/d3-zoom.mjs
 init_define_import_meta_env();
 
-// ../../session-tree/node_modules/d3-interpolate/dist/d3-interpolate.mjs
+// node_modules/d3-interpolate/dist/d3-interpolate.mjs
 init_define_import_meta_env();
 
-// ../../session-tree/node_modules/d3-color/dist/d3-color.mjs
+// node_modules/d3-color/dist/d3-color.mjs
 init_define_import_meta_env();
 function define(constructor, factory, prototype) {
   constructor.prototype = factory.prototype = prototype, prototype.constructor = constructor;
@@ -1969,7 +1969,7 @@ define(Cubehelix, cubehelix, extend(Color, {
   }
 }));
 
-// ../../session-tree/node_modules/d3-interpolate/dist/d3-interpolate.mjs
+// node_modules/d3-interpolate/dist/d3-interpolate.mjs
 function basis(t12, v0, v1, v2, v3) {
   var t22 = t12 * t12, t32 = t22 * t12;
   return ((1 - 3 * t12 + 3 * t22 - t32) * v0 + (4 - 6 * t22 + 3 * t32) * v1 + (1 + 3 * t12 + 3 * t22 - 3 * t32) * v2 + t32 * v3) / 6;
@@ -2226,10 +2226,10 @@ function cubehelix2(hue) {
 }
 var cubehelix_default = cubehelix2(hue$1), cubehelixLong = cubehelix2(nogamma);
 
-// ../../session-tree/node_modules/d3-transition/dist/d3-transition.mjs
+// node_modules/d3-transition/dist/d3-transition.mjs
 init_define_import_meta_env();
 
-// ../../session-tree/node_modules/d3-timer/dist/d3-timer.mjs
+// node_modules/d3-timer/dist/d3-timer.mjs
 init_define_import_meta_env();
 var frame = 0, timeout$1 = 0, interval$1 = 0, pokeDelay = 1e3, taskHead, taskTail, clockLast = 0, clockNow = 0, clockSkew = 0, clock = typeof performance == "object" && performance.now ? performance : Date, setFrame = typeof window == "object" && window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : function(f) {
   setTimeout(f, 17);
@@ -2294,7 +2294,7 @@ function timeout(callback, delay, time) {
   }, delay, time), t;
 }
 
-// ../../session-tree/node_modules/d3-ease/dist/d3-ease.mjs
+// node_modules/d3-ease/dist/d3-ease.mjs
 init_define_import_meta_env();
 function cubicInOut(t) {
   return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
@@ -2372,7 +2372,7 @@ var overshoot = 1.70158, backIn = (function custom4(s) {
   }, elasticInOut2;
 })(amplitude, period);
 
-// ../../session-tree/node_modules/d3-transition/dist/d3-transition.mjs
+// node_modules/d3-transition/dist/d3-transition.mjs
 var emptyOn = dispatch("start", "end", "cancel", "interrupt"), emptyTween = [], CREATED = 0, SCHEDULED = 1, STARTING = 2, STARTED = 3, RUNNING = 4, ENDING = 5, ENDED = 6;
 function schedule(node, name, id2, index2, group, timing) {
   var schedules = node.__transition;
@@ -2892,7 +2892,7 @@ function selection_transition(name) {
 selection.prototype.interrupt = selection_interrupt;
 selection.prototype.transition = selection_transition;
 
-// ../../session-tree/node_modules/d3-zoom/dist/d3-zoom.mjs
+// node_modules/d3-zoom/dist/d3-zoom.mjs
 var constant4 = (x) => () => x;
 function ZoomEvent(type, {
   sourceEvent: sourceEvent2,
@@ -3179,7 +3179,7 @@ function zoom2() {
   }, zoom3;
 }
 
-// ../../session-tree/node_modules/@xyflow/system/dist/esm/index.js
+// node_modules/@xyflow/system/dist/esm/index.js
 var errorMessages = {
   error001: (lib = "react") => `Seems like you have not used ${lib === "svelte" ? "SvelteFlowProvider" : "ReactFlowProvider"} as an ancestor. Help: https://${lib}flow.dev/error#001`,
   error002: () => "It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them.",
@@ -4880,12 +4880,12 @@ function XYResizer({ domNode, nodeId, getStoreItems, onChange, onEnd }) {
   };
 }
 
-// ../../session-tree/node_modules/zustand/esm/traditional.mjs
+// node_modules/zustand/esm/traditional.mjs
 init_define_import_meta_env();
 var import_with_selector = __toESM(require_with_selector(), 1);
 import ReactExports from "react";
 
-// ../../session-tree/node_modules/zustand/esm/vanilla.mjs
+// node_modules/zustand/esm/vanilla.mjs
 init_define_import_meta_env();
 var createStoreImpl = (createState) => {
   let state, listeners = /* @__PURE__ */ new Set(), setState = (partial, replace) => {
@@ -4902,7 +4902,7 @@ var createStoreImpl = (createState) => {
   return api;
 }, createStore = (createState) => createState ? createStoreImpl(createState) : createStoreImpl;
 
-// ../../session-tree/node_modules/zustand/esm/traditional.mjs
+// node_modules/zustand/esm/traditional.mjs
 var { useDebugValue } = ReactExports, { useSyncExternalStoreWithSelector } = import_with_selector.default, identity3 = (arg) => arg;
 function useStoreWithEqualityFn(api, selector2 = identity3, equalityFn) {
   let slice = useSyncExternalStoreWithSelector(
@@ -4919,7 +4919,7 @@ var createWithEqualityFnImpl = (createState, defaultEqualityFn) => {
   return Object.assign(useBoundStoreWithEqualityFn, api), useBoundStoreWithEqualityFn;
 }, createWithEqualityFn = (createState, defaultEqualityFn) => createState ? createWithEqualityFnImpl(createState, defaultEqualityFn) : createWithEqualityFnImpl;
 
-// ../../session-tree/node_modules/zustand/esm/shallow.mjs
+// node_modules/zustand/esm/shallow.mjs
 init_define_import_meta_env();
 function shallow$1(objA, objB) {
   if (Object.is(objA, objB))
@@ -4964,7 +4964,7 @@ function createPortal(children2, container, key) {
   };
 }
 
-// ../../session-tree/node_modules/@xyflow/react/dist/esm/index.js
+// node_modules/@xyflow/react/dist/esm/index.js
 var StoreContext = createContext(null), Provider$1 = StoreContext.Provider, zustandErrorMessage = errorMessages.error001("react");
 function useStore(selector2, equalityFn) {
   let store = useContext(StoreContext);

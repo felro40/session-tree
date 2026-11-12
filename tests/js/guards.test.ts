@@ -57,6 +57,14 @@ describe('desktop/plugin.js static guards', () => {
     assert.match(source, /export\s*\{[^}]*\bdefault\b[^}]*\}/)
   })
 
+  it('names no module path outside the repo (every checkout, worktrees too, builds the same bytes)', () => {
+    // esbuild names each module by its path relative to the repo. Without `preserveSymlinks`, a
+    // worktree whose node_modules is a symlink wrote the link's target (`../../session-tree/…`).
+    const outside = source.split('\n').filter(line => /^\s*\/\/ \.\.\//.test(line) || /"\.\.\//.test(line))
+
+    assert.deepEqual(outside.slice(0, 5), [], `${outside.length} lines name a path outside the repo`)
+  })
+
   it(`stays well under the loader's 16 MiB cap (budget ${SIZE_BUDGET_BYTES} bytes)`, () => {
     const bytes = statSync(bundlePath).size
 
