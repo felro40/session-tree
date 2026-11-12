@@ -248,7 +248,7 @@ npm ci
 
 | Command | What it does |
 |---|---|
-| `npm run build` | esbuild bundles `src/` into one ESM file, `desktop/plugin.js`. Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external; `react-dom` is aliased to `src/shims/react-dom.ts`. Fails on a copyleft dependency; `node scripts/build.mjs --licenses` prints the table below. |
+| `npm run build` | esbuild bundles `src/` into one ESM file, `desktop/plugin.js`. Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external; `react-dom` is aliased to `src/shims/react-dom.ts`. Fails on a copyleft dependency; `node scripts/build.mjs --licenses` prints the table below. The output is byte-identical in every checkout, including a worktree whose `node_modules` is a symlink to another checkout's (esbuild's `preserveSymlinks`). |
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
