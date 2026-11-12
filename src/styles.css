@@ -70,8 +70,19 @@
   --xy-handle-background-color: transparent;
   --xy-handle-border-color: transparent;
   --xy-selection-background-color: var(--ui-selection-background);
-  --xy-selection-border: 1px dotted var(--ui-stroke-secondary);
+  /* Card 9: the selection box (Dense, Subway, Rich cards). */
+  --xy-selection-border: 1px dashed var(--ui-accent);
   --xy-attribution-background-color: transparent;
+}
+
+/* Card 9: React Flow's own frame around a finished selection is not used: it would catch clicks
+   and drags on the empty canvas between the selected blocks. A selected block shows itself. */
+.session-tree .react-flow__nodesselection {
+  display: none;
+}
+
+.session-tree .react-flow__pane.selection {
+  cursor: default;
 }
 
 .session-tree .react-flow__node {
@@ -106,6 +117,74 @@
   border-bottom: 1px solid var(--ui-stroke-tertiary);
   background: var(--ui-bg-chrome);
   overflow: hidden;
+}
+
+/* No item ever shrinks below its content (a button's min-width would let it): when the bar is
+   too narrow, the layout changes instead (toolbar-layout.ts: data-layout, data-brand,
+   data-tools on the bar). */
+.st-bar > * {
+  flex: none;
+}
+
+.st-bar > .st-scope-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The tools sit at the right end of their line. */
+.st-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.st-tool-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* stacked: the scope strip on its own line below the controls. wrapped: the tools on a line of
+   their own between the two (and wrapping by group if even that is too narrow). */
+.st-bar[data-layout='stacked'],
+.st-bar[data-layout='wrapped'] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 34px;
+  padding: 5px 6px;
+  row-gap: 5px;
+}
+
+.st-bar[data-layout='stacked'] > .st-scope-slot,
+.st-bar[data-layout='wrapped'] > .st-scope-slot {
+  order: 1;
+  flex: 0 0 100%;
+}
+
+.st-bar[data-layout='wrapped'] > .st-tools {
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  row-gap: 5px;
+  margin-left: 0;
+}
+
+.st-brand,
+.st-tools .st-tb {
+  position: relative;
+}
+
+/* Text given up for room: out of the flow but still laid out (the layout measures it), anchored
+   at the right edge so it adds no scrollable overflow. The tooltip keeps the name. */
+.st-bar[data-brand='icon'] .st-brand .st-label,
+.st-bar[data-tools='icons'] .st-tools .st-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .st-brand {
@@ -184,8 +263,22 @@
 }
 
 .st-scope button {
+  flex: none;
   height: 20px;
   border-radius: 4px;
+}
+
+/* A scrolling strip fades out at the end(s) that hide chips. */
+.st-scope[data-fade='right'] {
+  mask-image: linear-gradient(to left, transparent, #000 18px);
+}
+
+.st-scope[data-fade='left'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px);
+}
+
+.st-scope[data-fade='both'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 18px), transparent);
 }
 
 .st-profile {
@@ -856,6 +949,14 @@ g.is-dimmed {
   pointer-events: none;
 }
 
+/* Card 8 (F1): with the Rich cards singles drawer open (300 px, on the stage's right edge), the
+   note moves left of it, 10 px clear, and stays inside the canvas (it wraps if the canvas is
+   narrow). Closed, and in the other styles, it stays where it is above. */
+.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note {
+  right: calc(300px + 10px);
+  max-width: calc(100% - 300px - 20px);
+}
+
 .session-tree__toast {
   position: absolute;
   bottom: 18px;
@@ -886,6 +987,58 @@ g.is-dimmed {
 
 .st-toast-btn:hover {
   background: var(--ui-bg-tertiary);
+}
+
+/* Layout history (the backups a Re-arrange or a restore keeps). */
+.st-hist-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 360px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 7px;
+}
+
+.st-hist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
+  font-size: 12.5px;
+}
+
+.st-hist-row + .st-hist-row {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+
+.st-hist-when {
+  display: flex;
+  flex-direction: column;
+  min-width: 112px;
+}
+
+.st-hist-ago,
+.st-hist-what {
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+}
+
+.st-hist-what {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-hist-note {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+/* The Re-arrange confirm: Layout history… on the left, Cancel and Re-arrange on the right. */
+.st-dlg-left {
+  margin-right: auto;
 }
 
 .st-style select {
@@ -1733,19 +1886,23 @@ g.is-dimmed {
   margin-left: auto;
 }
 
+/* Card 8 (F4): the bar's full extent is a 1 px outline in the tertiary text colour (≥ 3:1 against
+   the card, light and dark; drawn outside the box, so the 54 px width is unchanged), over a clear
+   track, and the fill is the full accent (≥ 3:1 against that track). */
 .st-rc-bar {
   display: block;
   height: 4px;
   overflow: hidden;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  outline: 1px solid var(--ui-text-tertiary);
+  background: transparent;
 }
 
 .st-rc-bar b {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+  background: var(--ui-accent);
 }
 
 /* The stand-in: a dashed skeleton card. Faded by its see-through fill, the dashes and the italic

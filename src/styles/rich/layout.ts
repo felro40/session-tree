@@ -6,7 +6,7 @@
  *   down the canvas, siblings across it, a parent centred over its children, a "continued as"
  *   successor tree to the right of its predecessor's.
  * - Cards are big (280 × 164), so the families are packed in two dimensions rather than in one
- *   long row: project groups (the scoped project first, `projects.tree` order, no project last),
+ *   long row: project groups (`projects.tree` order, no project last, the same in every scope),
  *   each a label over its families wrapped into rows, are shelved left to right and wrapped at a
  *   width that keeps the whole canvas near a 16:10 frame (the mockup's arrangement).
  * - `previous` (stored positions) is kept exactly (the same objects). A new card goes under its

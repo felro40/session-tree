@@ -21,7 +21,7 @@ import type { Path } from '../../src/model/route.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 import { createCanvasRouting } from '../../src/page/canvas-routing.ts'
 import type { CanvasRouting, Routing } from '../../src/page/canvas-routing.ts'
-import { labelRect, placeLabels } from '../../src/styles/subway/labels.ts'
+import { labelRect, labelTracks, placeLabels, segmentCrosses } from '../../src/styles/subway/labels.ts'
 import type { PlacedLabel } from '../../src/styles/subway/labels.ts'
 import { layoutSubway } from '../../src/styles/subway/layout.ts'
 import { subwaySlots } from '../../src/styles/subway/plan.ts'
@@ -38,8 +38,14 @@ function routeAll(m: GraphModel, positions: ReadonlyMap<string, Point>, chain: C
   return chain.get({ model: m, spec, positions, ports: subwayPorts, router: octilinearRouter, slots: subwaySlots })
 }
 
-/** The labels as the Subway layer places them (layer.tsx `useLabelDriver`). */
-function labelsOf(positions: ReadonlyMap<string, Point>, shown: ReadonlySet<string>): Map<string, PlacedLabel> {
+/** The labels as the Subway layer places them (layer.tsx `useLabelDriver`; card 8: the routed tracks too). */
+function labelsOf(positions: ReadonlyMap<string, Point>, routing: Pick<Routing, 'links' | 'routes' | 'shown'>, tracks = true): Map<string, PlacedLabel> {
+  const { stations, blocked } = labelInputs(positions, routing.shown)
+
+  return placeLabels(stations, blocked, tracks ? labelTracks(routing.links, routing.routes) : [])
+}
+
+function labelInputs(positions: ReadonlyMap<string, Point>, shown: ReadonlySet<string>): { stations: Map<string, Point>; blocked: Rect[] } {
   const stations = new Map<string, Point>()
   const blocked: Rect[] = []
 
@@ -51,7 +57,67 @@ function labelsOf(positions: ReadonlyMap<string, Point>, shown: ReadonlySet<stri
     }
   }
 
-  return placeLabels(stations, blocked)
+  return { stations, blocked }
+}
+
+const rectsOverlap = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+
+interface LabelAudit {
+  /** Stations one of whose own tracks runs through the station's own label (sampled, 0.5 px in). */
+  ownCrossed: string[]
+  /** …of those, the ones that had a free spot (no station, project label, earlier label or track in it). */
+  ownCrossedWithFree: string[]
+  /** …and the ones that had none (every spot was taken by something). */
+  ownCrossedNoFree: string[]
+  labelOverStation: number
+  labelOverLabel: number
+}
+
+/**
+ * Card 8 (F2): which stations' own tracks run through their own labels, and whether a free spot
+ * existed for them, worked out here independently of the placement's own scoring: a spot is free
+ * when it overlaps no station, no project label, no label of a station placed before it (the
+ * placement order: top to bottom, left to right, ties by id) and no track.
+ */
+function auditLabels(routing: Routing, positions: ReadonlyMap<string, Point>, labels: ReadonlyMap<string, PlacedLabel>): LabelAudit {
+  const { stations, blocked } = labelInputs(positions, routing.shown)
+  const boxes = [...stations].map(([id, p]) => ({ id, rect: { x: p.x, y: p.y, width: STATION_W, height: STATION_H } }))
+  const order = [...stations].sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || (a < b ? -1 : a > b ? 1 : 0)).map(([id]) => id)
+  const tracks = labelTracks(routing.links, routing.routes)
+  const pieces = tracks.flatMap(track => segmentsOf(track.path).map(([a, b]) => ({ a, b, track })))
+  const audit: LabelAudit = { ownCrossed: [], ownCrossedWithFree: [], ownCrossedNoFree: [], labelOverStation: 0, labelOverLabel: 0 }
+  const labelList = [...labels]
+
+  for (const [, label] of labelList) {
+    audit.labelOverStation += boxes.filter(box => rectsOverlap(box.rect, label.rect)).length
+  }
+
+  for (let i = 0; i < labelList.length; i += 1) {
+    for (let j = i + 1; j < labelList.length; j += 1) {
+      audit.labelOverLabel += rectsOverlap(labelList[i][1].rect, labelList[j][1].rect) ? 1 : 0
+    }
+  }
+
+  for (const [index, id] of order.entries()) {
+    const label = labels.get(id)!
+    const own = tracks.filter(track => track.source === id || track.target === id)
+
+    if (!own.some(track => samplePath(track.path).some(q => insideRect(q, label.rect, 0.5)))) {
+      continue
+    }
+
+    audit.ownCrossed.push(id)
+    const earlier = order.slice(0, index).map(other => labels.get(other)!.rect)
+    const free = LABEL_SPOTS.some(spot => {
+      const rect = labelRect(stations.get(id)!, spot.key)
+
+      return ![...boxes.map(box => box.rect), ...blocked, ...earlier].some(other => rectsOverlap(rect, other)) && !pieces.some(piece => segmentCrosses(piece.a, piece.b, rect))
+    })
+
+    ;(free ? audit.ownCrossedWithFree : audit.ownCrossedNoFree).push(id)
+  }
+
+  return audit
 }
 
 function offOctilinear(a: Point, b: Point): number {
@@ -93,8 +159,8 @@ interface Problems {
 const emptyProblems = (): Problems => ({ offOctilinear: [], throughOwnStation: [], throughOwnLabel: [], throughOwnMovedLabel: [], throughOther: [], throughDroppedOnEnd: [] })
 
 /** Every routed track of `routing`, checked (each track at most once per kind); `dropped` is the station just moved, if any. */
-function inspect(routing: Routing, positions: ReadonlyMap<string, Point>, problems: Problems, tag: string, dropped?: string): void {
-  const labels = labelsOf(positions, routing.shown)
+function inspect(routing: Routing, positions: ReadonlyMap<string, Point>, problems: Problems, tag: string, dropped?: string): Map<string, PlacedLabel> {
+  const labels = labelsOf(positions, routing)
 
   for (const link of routing.links) {
     const routed = routing.routes.get(link.id)
@@ -154,6 +220,8 @@ function inspect(routing: Routing, positions: ReadonlyMap<string, Point>, proble
       ;(onEnd ? problems.throughDroppedOnEnd : problems.throughOther).push(`${what} (through ${others.join(', ')})`)
     }
   }
+
+  return labels
 }
 
 describe('Subway: tracks never run through their own ends (review r1 finding 3)', () => {
@@ -226,6 +294,10 @@ describe('Subway: tracks never run through their own ends (review r1 finding 3)'
     let drops = 0
     let skipped = 0
     let backMismatch = 0
+    // Card 8 (F2): per drop — a station's own track through its own label (any spot), split by
+    // whether a free spot existed for it; label/station and label/label overlaps (summed).
+    const labelDrops = { ownCrossed: 0, ownCrossedWithFree: 0, ownCrossedNoFree: 0, labelOverStation: 0, labelOverLabel: 0 }
+    const ownCrossedWithFree: string[] = []
 
     for (const id of stations) {
       for (let k = 0; k < 30; k += 1) {
@@ -259,7 +331,25 @@ describe('Subway: tracks never run through their own ends (review r1 finding 3)'
         const moved = new Map(base).set(id, at)
 
         drops += 1
-        inspect(routeAll(model, moved, chain), moved, problems, `${mode} ${id}@${at.x.toFixed(2)},${at.y.toFixed(2)}`, id)
+        const routed = routeAll(model, moved, chain)
+        const labels = inspect(routed, moved, problems, `${mode} ${id}@${at.x.toFixed(2)},${at.y.toFixed(2)}`, id)
+        const audit = auditLabels(routed, moved, labels)
+
+        if (audit.ownCrossed.length > 0) {
+          labelDrops.ownCrossed += 1
+        }
+
+        if (audit.ownCrossedWithFree.length > 0) {
+          labelDrops.ownCrossedWithFree += 1
+          ownCrossedWithFree.push(`${mode} ${id}@${at.x.toFixed(2)},${at.y.toFixed(2)}: ${audit.ownCrossedWithFree.map(each => `${each} (${labels.get(each)!.spot})`).join(', ')}`)
+        }
+
+        if (audit.ownCrossedNoFree.length > 0) {
+          labelDrops.ownCrossedNoFree += 1
+        }
+
+        labelDrops.labelOverStation += audit.labelOverStation
+        labelDrops.labelOverLabel += audit.labelOverLabel
         const back = routeAll(model, new Map(base), chain)
 
         if ([...orig.routes].some(([lid, each]) => back.routes.get(lid)?.route.svg !== each.route.svg)) {
@@ -271,8 +361,9 @@ describe('Subway: tracks never run through their own ends (review r1 finding 3)'
     const counts = Object.fromEntries(Object.entries(problems).map(([key, list]) => [key, list.length]))
 
     t.diagnostic(`subway fuzz: ${JSON.stringify({ drops, skipped, backMismatch, ...counts })}`)
+    t.diagnostic(`subway fuzz labels (drops): ${JSON.stringify(labelDrops)}`)
     if (process.env.ST_FUZZ_DUMP) {
-      console.log(JSON.stringify(problems, null, 1))
+      console.log(JSON.stringify({ ...problems, ownCrossedWithFree }, null, 1))
     }
     assert.ok(drops >= 400, `${drops} drops`)
     assert.equal(backMismatch, 0)
@@ -282,9 +373,17 @@ describe('Subway: tracks never run through their own ends (review r1 finding 3)'
     assert.deepEqual(problems.throughOther, [], problems.throughOther.slice(0, 5).join('\n'))
     // ff5475c on this fuzz: 108 tracks through an own station, 207 through an own label at its
     // first-choice spot, 111 through a moved own label, 1 through another station. The moved-label
-    // cases are the label placement's (it avoids stations and labels, not tracks): a ratchet,
-    // listed in docs/subway.md § Limits.
-    assert.ok(problems.throughOwnMovedLabel.length <= 167, `${problems.throughOwnMovedLabel.length} tracks through a moved own label`)
+    // cases are the label placement's: 033096c (labels avoided stations and labels, not tracks)
+    // had 167 such tracks in 94 drops, 30 of those drops with a spot free of every station, label
+    // and track. Card 8 (F2): the placement avoids the tracks, a station's own first, so no drop
+    // keeps an own track through its own label where a free spot exists; what remains (65 tracks,
+    // 48 drops) had no free spot at all (docs/subway.md § Limits). No label covers a station or
+    // another label, before or after.
+    assert.equal(labelDrops.ownCrossedWithFree, 0, ownCrossedWithFree.slice(0, 5).join('\n'))
+    assert.equal(labelDrops.labelOverStation, 0)
+    assert.equal(labelDrops.labelOverLabel, 0)
+    assert.ok(problems.throughOwnMovedLabel.length <= 65, `${problems.throughOwnMovedLabel.length} tracks through a moved own label`)
+    assert.ok(labelDrops.ownCrossed <= 48, `${labelDrops.ownCrossed} drops with an own track through its own label`)
   })
 
   it('the room kept clear for a station\'s label is the label\'s first-choice spot (LABEL_SPOTS[0], above)', () => {

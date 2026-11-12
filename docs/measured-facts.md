@@ -283,7 +283,8 @@ ring (R11). Out-of-scope blocks and stand-ins never open.
 - Measured: wheel −240 at a block point zoomed 125 % → 174 % and the point under the cursor moved
   (0.20, 0.10) px; 12 more wheel-ups clamp at 250 %, 20 wheel-downs at 30 %. Middle-drag (140, 90)
   panned exactly (140, 90); Space + left-drag (−110, 60) panned (−110, 60); left-drag on empty
-  canvas kept the viewport and cleared the selection.
+  canvas kept the viewport and cleared the selection. (Card 9 replaced that rule: in Dense, Subway
+  and Rich cards a left-drag on empty canvas draws a selection box; see § Card 9 for the props.)
 - Space + left-drag also pans when it starts on a block (fix r1): while Space is held every block
   is rendered `draggable: false`, so it has no `nopan` class and d3-zoom takes the drag. Measured:
   Space + drag (100, 60) from `st-sys-tip` panned (100, 60), the block stayed put. A Space typed in
@@ -1788,3 +1789,340 @@ real `is_active` heuristic.
   core-dense ran on the home `run-e2e.sh` had just reset (B3).
 - 500 fixture (e2e-final, run 1): Dense 314 ms / 61.5 fps, Swimlanes 817 ms / 61.6 fps, Subway
   337 ms / 61.2 fps, Rich 338 ms / 61.2 fps.
+
+## Card 8 — follow-up fixes F1–F6
+
+Branch `feature/session-tree-followups` from `dev` at `033096c`; Hermes checkout `3b42157` (read
+only, `git status --short` empty before and after). `scripts/e2e/CARD` = 8 (the harness now accepts
+cards 1..8): coder ports 19380–19384, homes `c8-coder*`. Findings from card 6 review r2
+`t_099e37c7` (NB4), card 7 r1 `t_13edf7f7` and r2 `t_20c0ad8f` (findings 1–3); their evidence
+folders were gone, so each repro was rebuilt from the findings text.
+
+| | 033096c (before) | now (after) |
+|---|---|---|
+| **F1** Rich: refresh-failed note vs open drawer (e2e-rich, sessions poll refused by the browser) | note `{x 1185.0, y 76, w 245.0, h 22.3}` overlaps the drawer `{x 1140, w 300}` at 1440 × 900; `{x 745.0}` overlaps `{x 700}` at 1000 px; light and dark alike | open: note `{x 885.0, y 76}` (1440) / `{x 445.0, y 76}` (1000), 10 px clear of the drawer, inside the canvas `{x 260, w 1180 / 740}`; light and dark |
+| F1 note, drawer closed / other styles (1440 × 900) | Rich 1185.03 / 76, Rich 1000 px 745.03 / 76, Dense 921.03 / 76 (inspector open), Swimlanes 1185.03 / 76, Subway 1185.03 / 76 | identical (0 px): every box at top 8 / right 10 of the stage |
+| **F2** Subway fuzz (447 drops, seed 7): drops with a station's own track through its own label | 94 drops (167 tracks), 30 of them with a free spot, 65 with none | **48 drops (65 tracks), 0 with a free spot**, 48 with none |
+| F2 label/station, label/label overlaps (fuzz, summed) | 0 / 0 | 0 / 0 |
+| F2 auto-layout labels with the routed tracks vs without (default + 500 fixtures, Show all off/on) | — | byte-identical, all `above`; the subway tests' track pins unchanged |
+| F2 browser check (e2e-subway) | — | st-md-tip dropped under st-hp-root (4th candidate): `below` crossed by both splits, the only free spot `left` taken; 0 own-track points in the label (flow and screen) |
+| **F3** shared corridor after a drop | undocumented | `docs/subway.md` § Limits and README § Known limitations (repro: `st-md-tip → redline` / `→ katex` on y = 898 for ≈ 209 px; Re-arrange clears it) |
+| **F4** token bar: full extent vs card (light / dark) | 1.20 / 1.27 (10 % text track, no outline) | **3.53 / 5.17** (1 px `--ui-text-tertiary` outline) |
+| F4 fill vs track (light / dark) | 3.28 / **2.87** (accent 75 % over the track) | **5.64 / 5.08** (full `--ui-accent` over a clear track) |
+| F4 token-bar width check (± 2 px) | pass | pass (sample 480 000 tokens → 54.0 px) |
+| **F5** trash after two full runs | grows forever (289 homes, 127 GB seen by the user) | ≤ one copy per home name: after run 2, 7 entries (one run), 3.2 GB |
+| **F6** README install | merge into `main`; hand-edited `plugins.enabled` | `dev` checkout; `hermes plugins enable/disable session-tree` |
+
+- **F1.** `.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note { right: 310px;
+  max-width: calc(100% - 320px) }` — nothing else changes. Screenshots `rich-note-drawer-open-
+  {light,dark}-{1440,1000}.png` (before and after).
+- **F2.** `placeLabels(stations, blocked, tracks)`: a spot is free when it overlaps no station,
+  project label or earlier label and no routed track (exact segment test, 0.5 px inset, the
+  fuzz's own threshold); otherwise the least overlap of stations and labels as before, ties broken
+  by fewer own tracks, then fewer other tracks. The Subway layer gets the routing chain's `links` and
+  `routes` (new `StyleLayerProps` fields, passed by `graph-canvas.tsx`). The fuzz audit computes
+  "free" independently (its own order and overlap code). The 48 remaining drops all have no free
+  spot (every spot overlaps a station, a label or a track).
+- **F4** composited with `scripts/e2e/contrast.ts` on the card with the smallest filled share
+  (st-hp-mockup, 3.1 %, the empty part) and the largest (st-sys-tip, full).
+- **F5.** `scripts/e2e/trash.ts`: `moveAside` (rename into `trash/<name>-<ms>`, then `pruneTrash`:
+  the newest copy of each home name stays) and the one delete, `deleteTrashEntry`: a direct child
+  of the real `<root>/trash` only (`..`, nested paths, the root, the trash itself and a trash entry
+  that is a symlink are refused), never following a symlink while deleting (links are unlinked), and
+  refusing a home with a live gateway (`home/gateway.pid` or a profile's, or any process whose
+  `HERMES_HOME` or working directory is inside it; zombies do not count). Every suite's fresh home
+  and `test-hermes reset` use it. `npm run clean:e2e [-- --all]` (`scripts/e2e/clean.ts`) moves the
+  role's (or every card's and role's) stopped `c<card>-<role>[-variant]` homes (directories with a
+  `home/`) into the trash and deletes every trash entry, keeping `pytest-venv`, logs and screenshot
+  folders; it refuses and removes nothing while any of them has a live process; it prints each path
+  with its size (apparent bytes, a hard-linked file once: equal to `du --apparent-size -B1`, e.g.
+  456 707 653 B for a rich home). Unit tests `tests/js/e2e-trash.test.ts` (15).
+  - Two full runs back to back (`f149c39`), du measured after each: start trash 929 MB / root
+    1.5 GB; after run 1 trash 1.4 GB (3 entries: the homes run 1 replaced) / root 3.3 GB; after run
+    2 trash **3.2 GB, 7 entries — one per home, one run** / root **6.4 GB** (7 live homes + the
+    trash + `pytest-venv`; measured separately: `du` over both at once counts the shared inodes
+    once). Each later run replaces the trash's copies instead of adding to them.
+  - A home is 442–471 MB (`du`): `home/cache/uv` 309 MB, `home/installs` 130 MB.
+  - **Shared uv cache: not done.** Hermes takes it from `pm.packages.uv_cache_dir()` =
+    `get_default_hermes_root() / "cache" / "uv"` (the test's `HERMES_HOME`) and passes it to uv as
+    `UV_CACHE_DIR` explicitly (`pm/environment.py`), overriding any environment value; there is no
+    override to honour, so the per-home size stays 442–471 MB.
+- **F6** in the c8-coder test home (`HERMES_HOME=…/c8-coder/home`), `plugins.enabled` set to
+  `[st-dummy-plugin]` first:
+  - no gateway: `hermes plugins enable session-tree` → `✓ Plugin session-tree enabled.` (exit 0);
+    `plugins.enabled` `[st-dummy-plugin]` → `[session-tree, st-dummy-plugin]`. The config diff is
+    that line plus `disabled: []` (an empty list Hermes writes). `hermes plugins disable
+    session-tree` → `⊘ Plugin session-tree disabled. No running gateway answered. If one is
+    running, restart it for this to take effect: hermes gateway restart`; enabled back to
+    `[st-dummy-plugin]`, `disabled: [session-tree]`.
+  - test gateway running (Webapp on 19380): enable → `✓ Plugin session-tree enabled. Gateway
+    reloaded plugins; nothing of this plugin needs a session or restart.`; disable → `The running
+    gateway reloaded its plugins and unloaded session-tree; platform hooks it already wired up stay
+    until a gateway restart (hermes gateway restart).`
+  - No consent prompt (`capabilities: []`). README § Install says this.
+
+### Found on the way (not changed)
+
+- **e2e-swimlanes "B1-r3" is intermittent around midnight.** It asserts that `st-scale-0007`
+  (seeded 4.5 h old) is drawn in the default Swimlanes view with Show all on. It passed at 23:4x
+  (run 1), failed at 00:0x (run 2) and 00:2x (alone), and passed again at 01:2x (alone, 28/28) and
+  in the final run. The cause was not found (the view depends on the clock through the day columns
+  and the lanes' packing); Swimlanes is untouched by this card; not fixed (outside F1–F6).
+- The real-Hermes guard of one before-run of e2e-rich (CSS of 033096c) failed on
+  `~/.hermes/desktop-plugins` at 23:15: the user checked out `main` → `dev` in their checkout, and
+  their Hermes re-copied the linked package's `plugin.js` (`.hermes-package.json` source mtime
+  23:15:18). Nothing of this card touches `~/.hermes`; every later guard passed.
+
+### Simulated
+
+Unchanged: needs input via the test-only hook (rich, subway); running via the real `is_active`
+heuristic. F1's failed refresh is the browser refusing the plugin's `/sessions` poll (the gateway
+stays up).
+
+### Scope sweep (`git diff 033096c..HEAD`)
+
+F1: `src/styles.css`, `scripts/e2e-rich.ts`. F2: `src/styles/subway/labels.ts`,
+`src/styles/subway/layer.tsx`, `src/styles/types.ts` and `src/page/graph-canvas.tsx` (the routes
+reach the layer), `tests/js/subway-fuzz.test.ts`, `tests/js/subway.test.ts`,
+`scripts/e2e-subway.ts`. F4: `src/styles.css`, `scripts/e2e-rich.ts`. F5: `scripts/e2e/trash.ts`,
+`scripts/e2e/clean.ts`, `tests/js/e2e-trash.test.ts`, `package.json` (`clean:e2e`), the fresh-home
+code of `scripts/e2e/common.ts`, `e2e-actions.ts`, `e2e-sync.ts`, `e2e-swimlanes.ts`,
+`e2e-rich.ts`, `scripts/e2e/test-hermes-cli.ts` (reset). Card number: `scripts/e2e/CARD`,
+`scripts/e2e/harness.ts`, `tests/js/harness-card.test.ts`. Docs: `README.md`, `docs/subway.md`,
+`docs/rich-cards.md`, this file. `desktop/plugin.js` rebuilt.
+
+### Gates, bundle and numbers
+
+- **`desktop/plugin.js`: 706 600 bytes** (was 703 954), sha256 `e5e3e90a…537b6b23f`,
+  byte-identical over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no
+  `eval(` / `new Function` (guard tests).
+- lint 0; build 0; `npm test` **323/323** (was 306: e2e-trash 15, subway +2); `npm run test:py`
+  **259 passed**.
+- `npm run test:e2e`: run 1 (`f149c39`, 23:32–23:53) **181/181, exit 0**; run 2 (`f149c39`,
+  23:53–00:13) 180/181, exit 1 (the swimlanes B1-r3 flake above); final run 3 on `1e51269` (code =
+  `07b2fa8`, 01:27–01:47) **181/181, exit 0**: foundation 19 + core-dense 28 + actions 30 + sync 22
+  + swimlanes 28 + rich **23** (F4, F1) + subway **17** (F2) + final 14; every suite's real-Hermes
+  guard passed. After run 3: trash 3.3 GB, 7 entries (one per home) / e2e root 6.5 GB.
+
+## Card 9 — box selection and moving several blocks at once
+
+Branch `feature/session-tree-followups`, start commit `fa1da60` (card 8's reviewed head; `git
+status --short` empty). `scripts/e2e/CARD` = 9 (`afc334b`; the harness accepts cards 1..9): coder
+ports 19390–19394, homes `c9-coder*`. Code commit `6614475`; the docs commit after it changes only
+`README.md` and this file.
+
+### React Flow 12.12.1 props (`src/page/graph-canvas.tsx`)
+
+| Prop | Before | Card 9 | Why |
+|---|---|---|---|
+| `selectionOnDrag` | `false` | `style.draggable` (Dense, Subway, Rich `true`; Swimlanes `false`) | React Flow draws the box on a left-drag that starts on the pane itself (`Pane.onPointerDownCapture`: `selectionOnDrag && event.target === pane`), so a drag from a block still drags it. |
+| `selectionMode` | (default `Full`) | `SelectionMode.Full` | Only blocks fully inside count. The canvas decides the selected ids itself (below); React Flow's own `select` changes are ignored, the selection is controlled (`selected` per node). |
+| `onSelectionStart` / `onSelectionEnd` | — | the box's start corner in flow coordinates (`userSelectionRect.startX/Y` from the store at start, Shift held or not) and, at the end, the pointer's flow position (`screenToFlowPosition`); `fullyInside(rects, boxOf(start, end))` over the editable canvas blocks | the box survives React Flow's auto-pan during the drag (its start is in flow coordinates) and selects from the model's rectangles, also for blocks `onlyRenderVisibleElements` does not draw. |
+| `panOnDrag` | `[1]` | `[1]` (unchanged) | Middle-drag pans. |
+| `panActivationKeyCode` | `"Space"` | `"Space"` (unchanged) | While Space is held `FlowRenderer` sets `panOnDrag = true`, which turns `selectionOnDrag` off (`_selectionOnDrag = selectionOnDrag && panOnDrag !== true`): Space + left-drag pans, no box. |
+| `selectionKeyCode` / `multiSelectionKeyCode` / `deleteKeyCode` | `null` | `null` (unchanged) | Shift is handled by the canvas (`event.shiftKey` on the click and at the box start); no key ever deletes. |
+| `snapToGrid` | `snap` | `false` | React Flow snaps a multi-node drag by the first dragged node in its lookup (`calculateSnapOffset`), not the grabbed one. The canvas snaps instead (`groupPositions`: the grabbed block to `grid·round(p/grid)`, React Flow's `snapPosition`, the others by the same offset). One block lands exactly where React Flow's snap put it. `snapGrid` stays for the dot grid. |
+| multi-node drag | — | React Flow's own (`getDragItems`: every `selected` node moves with the grabbed one; an unselected grabbed node drags alone) | The canvas records the drag-start spots in `onNodeDragStart`, lays every dragged block out from the grabbed block's offset in `onNodesChange`, and sends the final spots as one `onMove` in `onNodeDragStop`. |
+
+- React Flow's frame around a finished selection (`.react-flow__nodesselection`) is hidden (CSS): it
+  would catch clicks and drags on the empty canvas between selected blocks. The box itself is
+  `--xy-selection-background-color: var(--ui-selection-background)` with a 1 px dashed
+  `--ui-accent` border.
+- A plain press on empty canvas still clears (capture-phase `pointerdown`, as before), except with
+  Shift in the box styles (Shift + a box adds). Esc and Ctrl/⌘+A are a window `keydown` listener
+  (`ctx.addEventListener`) that acts only on keys aimed at the page (or the body), never in a text
+  field (`isTextField`: inputs that take text, textareas, contenteditable; a toolbar `<select>` or a
+  button that kept the focus is not one) or an open menu / dialog. Ctrl/⌘+A calls
+  `preventDefault` (no page text gets selected; e2e).
+- A right-click inside the selection keeps it (the menu acts on that block only, S3); outside it
+  selects just the right-clicked block, as before.
+- The canvas exposes `data-selected` (ids), `data-selected-count`, `data-box-select` and
+  `data-route-passes` (the routing chain's `routed` counter) for the e2e.
+
+### Numbers
+
+- **Drop of a group of 3** (e2e-select, default fixture, each of Dense / Subway / Rich): every
+  selected block moved by the same offset (0 px apart; e.g. Dense (46.4, 36) for a (61, 47) px drag
+  at 125 %: React Flow starts the drag after its 1 px threshold, so the first mouse step is not in
+  the offset); no unselected block moved; **1 routing pass** (`data-route-passes` before/after the
+  drop); **1 request** `PATCH /state/positions` with the **3 entries**; the stored spots equal the
+  drawn ones; the second browser context shows all three moved without a reload (push, or the
+  5 s poll); after a
+  reload the three come back (± 0.6 px). Unit: `tests/js/selection.test.ts` — a drop of 4 blocks is
+  1 `routeLinks` pass and 1 `patch:set:4`.
+- **Snap** (each style, after a single snapped drop of each block): the group lands on the grid
+  (Dense 16, Subway 25, Rich 20) with the spacing unchanged (`0,0 0,-32 0,48` in Dense).
+- **Project scope `mdesign`:** 11 dimmed blocks shown; a box over the whole pane covered 8 / 6 / 5
+  of them and selected none; Ctrl+A selected the 5 editable blocks.
+- **500-session fixture** (`scale`, Show all, 1440 × 900, at Fit; full e2e run on `6614475`):
+
+  | | blocks moved | fps while dragging (group / one block) | release → 2nd frame (group / one) | longest task on drop (group / one) |
+  |---|---|---|---|---|
+  | Dense | 118 (one box) | 62.5 / 62.0 | 39 / 58 ms | none ≥ 50 ms / none |
+  | Subway | 108 (one box) | 61.8 / 62.5 | 58 / 43 ms | none ≥ 50 ms / none |
+  | Rich cards | 89 (a box of 61, then pan and Shift + a box: +28) | 62.7 / 62.0 | 43 / 30 ms | none ≥ 50 ms / none |
+
+  Bars: Dense and Subway ≥ 45, Rich ≥ 30 fps. "Longest task" is a `PerformanceObserver`
+  (`longtask`) over the 2 s after the release; it reports only tasks of 50 ms or more, and saw none.
+  Rich cards at the 30 % zoom floor draw about 74 cards at once in a 1440 × 900 window, so one box
+  cannot hold 100 there; the suite adds a second box after a middle-drag pan. Earlier standalone
+  runs gave the same picture (62–63 fps in every style, group and single; no long task).
+- Bundle: **`desktop/plugin.js` 716 270 bytes** (was 706 600), sha256 `c271fb22…1764128d`,
+  byte-identical over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no
+  `eval(` / `new Function` (guard tests).
+
+### Changed earlier checks
+
+- `scripts/e2e-core-dense.ts`: **old** "R3: left-drag on empty canvas does not pan and clears the
+  selection" (asserted: viewport unchanged, inspector `data-selected-id` `''`). **New** "R3 + card
+  9: a left-drag on empty canvas does not pan; it draws a selection box, and a box around no block
+  leaves nothing selected" (asserted: viewport unchanged, a `.react-flow__selection` wider than 2 px
+  during the drag, inspector `data-selected-id` `''` and canvas `data-selected-count` `0`).
+- `tests/js/harness-card.test.ts`: "scripts/e2e/CARD holds a card of the set" `CARD_FILE <= 8` →
+  `<= 9` (with `scripts/e2e/harness.ts` 1..8 → 1..9).
+
+### Simulated
+
+Nothing new. Unchanged: needs input via the test-only hook (rich, subway); running via the real
+`is_active` heuristic.
+
+### Scope sweep (`git diff fa1da60..HEAD`)
+
+Card 9 surface: `src/model/selection.ts` (new), `src/page/graph-canvas.tsx`,
+`src/page/session-tree-page.tsx`, `src/styles/dense/inspector.tsx`, `src/styles/types.ts`
+(`StylePanelProps.selectedIds`), `src/styles.css` (the box border, the hidden selection frame),
+`tests/js/selection.test.ts` (new), `scripts/e2e-select.ts` (new), `scripts/run-e2e.sh` (the new
+suite), `scripts/e2e-core-dense.ts` (the changed R3 check above), `desktop/plugin.js` (rebuilt).
+Card number: `scripts/e2e/CARD`, `scripts/e2e/harness.ts`, `tests/js/harness-card.test.ts`. Docs:
+`README.md`, this file. Nothing else.
+
+### Gates (code `6614475`)
+
+- lint 0; build 0 (716 270 B); `npm test` **340/340** (was 323: selection +17); `npm run test:py`
+  **259 passed**.
+- `npm run test:e2e` (03:56–04:20) **216/216, exit 0**: foundation 19 + core-dense 28 + actions 30 +
+  sync 22 + swimlanes 28 + rich 23 + subway 17 + final 14 + **select 35**; every suite's real-Hermes
+  guard passed; the swimlanes B1-r3 flake did not show.
+- Baseline at the start (`afc334b`, run from an exported copy so the working tree's edits could not
+  leak into the test builds): lint 0, build 706 600 B, `npm test` 323, `test:py` 259, `test:e2e`
+  181/181 exit 0. (A first baseline run in the worktree was stopped: its later suites build the
+  test package from `src/` at start, and `src/` was being edited.)
+
+## Card 10 — one shared layout per style (the scope chips only dim and frame)
+
+Start commit `84965816` (the tip of `feature/remember-fix-r2`, merged into `dev` as `5a19146`).
+Measured 2026-11-12 in the worktree `session-tree-wt/shared-layout`.
+
+### Why the layouts differed per scope (pre-check P1)
+
+Every place a scope fed a stored position, a layout key or the auto-layout order, before:
+
+- `src/page/session-tree-page.tsx` `ref = {profile, style, scope}` (the `LayoutRef` every
+  `place` / `drop` / `rearrange` / `restore` / `restoreBackup` used) and the Layout history
+  dialog's `key` / `layout`;
+- `src/model/layout-sync.ts` `refKey` / `sameRef` / `positions(ref)` (`layouts[style][scope]`),
+  `send` (`scope` in `PATCH /state/positions`, `DELETE` / `PUT /state/layout`), `ack`,
+  `replaceRefused`, the drop record key (`entryKey`);
+- `src/model/layout.ts` `groupOrder` (the scoped project's group first), shared by
+  `src/styles/subway/layout.ts` and `src/styles/rich/layout.ts`; `src/styles/swimlanes/layout.ts`
+  (its own lanes: kept);
+- `src/page/layout-history.tsx` (`fetchBackups(…, scope)`, the query key, the backup's scope check);
+- `src/model/device-prefs.ts` `viewportKey(style, profile, scope)` (kept, bumped to v2);
+- `dashboard/layout_store.py` `check_scope` in `upsert_positions` / `delete_layout` /
+  `replace_layout` / `list_backups`, `_layout`, `_keep_backup_locked` and `_trimmed_backups` (per
+  profile + style + scope), `forget_blocks` / `prune` (every scope);
+- `dashboard/plugin_api.py` `PositionsBody.scope`, `LayoutBody.scope`, `DELETE /state/layout` and
+  `GET /state/backups` `scope`.
+
+The user's real store (the card's attachment, read-only): 22 layouts for `default` (Dense 11
+scopes, Subway 8, Rich 3), each with 45–167 entries; `*` and `tasker` one `all` layout each.
+
+### What changed
+
+- Positions once per profile + style (scope key `all`, `state.json` still schema 1). The page's
+  ref is `layoutRef(profile, style)`; `groupOrder` ignores the scope, so every scope's
+  auto-layout is byte-identical to All's (unit test: Dense, Subway, Rich × default and 500-session
+  fixtures × Show all on/off, fresh and merged; a mutation putting the scope first again fails 13
+  of them).
+- Migration on the first load or write (one log line); 409 `scope_layout_retired` for another
+  scope; old queued ops of another scope dropped on adoption.
+- `PUT /state/layout/project`: the scoped Re-arrange (backup of the whole style layout first, under
+  the same lock) and its Undo, per block. `backups.json` schema 2 (`project`); schema 1 loads.
+- `viewport.v2`; a project scope frames its own blocks (first visit, Fit, an off-project view).
+
+### e2e-shared (`scripts/e2e-shared.ts`, 19 checks)
+
+- Migration fixture: the attachment's store with its 44 seeded-session-mapped keys (the rest
+  pruned as gone), plus a schema-1 `backups.json` with a backup of `/home/david/work_projects/mdesign`
+  and one of `all`. After the first `GET /state`: 5 profile/style layouts, each only `all`, every
+  remaining entry byte-identical; `backups.json` schema 2 with only the `all` backup. Every scope
+  chip (All, Home, syscanvas, hermes-plugins, mdesign) showed 16 / 15 / 16 stored blocks (Dense /
+  Subway / Rich) at their `all` spots (±0.5).
+- Per style (Dense, Subway, Rich): Re-arrange in All rewrote all 20 entries; two blocks dragged
+  in All stayed put on screen (20 compared) and in the store through the mdesign scope and back;
+  the first visit framed mdesign's 5 blocks inside the pane with 11 dimmed; Fit after a 600 × 400 px
+  middle-drag pan framed them again; a block dragged in the scope showed at its spot in All and in
+  the second context; the scoped Re-arrange ("The 5 blocks of mdesign go back to their automatic
+  spots; other projects stay where they are. …") sent one `PUT /state/layout/project` (no
+  `DELETE`), moved only mdesign's dragged blocks, every other entry byte-identical (the other
+  project's dragged block kept its spot); Undo restored exactly those; Layout history's top row
+  "20 blocks · Before Re-arrange · mdesign" (`data-project` the project id, the restore-replaces-
+  everything note, focus on Close); Restore brought back all 20 entries.
+
+### Changed earlier checks (old → new)
+
+- `scripts/e2e-core-dense.ts` live placement: "The syscanvas scope has its own layout: the new
+  blocks land in its bands too" → "the syscanvas scope shows the same layout as All: every block,
+  the new ones included, sits exactly where All shows it (and the new blocks are in their bands)"
+  (new assertion: ≥ 10 blocks compared, none moved by the scope).
+- `scripts/e2e-final.ts`: "each style that saves positions stores its own layout (Swimlanes none)"
+  → "… its own layout, one per style whatever the scope (Swimlanes none)" (new assertion: every
+  stored style has exactly the scope key `all`).
+- `scripts/e2e-sync.ts`: "Re-arrange asks first …; confirmed, it resets this style + scope layout
+  (store and B) …" → "Re-arrange in All projects asks first …; confirmed, it resets every block of
+  this style's one layout (store and B) …"; N2 check "a Re-arrange refused for a newer Layout
+  history (backups.json schema 2)" → "(backups.json schema 3; card 10 writes 2)" (the file it writes
+  is now `schema: 3`).
+- `layoutOf(state, style, scope = 'all')` → `layoutOf(state, style)` (always `all`) in
+  `scripts/e2e/common.ts`, `e2e-sync.ts`, `e2e-rich.ts`, `e2e-swimlanes.ts` (no caller passed a
+  scope); `e2e-rich.ts` / `e2e-subway.ts` clear `viewport.v2` instead of `viewport.v1` for their
+  open-at-Fit checks.
+- `tests/js/layout-sync.test.ts`: "layouts are per profile, style and scope" → "layouts are per
+  profile and style; a ref of another scope is never stored (card 10)" (the `p1` layout is now
+  `{}`); the N2 and B1 tests use a second style instead of scope `p1`.
+- `tests/py/test_layout_store.py`: tests that used another scope as "another layout" (round trip,
+  caps per layout / in all / by size, global caps, forget, prune, canonicalise, layout-count cap)
+  use another style; `test_upsert_then_snapshot_per_profile_style_scope` →
+  `…_per_profile_and_style`; the Re-arrange backup test now asserts a scope is ignored by
+  `list_backups`; the documented backup shape has `project`.
+- `tests/py/test_state_api.py`: the DELETE/PUT and backups endpoint tests use scope `all`;
+  "`GET /state/backups` without `scope` → 422" → "without `style` → 422" (scope is optional).
+- `tests/py/test_plugin_api.py`: the write-route list gains `PUT /state/layout/project`.
+
+### Known downgrade effect
+
+An older Session Tree reads the schema-2 `backups.json` as newer: its Layout history reads empty
+and its Re-arrange / restore answer 409 `layout_history_newer` (its drops still save). Its page
+still reads the shared `all` layout; its writes to another scope get 409 `scope_layout_retired`.
+
+### Bundle
+
+`desktop/plugin.js` **750 534 bytes** (was 742 905), sha256 `ccaa9f57…fb61a59e`, byte-identical
+over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no `eval(` /
+`new Function` (guard tests).
+
+### Gates
+
+- Baseline at the start `84965816`: lint 0; build 742 905 B (identical to the committed file);
+  `npm test` 375/375; `npm run test:py` 281 passed; `npm run test:e2e` (17:34–18:03 UTC, run from an
+  exported copy, `git archive`, so the worktree's edits could not leak into the test builds)
+  **240/240, exit 0** in one run: foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28,
+  rich 23, subway 19, toolbar 17, final 14, select 35. (A first baseline run in the worktree was
+  stopped after foundation 19, core-dense 30, actions 30: its sync suite already copied the
+  edited backend, and its N2 check's schema-2 `backups.json` is valid for card 10.)
+- Card 10 (code `3f1e968`; the commits after it change only docs): lint 0; build 0 (750 534 B);
+  `npm test` **404/404** (was 375: layout-sync +8, shared-layout +21); `npm run test:py` **341
+  passed** (was 281: test_shared_layout +48, test_state_api +12); `npm run test:e2e` **259/259,
+  exit 0** in one run (ended 17:27 UTC): foundation 19, core-dense 30, actions 30, sync 25,
+  swimlanes 28, rich 23, subway 19, toolbar 17, final 14, select 35, **shared 19**; every suite's
+  real-Hermes guard passed.

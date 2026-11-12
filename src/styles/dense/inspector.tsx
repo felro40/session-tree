@@ -3,7 +3,6 @@
  * list (R8) at its foot, filtered by scope. Its action buttons run the session actions (R14).
  */
 import { Codicon } from '@hermes/plugin-sdk'
-import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { agoLabel, compactNumber, costLabel, dateTimeLabel, shortAge } from '../../model/format.ts'
@@ -272,16 +271,35 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }: StyleP
   )
 }
 
+/** Card 9: with 2 or more blocks selected, how many and their titles; a click selects just that one. */
+function SelectionList({ model, ids, onSelect, onOpen, nowMs }: { model: GraphModel; ids: readonly string[]; onSelect: StylePanelProps['onSelect']; onOpen: StylePanelProps['onOpen']; nowMs: number }) {
+  return (
+    <div className="st-multi" data-testid="session-tree-inspector-multi" data-count={ids.length}>
+      <div className="st-it" data-field="selected-count">
+        {ids.length} selected
+      </div>
+      <div className="st-sec">
+        {ids.map(id => (
+          <NodeLink key={id} model={model} id={id} relation="" onSelect={id => onSelect(id)} onOpen={onOpen} nowMs={nowMs} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DenseInspector(props: StylePanelProps) {
-  const { model, selectedId, statusOf, onSelect, onOpen, nowMs } = props
-  const [singlesOpen, setSinglesOpen] = useState(true)
+  const { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs, sectionOpen, onSection } = props
+  // Remembered on this device (closing and reopening the page keeps it).
+  const singlesOpen = sectionOpen('singles')
   const node = selectedId ? model.nodeById.get(selectedId) : undefined
   const singles = singlesInScope(model)
+  const several = selectedIds.length > 1
 
   return (
-    <aside className="st-insp" data-testid="session-tree-inspector" data-selected-id={node?.id ?? ''}>
+    <aside className="st-insp" data-testid="session-tree-inspector" data-selected-id={node?.id ?? ''} data-selected-count={selectedIds.length}>
       <div className="st-ib">
-        {!node && (
+        {several && <SelectionList model={model} ids={selectedIds} onSelect={onSelect} onOpen={onOpen} nowMs={nowMs} />}
+        {!node && !several && (
           <div className="st-empty" data-testid="session-tree-inspector-empty">
             Select a session to inspect it.
             <br />
@@ -292,7 +310,7 @@ export function DenseInspector(props: StylePanelProps) {
         {node?.kind === 'session' && <SessionDetails {...props} node={node} status={statusOf(node)} />}
       </div>
       <div className={`st-singles${singlesOpen ? '' : ' is-collapsed'}`} data-testid="session-tree-singles">
-        <button type="button" className="st-singles-toggle" onClick={() => setSinglesOpen(open => !open)} aria-expanded={singlesOpen}>
+        <button type="button" className="st-singles-toggle" onClick={() => onSection('singles', !singlesOpen)} aria-expanded={singlesOpen}>
           <Codicon name={singlesOpen ? 'chevron-down' : 'chevron-right'} size={12} />
           <b>Singles</b>
           <span data-testid="session-tree-singles-count">{singles.length}</span>· no branches

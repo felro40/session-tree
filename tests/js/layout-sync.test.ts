@@ -1,9 +1,27 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
+import { ALL_PROJECTS, buildGraph, layoutKeysOf } from '../../src/model/graph.ts'
+import { mergeLayout } from '../../src/model/layout.ts'
 import type { LayoutResult, Point } from '../../src/model/layout.ts'
-import { CACHE_KEY, DROPS_KEY, isRefusal, LayoutSync, LEGACY_PENDING_KEY, NEWER_SCHEMA, ORPHAN_MS, PENDING_KEY, refusalKind } from '../../src/model/layout-sync.ts'
-import type { KnownState, LayoutRef, PositionsBody, StateAnswer, StateSnapshot, StoredLayouts, SyncedSettings, SyncOptions, SyncTransport } from '../../src/model/layout-sync.ts'
+import { projectReset } from '../../src/model/project-rearrange.ts'
+import { blockProjects, undoPositions, undoProject } from '../../src/model/layout-undo.ts'
+import { denseLayoutSpec } from '../../src/styles/dense/spec.ts'
+import { loadFixture } from './fixtures.ts'
+import { CACHE_KEY, DROPS_KEY, isRefusal, layoutRef, LayoutSync, LEGACY_PENDING_KEY, NEWER_SCHEMA, ORPHAN_MS, PENDING_KEY, refusalKind, SHARED_SCOPE } from '../../src/model/layout-sync.ts'
+import type {
+  KnownState,
+  LayoutRef,
+  PositionsBody,
+  ProjectBlocksBody,
+  ReplaceRefusal,
+  StateAnswer,
+  StateSnapshot,
+  StoredLayouts,
+  SyncedSettings,
+  SyncOptions,
+  SyncTransport
+} from '../../src/model/layout-sync.ts'
 
 /** An in-memory backend with the store's semantics (set / if_absent / delete / put / forget). */
 class FakeServer implements SyncTransport {
@@ -89,8 +107,8 @@ class FakeServer implements SyncTransport {
     return { rev: this.rev, changed: true }
   }
 
-  async putLayout(profile: string, body: { style: string; scope: string; positions: { id: string; x: number; y: number }[] }) {
-    await this.enter('put')
+  async putLayout(profile: string, body: { style: string; scope: string; positions: { id: string; x: number; y: number }[]; backup?: boolean }) {
+    await this.enter(body.backup ? 'put:backup' : 'put')
     const blocks = this.blocks(profile, body.style, body.scope)
 
     for (const key of Object.keys(blocks)) {
@@ -104,6 +122,38 @@ class FakeServer implements SyncTransport {
     this.rev += 1
 
     return { rev: this.rev, changed: true }
+  }
+
+  /** Card 10: per block, like `set_project_blocks` (only these keys; nothing changed: no rev). */
+  async putProjectBlocks(profile: string, body: ProjectBlocksBody) {
+    await this.enter(body.backup ? `project:backup:${body.project}` : `project:${body.project}`)
+
+    if (body.scope !== 'all') {
+      throw new Error('409: {"detail":"scope_layout_retired: per-project layouts are retired"}')
+    }
+
+    const blocks = this.blocks(profile, body.style, body.scope)
+    let changed = false
+
+    for (const id of body.remove) {
+      if (blocks[id]) {
+        delete blocks[id]
+        changed = true
+      }
+    }
+
+    for (const entry of body.positions) {
+      if (blocks[entry.id]?.x !== entry.x || blocks[entry.id]?.y !== entry.y) {
+        blocks[entry.id] = { x: entry.x, y: entry.y, updated_at: this.rev + 1 }
+        changed = true
+      }
+    }
+
+    if (changed) {
+      this.rev += 1
+    }
+
+    return { rev: this.rev, changed }
   }
 
   async forgetBlocks(profile: string, ids: string[]) {
@@ -464,6 +514,9 @@ describe('LayoutSync: offline', () => {
   })
 })
 
+/** The backend's refusal of a Re-arrange or restore while `backups.json` has a newer schema. */
+const HISTORY_NEWER_409 = '409: {"detail":"layout_history_newer: Layout history (backups.json, schema 2) was written by a newer Session Tree"}'
+
 describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
   it('Re-arrange clears the layout and Undo restores exactly what was shown', async () => {
     const { server, timers, sync } = setup()
@@ -487,6 +540,145 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     await timers.advance(300)
     assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [333, 444], b: [100, 0] })
     assert.ok(server.calls.includes('delete') && server.calls.includes('put'))
+  })
+
+  it('a restore from Layout history replaces the layout (PUT with backup: true); its Undo is a plain PUT', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a', 'b']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    const shown = sync.restoreBackup(
+      REF,
+      new Map([
+        ['a', { x: 333, y: 444 }],
+        ['gone', { x: 1, y: 1 }]
+      ])
+    )
+
+    assert.deepEqual(pointsOf(shown), { a: [7, 8], b: [100, 0] })
+    // Shown at once, before the server answers; a block the backup lacks is placed anew.
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [333, 444], gone: [1, 1] })
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [333, 444], gone: [1, 1] })
+    assert.equal(server.calls.filter(call => call === 'put:backup').length, 1)
+    sync.restore(REF, shown)
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [7, 8], b: [100, 0] })
+    assert.equal(server.calls.at(-1), 'put')
+  })
+
+  it('a Re-arrange refused for a newer Layout history (409 layout_history_newer) is dropped: the layout comes back, the page stays writable, nothing is re-sent', async () => {
+    const { server, timers, sync, storage, kinds } = setup()
+
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    server.refuse = HISTORY_NEWER_409
+    sync.rearrange(REF)
+    assert.equal(sync.positions(REF).size, 0)
+    await timers.advance(300)
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [7, 8] })
+    assert.equal(sync.storeReadOnly, false)
+    assert.equal(queuedOps(storage), 0)
+    assert.deepEqual(kinds, ['409'])
+    // Drops still go out.
+    server.refuse = false
+    sync.drop(REF, new Map([['a', { x: 9, y: 9 }]]))
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [9, 9] })
+    assert.equal(server.calls.filter(call => call === 'delete').length, 1)
+  })
+
+  it('review t_b632e3ac N2: every refused and dropped Re-arrange or restore from Layout history tells onReplaceRefused (ref and action), not only the first; the notice stays once per kind', async () => {
+    const { server, timers, sync, kinds } = setup()
+    const signals: ReplaceRefusal[] = []
+    // Card 10: a second layout is another style now (a scope has no layout of its own).
+    const P1 = { ...REF, style: 'rich' }
+
+    sync.onReplaceRefused(refusal => signals.push(refusal))
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    server.refuse = HISTORY_NEWER_409
+    sync.rearrange(REF)
+    await timers.advance(300)
+    assert.deepEqual(signals, [{ ref: REF, action: 'rearrange' }])
+    assert.deepEqual(kinds, ['409'])
+    // A second refused Re-arrange: the once-per-kind notice is used up, the signal is not.
+    sync.rearrange(P1)
+    await timers.advance(300)
+    assert.deepEqual(signals, [
+      { ref: REF, action: 'rearrange' },
+      { ref: P1, action: 'rearrange' }
+    ])
+    // A refused restore from Layout history (PUT with backup: true).
+    sync.restoreBackup(P1, new Map([['a', { x: 1, y: 2 }]]))
+    await timers.advance(300)
+    assert.deepEqual(signals.at(-1), { ref: P1, action: 'restore' })
+    assert.equal(signals.length, 3)
+    assert.deepEqual(kinds, ['409'])
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [7, 8] })
+    // A refused Undo (a plain PUT) and a refused drop showed no toast of their own: no signal.
+    sync.restore(REF, new Map([['a', { x: 3, y: 3 }]]))
+    sync.drop(REF, new Map([['a', { x: 4, y: 4 }]]))
+    await timers.advance(300)
+    assert.equal(signals.length, 3)
+    assert.equal(sync.pendingCount, 0)
+    assert.deepEqual(kinds, ['409'])
+  })
+
+  it('review t_b632e3ac N2: no onReplaceRefused for a saved Re-arrange, restore or Undo, nor on the newer_schema read-only path (the op is kept there)', async () => {
+    const { server, timers, sync, kinds } = setup()
+    const signals: ReplaceRefusal[] = []
+
+    sync.onReplaceRefused(refusal => signals.push(refusal))
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    const previous = sync.rearrange(REF)
+
+    await timers.advance(300)
+    sync.restore(REF, previous)
+    await timers.advance(300)
+    sync.restoreBackup(REF, new Map([['a', { x: 1, y: 2 }]]))
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [1, 2] })
+    assert.deepEqual(signals, [])
+    // 409 newer_schema on a Re-arrange: read-only, the op stays queued, no signal.
+    server.refuse = NEWER_409
+    server.readOnly = true
+    sync.rearrange(REF)
+    await timers.advance(300)
+    assert.equal(sync.storeReadOnly, true)
+    assert.equal(sync.pendingCount, 1)
+    sync.restoreBackup(REF, new Map([['a', { x: 5, y: 5 }]]))
+    await timers.advance(2000)
+    assert.deepEqual(signals, [])
+    assert.deepEqual(kinds, [NEWER_SCHEMA])
+  })
+
+  it('review t_b632e3ac N2: an unsubscribed onReplaceRefused listener is not called', async () => {
+    const { server, timers, sync } = setup()
+    const signals: ReplaceRefusal[] = []
+    const stop = sync.onReplaceRefused(refusal => signals.push(refusal))
+
+    sync.watch('default')
+    await settle()
+    stop()
+    server.refuse = HISTORY_NEWER_409
+    sync.rearrange(REF)
+    await timers.advance(300)
+    assert.equal(sync.pendingCount, 0)
+    assert.deepEqual(signals, [])
   })
 
   it('forget drops a block from every layout of the profile, so the next layout re-places it', async () => {
@@ -520,7 +712,7 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     assert.equal(sync.settings('work').style, 'e2e-alt')
   })
 
-  it('layouts are per profile, style and scope', async () => {
+  it('layouts are per profile and style; a ref of another scope is never stored (card 10)', async () => {
     const { server, timers, sync } = setup()
 
     sync.watch('default')
@@ -532,7 +724,7 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     sync.drop({ ...REF, profile: 'work' }, new Map([['a', { x: 4, y: 4 }]]))
     await timers.advance(300)
     assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [1, 1] })
-    assert.deepEqual(server.stored('default', 'dense', 'p1'), { a: [2, 2] })
+    assert.deepEqual(server.stored('default', 'dense', 'p1'), {})
     assert.deepEqual(server.stored('default', 'e2e-alt', 'all'), { a: [3, 3] })
     assert.deepEqual(server.stored('work', 'dense', 'all'), { a: [4, 4] })
   })
@@ -590,9 +782,9 @@ describe('LayoutSync: a refused save never loops (B1)', () => {
     sync.drop(REF, new Map([['a', { x: 5, y: 6 }]]))
     sync.setSettings('default', { snap: true })
     sync.forget('default', 'b')
-    const shown = sync.rearrange({ ...REF, scope: 'p1' })
+    const shown = sync.rearrange({ ...REF, style: 'e2e-alt' })
 
-    sync.restore({ ...REF, scope: 'p1' }, shown)
+    sync.restore({ ...REF, style: 'e2e-alt' }, shown)
 
     for (let i = 0; i < 150; i += 1) {
       sync.place(REF, autoLayout(ids))
@@ -805,6 +997,7 @@ describe('LayoutSync: windows on one device (NB1)', () => {
       patchSettings: (profile, patch) => guard(() => server.patchSettings(profile, patch)),
       deleteLayout: (profile, style, scope) => guard(() => server.deleteLayout(profile, style, scope)),
       putLayout: (profile, body) => guard(() => server.putLayout(profile, body)),
+      putProjectBlocks: (profile, body) => guard(() => server.putProjectBlocks(profile, body)),
       forgetBlocks: (profile, ids) => guard(() => server.forgetBlocks(profile, ids))
     }
   }
@@ -931,5 +1124,307 @@ describe('LayoutSync: the store epoch (NB2)', () => {
     sync.poll()
     await settle()
     assert.deepEqual(pointsOf(sync.positions(REF)), { a: [7, 7] })
+  })
+})
+
+// --- card 10: one shared layout per style -------------------------------------------------------
+
+describe('LayoutSync: one layout per style (card 10)', () => {
+  const fixture = loadFixture('default')
+  const spec = denseLayoutSpec({ showAll: false })
+  const scoped = (scope: string) => buildGraph(fixture.rows, fixture.projects, { profile: 'default', showArchived: false, scope })
+  const projectIds = () => [...new Set(scoped(ALL_PROJECTS).nodes.map(node => node.projectId).filter((id): id is string => Boolean(id)))]
+  /** What the page does on each render: lay out the scoped graph against the shared layout. */
+  const render = (sync: LayoutSync, scope: string) => {
+    const model = scoped(scope)
+    const keys = layoutKeysOf(model)
+
+    return { model, keys, result: sync.place(layoutRef('default', 'dense'), previous => mergeLayout(previous, model, spec), { keys }) }
+  }
+
+  it('the page ref of every scope is the shared one: scope all', () => {
+    assert.deepEqual(layoutRef('default', 'subway'), { profile: 'default', style: 'subway', scope: SHARED_SCOPE })
+    assert.equal(SHARED_SCOPE, 'all')
+  })
+
+  it('switching scope never changes a stored or shown position, and sends nothing', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    const all = render(sync, ALL_PROJECTS).result.positions
+    await timers.advance(300)
+    // Two blocks dragged in All.
+    const [first, second] = [...all.keys()].filter(id => !id.startsWith('group:'))
+    sync.drop(REF, new Map([[first, { x: 900, y: 900 }], [second, { x: -300, y: 40 }]]))
+    await timers.advance(300)
+    const stored = structuredClone(server.layouts.default)
+    const calls = server.calls.length
+    const shownInAll = pointsOf(render(sync, ALL_PROJECTS).result.positions)
+
+    for (const scope of [...projectIds(), ALL_PROJECTS]) {
+      assert.deepEqual(pointsOf(render(sync, scope).result.positions), shownInAll, `scope ${scope} moved a block`)
+      await timers.advance(300)
+    }
+
+    assert.deepEqual(server.layouts.default, stored)
+    assert.equal(server.calls.length, calls, `sent: ${server.calls.slice(calls).join(', ')}`)
+    assert.deepEqual(Object.keys(server.layouts.default.dense), ['all'])
+  })
+
+  it('a scoped Re-arrange moves only that project\u2019s blocks, to their spots in a fresh full layout; Undo puts back exactly those', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    render(sync, ALL_PROJECTS)
+    await timers.advance(300)
+    const fresh = structuredClone(server.layouts.default.dense.all)
+    const project = projectIds()[0]
+    const { model, keys } = render(sync, project)
+    const own = model.nodes.filter(node => !node.outOfScope).map(node => keys.toStore(node.id))
+    const other = model.nodes.filter(node => node.outOfScope).map(node => keys.toStore(node.id))
+    // Drag one block of the project and one of another project.
+    sync.drop(REF, new Map([[own[0], { x: 5000, y: 5000 }], [other[0], { x: -5000, y: -5000 }]]))
+    await timers.advance(300)
+    const before = structuredClone(server.layouts.default.dense.all)
+    const reset = projectReset(model, project, mergeLayout(undefined, model, spec), sync.positions(REF), keys)
+    const undo = sync.rearrangeProject(REF, project, reset.keys, reset.spots)
+
+    await timers.advance(300)
+    const after = server.layouts.default.dense.all
+    assert.deepEqual([after[own[0]].x, after[own[0]].y], [fresh[own[0]].x, fresh[own[0]].y], 'the project block went back')
+    assert.deepEqual(after[other[0]], before[other[0]], 'the other project block stayed, its entry untouched')
+    for (const key of Object.keys(before).filter(key => !reset.keys.includes(key))) {
+      assert.deepEqual(after[key], before[key], `${key} changed`)
+    }
+    assert.ok(server.calls.includes(`project:backup:${project}`))
+    // Undo: the project's entries come back exactly; nothing else changes.
+    const beforeUndo = structuredClone(after)
+    sync.restoreProject(REF, undo)
+    await timers.advance(300)
+    const undone = server.layouts.default.dense.all
+    assert.deepEqual(pointsOf(new Map(Object.entries(undone).map(([key, entry]) => [key, entry]))), pointsOf(new Map(Object.entries(before).map(([key, entry]) => [key, entry]))))
+    for (const key of Object.keys(beforeUndo).filter(key => !reset.keys.includes(key))) {
+      assert.deepEqual(undone[key], beforeUndo[key], `Undo touched ${key}`)
+    }
+    assert.ok(server.calls.includes(`project:${project}`), 'the Undo keeps no backup')
+  })
+
+  it('a scoped Re-arrange of a layout nobody dragged moves nothing', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    render(sync, ALL_PROJECTS)
+    await timers.advance(300)
+    const rev = server.rev
+    const stored = structuredClone(server.layouts.default.dense.all)
+
+    for (const project of projectIds()) {
+      const { model, keys } = render(sync, project)
+      const reset = projectReset(model, project, mergeLayout(undefined, model, spec), sync.positions(REF), keys)
+
+      assert.ok(reset.spots.size > 0)
+      sync.rearrangeProject(REF, project, reset.keys, reset.spots)
+      await timers.advance(300)
+    }
+
+    assert.deepEqual(server.layouts.default.dense.all, stored)
+    assert.equal(server.rev, rev)
+  })
+
+  it('another device\u2019s move of another project\u2019s block, made while the Re-arrange was queued, survives', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    render(sync, ALL_PROJECTS)
+    await timers.advance(300)
+    const project = projectIds()[0]
+    const { model, keys } = render(sync, project)
+    const own = model.nodes.filter(node => !node.outOfScope).map(node => keys.toStore(node.id))
+    const other = model.nodes.find(node => node.outOfScope)!
+    sync.drop(REF, new Map([[own[0], { x: 5000, y: 5000 }]]))
+    await timers.advance(300)
+    const reset = projectReset(model, project, mergeLayout(undefined, model, spec), sync.positions(REF), keys)
+
+    sync.rearrangeProject(REF, project, reset.keys, reset.spots)
+    // Another device drops a block of another project before this window's op goes out.
+    server.layouts.default.dense.all[keys.toStore(other.id)] = { x: 77, y: 88, updated_at: 999 }
+    await timers.advance(300)
+    assert.deepEqual(server.layouts.default.dense.all[keys.toStore(other.id)], { x: 77, y: 88, updated_at: 999 })
+  })
+
+  it('a refused scoped Re-arrange is dropped and tells onReplaceRefused, with its project (A11)', async () => {
+    const { server, timers, sync, kinds } = setup()
+    const signals: ReplaceRefusal[] = []
+
+    sync.onReplaceRefused(refusal => signals.push(refusal))
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a', 'b']))
+    await timers.advance(300)
+    server.refuse = HISTORY_NEWER_409
+    sync.rearrangeProject(REF, 'p1', ['a'], new Map([['a', { x: 50, y: 50 }]]))
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [50, 50], b: [100, 0] })
+    await timers.advance(300)
+    assert.deepEqual(signals, [{ ref: REF, action: 'rearrange', project: 'p1' }])
+    assert.deepEqual(kinds, ['409'])
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [0, 0], b: [100, 0] }, 'the layout came back')
+    // Its Undo (no backup) refused: no signal (it showed no toast).
+    sync.restoreProject(REF, { project: 'p1', previous: new Map([['a', { x: 0, y: 0 }]]), touched: ['a'] })
+    await timers.advance(300)
+    assert.equal(signals.length, 1)
+  })
+
+  it('an op an older build queued for another scope is dropped on adoption, never sent; the rest go out', async () => {
+    const server = new FakeServer()
+    const storage = new MemoryStorage()
+    const old = { profile: 'default', style: 'dense', scope: '/repos/syscanvas' }
+
+    storage.set(PENDING_KEY, {
+      slots: {
+        closed: {
+          beat: 0,
+          ops: [
+            { kind: 'upsert', ref: old, mode: 'set', entries: [['x', { x: 1, y: 1 }]], at: 1 },
+            { kind: 'replace', ref: old, entries: null },
+            { kind: 'upsert', ref: REF, mode: 'set', entries: [['a', { x: 2, y: 2 }]], at: 2 }
+          ]
+        }
+      }
+    })
+    storage.set(LEGACY_PENDING_KEY, [{ kind: 'upsert', ref: old, mode: 'set', entries: [['y', { x: 3, y: 3 }]] }])
+    const { timers, sync, refused } = setup({ server, storage, options: { windowId: 'next', now: () => ORPHAN_MS * 10 } })
+
+    sync.watch('default')
+    await timers.advance(300)
+    assert.deepEqual(server.calls.filter(call => call !== 'get'), ['patch:set:1'])
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [2, 2] })
+    assert.deepEqual(server.stored('default', 'dense', '/repos/syscanvas'), {})
+    assert.deepEqual(refused, [], 'no notice')
+    assert.equal(queuedOps(storage), 0)
+  })
+
+  it('the queue keeps the shape an older build reads: a scoped Re-arrange is one op of its own kind, refs scope all', () => {
+    const storage = new MemoryStorage()
+    const { sync } = setup({ storage, options: { windowId: 'w' } })
+
+    sync.rearrangeProject(REF, 'p1', ['a', 'b'], new Map([['a', { x: 1, y: 2 }]]))
+    const raw = JSON.parse(storage.data.get(PENDING_KEY)!) as { slots: Record<string, { beat: number; ops: { kind: string; ref: LayoutRef }[] }> }
+
+    assert.equal(typeof raw.slots.w.beat, 'number')
+    assert.deepEqual(raw.slots.w.ops.map(op => [op.kind, op.ref.scope]), [['project', 'all']])
+  })
+})
+
+describe('LayoutSync: an Undo after a move to another project (review t_5e9be878 N1)', () => {
+  const fixture = loadFixture('default')
+  const spec = denseLayoutSpec({ showAll: false })
+  const MDESIGN = '/e2e/projects/mdesign'
+  const SYSCANVAS = '/e2e/projects/syscanvas'
+  const MOVED = 'st-split-child'
+  const before = () => buildGraph(fixture.rows, fixture.projects, { profile: 'default', showArchived: false, scope: MDESIGN })
+  /** The graph after "Move to project" put `MOVED` in syscanvas. */
+  const after = () =>
+    buildGraph(
+      fixture.rows.map(row => (row.id === MOVED ? { ...row, cwd: SYSCANVAS, git_repo_root: SYSCANVAS } : row)),
+      fixture.projects.map(project => ({ ...project, sessionIds: project.id === SYSCANVAS ? [...project.sessionIds, MOVED] : project.sessionIds.filter(id => id !== MOVED) })),
+      { profile: 'default', showArchived: false, scope: MDESIGN }
+    )
+  const place = (sync: LayoutSync, model: ReturnType<typeof before>) => sync.place(REF, previous => mergeLayout(previous, model, spec), { keys: layoutKeysOf(model) })
+
+  it('a project Undo sends no entry or remove for the moved block; the rest comes back exactly', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    const model = before()
+    const keys = layoutKeysOf(model)
+    place(sync, model)
+    await timers.advance(300)
+    sync.drop(REF, new Map([[MOVED, { x: 295.76, y: 229.82 }], ['st-md-katex', { x: 4000, y: 10 }]]))
+    await timers.advance(300)
+    const dragged = structuredClone(server.layouts.default.dense.all)
+    const reset = projectReset(model, MDESIGN, mergeLayout(undefined, model, spec), sync.positions(REF), keys)
+    const undo = sync.rearrangeProject(REF, MDESIGN, reset.keys, reset.spots)
+    const then = blockProjects(model)
+
+    await timers.advance(300)
+    // Move to project: forget, then the page's next layout places it in syscanvas's band.
+    sync.forget('default', MOVED)
+    await timers.advance(300)
+    const moved = after()
+    place(sync, moved)
+    await timers.advance(300)
+    const placed = server.layouts.default.dense.all[MOVED]
+    assert.ok(placed && (placed.x !== 295.76 || placed.y !== 229.82))
+    const calls = server.calls.length
+    const sent: ProjectBlocksBody[] = []
+    const putProjectBlocks = server.putProjectBlocks.bind(server)
+    server.putProjectBlocks = async (profile, body) => {
+      sent.push(structuredClone(body))
+      return putProjectBlocks(profile, body)
+    }
+
+    sync.restoreProject(REF, undoProject(undo, then, blockProjects(moved)))
+    await timers.advance(300)
+    assert.equal(sent.length, 1, `calls ${server.calls.slice(calls).join(', ')}`)
+    assert.ok(!sent[0].positions.some(entry => entry.id === MOVED) && !sent[0].remove.includes(MOVED), 'the Undo names the moved block')
+    const undone = server.layouts.default.dense.all
+    assert.deepEqual(undone[MOVED], placed, 'the moved block kept its new spot')
+    for (const key of Object.keys(dragged).filter(key => key !== MOVED)) {
+      assert.deepEqual([undone[key]?.x, undone[key]?.y], [dragged[key].x, dragged[key].y], `${key} is not back`)
+    }
+  })
+
+  it('a whole-layout Undo (All Re-arrange, restore from history) leaves the moved block out of the PUT; place() puts it in its new band', async () => {
+    const { server, timers, sync } = setup()
+
+    sync.watch('default')
+    await settle()
+    const model = before()
+    place(sync, model)
+    await timers.advance(300)
+    sync.drop(REF, new Map([[MOVED, { x: 295.76, y: 229.82 }], ['st-md-katex', { x: 4000, y: 10 }]]))
+    await timers.advance(300)
+    const dragged = structuredClone(server.layouts.default.dense.all)
+
+    for (const action of ['rearrange', 'restore'] as const) {
+      const previous = action === 'rearrange' ? sync.rearrange(REF) : sync.restoreBackup(REF, new Map([['st-md-katex', { x: 1, y: 1 }]]))
+      const then = blockProjects(model)
+
+      await timers.advance(300)
+      place(sync, model)
+      await timers.advance(300)
+      sync.forget('default', MOVED)
+      await timers.advance(300)
+      const moved = after()
+      const sent: { id: string }[][] = []
+      const putLayout = server.putLayout.bind(server)
+      server.putLayout = async (profile, body) => {
+        sent.push(structuredClone(body.positions))
+        return putLayout(profile, body)
+      }
+
+      sync.restore(REF, undoPositions(previous, then, blockProjects(moved)))
+      await timers.advance(300)
+      server.putLayout = putLayout
+      assert.equal(sent.length, 1, action)
+      assert.ok(!sent[0].some(entry => entry.id === MOVED), `${action}: the PUT names the moved block`)
+      assert.equal(server.layouts.default.dense.all[MOVED], undefined, `${action}: the moved block is stored`)
+      place(sync, moved)
+      await timers.advance(300)
+      const undone = server.layouts.default.dense.all
+      const spot = undone[MOVED]
+      assert.ok(spot && (spot.x !== 295.76 || spot.y !== 229.82), `${action}: the old spot came back`)
+      for (const key of Object.keys(dragged).filter(key => key !== MOVED)) {
+        assert.deepEqual([undone[key]?.x, undone[key]?.y], [dragged[key].x, dragged[key].y], `${action}: ${key} is not back`)
+      }
+      // Next round: the moved block back in mdesign at its dragged spot.
+      sync.drop(REF, new Map([[MOVED, { x: 295.76, y: 229.82 }]]))
+      await timers.advance(300)
+    }
   })
 })

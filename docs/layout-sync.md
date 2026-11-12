@@ -8,15 +8,74 @@ How Session Tree keeps block positions and the view settings across reloads, win
 | What | Where | Synced? |
 |---|---|---|
 | View style (`style`), Snap grid (`snap`) | backend store, `settings` | every window and device served by the gateway |
-| Block positions, per profile → style → scope → layout key, `{x, y, updated_at}` | backend store, `layouts` | yes |
-| Zoom + pan per style + profile + scope | `ctx.storage` `viewport.v1:<style>\|<profile>\|<scope>` | no (this device) |
-| Show all, Show archived, the profile filter, the style override, the side panel per style | `ctx.storage` `device.v1` | no |
+| Block positions, per profile → style → layout key, `{x, y, updated_at}` (card 10: one layout per style; stored under the scope key `all`) | backend store, `layouts` | yes |
+| Zoom + pan per style + profile + scope | `ctx.storage` `viewport.v2:<style>\|<profile>\|<scope>` (card 10; `viewport.v1` entries are ignored and removed) | no (this device) |
+| Show all, Show archived, the profile filter, the project scope per profile filter (`scopes`), the style override, the side panel per style, a panel's sections (`sectionsOpen`: the Dense inspector's Singles) | `ctx.storage` `device.v1` | no |
+| Layout history: the arrangements a Re-arrange or a restore replaced, one list per profile → style | backend store, `backups.json` | yes |
 | The last server snapshot of each profile (offline fallback; never a read-only one) | `ctx.storage` `layoutCache.v1:<profile>` | — |
 | Changes not yet acknowledged by the backend, one slot per window | `ctx.storage` `layoutPending.v2` | — |
 | The latest drop time per layout + key on this device | `ctx.storage` `layoutDrops.v1` | — |
 
 `ctx.storage` is namespaced by the host to `hermes.plugin.session-tree.*` (`localStorage`: shared by
 every window of one browser profile, read live on each `get`).
+
+## One layout per style (card 10)
+
+The project scope chips only **dim and frame**: a style has one layout per profile, and every
+scope shows it. Choosing a scope never moves a block and never changes a stored position;
+arranging blocks in a project scope changes the layout All projects shows. Dense, Subway and Rich
+cards keep separate layouts (their blocks differ in size); Swimlanes has none and still collapses
+the other lanes in a scope.
+
+- **Store shape:** `state.json` stays schema 1 with its `profile → style → scope` shape, but the
+  only scope key used is `all` (a style's shared layout is its All projects layout as it was), so
+  an older Session Tree still reads it as its All layout.
+- **Auto-layout order:** `groupOrder` no longer puts the scoped project first: for any scope the
+  auto-layout (fresh, and the merge of new sessions) gives exactly All's positions. The Dense
+  inspector's singles, the Subway depot and the Rich drawer still list only the scope's sessions.
+- **Migration:** on the first load (`GET /state`, `GET /state/backups`) or write after the upgrade,
+  the store drops every layout of another scope from `state.json` and every backup of another
+  scope from `backups.json`, under the store's locks, each file replaced atomically (the backups
+  first; a writer killed in between leaves `state.json` as it was, and the next load finishes the
+  job), and logs one line (`session_tree.layout_store`: how many layouts and backups it dropped).
+  The `all` layouts are kept byte for byte; nothing is copied into Layout history (the user ruled
+  the per-scope arrangements need not be kept). The migration bumps `rev`, so other windows'
+  polls pick it up.
+- **Retired scopes:** a write to a scope other than `all` (`PATCH /state/positions`, `PUT` /
+  `DELETE /state/layout`, `PUT /state/layout/project`) answers **409 `scope_layout_retired: …`**
+  and changes nothing. Its own code, not `newer_schema`: a still-open older tab gets one "could not
+  save the layout" notice and drops the op, instead of turning read-only or silently writing a
+  layout nothing reads. The page itself only ever sends `all` (`layoutRef`).
+- **Old queued ops:** a window's pending queue (`layoutPending.v2`) can hold ops an older build
+  queued for another scope. When a window adopts a queue (on load, or a closed window's slot) those
+  are dropped, never sent, with no notice. The queue format is unchanged; a scoped Re-arrange is a
+  new op kind (`project`), which an older build's reader skips.
+- **Camera (`viewport.v2`):** zoom + pan stay remembered per device, per style + profile + scope.
+  The keys were bumped once from `viewport.v1` (saved for the old per-scope positions): v1 entries
+  are never read, and are removed when the page looks at their key or names it (every style × the
+  known profiles × All + the projects; the storage cannot list its keys). With no remembered view
+  a project scope frames that project's blocks on the canvas, All everything; **Fit** does the
+  same; a remembered view that shows none of the scope's blocks (in a project scope: of that
+  project's) opens framed on them.
+- **Re-arrange in a project scope** resets only that project's blocks (L2). The page computes a
+  fresh full auto-layout of the current graph (All order) and sends one
+  `PUT /state/layout/project` with the spots it gives that project's blocks (its sessions and
+  in-scope stand-ins, by layout key) and its group labels; a project key the fresh layout does not
+  place (a continuation label, a single while Show all is off) goes in `remove`. The server
+  applies it per block under the lock (last write wins per block): every other block is untouched,
+  also one another device moved meanwhile. Before changing anything it keeps a backup of the whole
+  style layout in Layout history, written first under the same lock (`project` recorded with it).
+  In a layout nobody dragged nothing moves (no backup, no new revision). **Undo** sends the same
+  endpoint without `backup`: exactly that project's previous entries back, the keys the
+  Re-arrange added removed, no other block touched. Every Undo (this one, a Re-arrange in All
+  projects' and a restore's) skips a block moved to another project since (review t_5e9be878
+  N1): the page compares each block's project when the action ran with its project at Undo (its
+  graph model, which follows other devices too), and the moved block gets no entry and no
+  remove (in a whole-layout `PUT` it is left out), so it keeps the spot the auto-layout gave it in
+  its new band; group labels and every other entry come back exactly. A refused scoped Re-arrange removes its toast
+  too (`onReplaceRefused`, with the `project`). Re-arrange in All projects is unchanged
+  (`DELETE /state/layout`). Known limitation: a block of another project dragged into that
+  project's area can overlap the reset blocks (README § Known limitations).
 
 ## Layout keys (card-4 review B2)
 
@@ -49,7 +108,8 @@ its spot, and every compaction leaves exactly one entry.
   is a key inside; the gateway may serve a request in a secondary profile's scope). Outside the
   plugin package, which installs and updates replace.
 - **Shape (schema 1):** `{"schema": 1, "epoch": E, "rev": N, "settings": {"style": null|id, "snap": bool},
-  "layouts": {profile: {style: {scope: {key: {"x", "y", "updated_at"}}}}}}`. `rev` counts writes.
+  "layouts": {profile: {style: {"all": {key: {"x", "y", "updated_at"}}}}}}`. `rev` counts writes.
+  The scope level stays for older readers; card 10 uses only `all` (see One layout per style).
   `profile` is a profile name or `*` (the All profiles view keeps its own layouts). Keys are the
   graph's layout keys: session ids (a compacted conversation's lineage root), `<profile>/<id>`
   (only when two profiles share an id), `missing:<profile>/<id>` (stand-ins) and `group:<project>`
@@ -93,6 +153,34 @@ its spot, and every compaction leaves exactly one entry.
   entry is kept when its key is an existing session id or the lineage root of one. Group labels
   and stand-ins are not sessions and stay. When a profile's store cannot be read, nothing is
   pruned or moved.
+- **Layout history (`backups.json`, its own schema 2):** `{"schema": 2, "backups": [{id, profile,
+  style, scope, project, created_at, reason, positions: {key: {x, y}}}]}`, oldest first. `scope`
+  is `all`; `project` is the project a Re-arrange in a project scope reset, `null` for one in All
+  projects and for a restore. Schema 1 (card 4–9, no `project`) still loads, its backups reading as
+  `project: null` ("Before Re-arrange · All projects"), and is written back as schema 2; an older
+  Session Tree reads a schema-2 file as newer (see below). A Re-arrange
+  (`DELETE /state/layout`) keeps the layout it forgets (`reason: "rearrange"`); a scoped
+  Re-arrange (`PUT /state/layout/project` with `backup: true`) keeps the whole style layout
+  (`"rearrange"`, with its `project`); a restore
+  (`PUT /state/layout` with `backup: true`) keeps the one it replaces (`"restore"`); an Undo
+  (`PUT` without it) and a Re-arrange of nothing keep none. An arrangement the layout already has
+  a backup of adds no second copy (that one moves to the newest end). At most 10 per profile +
+  style (the oldest go first), 200 in all, within 16 MiB; the global caps take the oldest
+  backup of a style that has more than one first, so a style keeps its newest backup unless
+  every style is down to one. Written under the same locks,
+  atomically, **before** `state.json`: a writer killed in between leaves one extra backup, never a
+  lost layout. A corrupt `backups.json` is moved to `backups.json.corrupt-<time>-<random>.bak` and
+  never blocks a Re-arrange; a newer-schema one (after a downgrade) reads as empty
+  (`read_only: true`) and refuses a Re-arrange and a restore (409 `layout_history_newer: …`, the
+  layout stays; not `newer_schema`, so the page stays writable and the page drops the refused op
+  with one notice). Drops, Undo and `POST /state/forget` still work then (forget leaves a newer
+  file alone). `POST /state/forget` drops the blocks from
+  the profile's backups too (a backup that held only them goes). Backups are not pruned when a
+  session is deleted: a restore with a gone session's key is harmless (no block uses it, and the
+  next `GET /state` prunes it). A restore is a `PUT` of positions, not of a backup id, so the
+  server cannot tell that they came from a backup of the same style; the page checks it
+  (`layout-history.tsx`), and a mismatched `PUT` is no worse than any other `PUT`. A separate
+  file, so `state.json` keeps its schema and an older Session Tree reads it as before.
 
 ## Endpoints (`dashboard/plugin_api.py`)
 
@@ -103,10 +191,13 @@ Every write answers `epoch` too.
 | Endpoint | What |
 |---|---|
 | `GET /state[?since_rev=N&epoch=E]` | `{schema, epoch, rev, settings, layouts, read_only[, store_schema]}` of the profile (pruned and canonicalised first); `since_rev` + `epoch` naming the current state answer `{schema, epoch, rev, unchanged: true}` (the cheap poll). Only both together: a `since_rev` without `epoch`, or with another epoch, gets the full state. |
-| `PATCH /state/positions` `{style, scope, mode: set\|if_absent, positions: [{id, x, y}]}` | Batch upsert → `{ok, rev, changed, applied, skipped, updated_at}`. |
+| `PATCH /state/positions` `{style, scope, mode: set\|if_absent, positions: [{id, x, y}]}` | Batch upsert → `{ok, rev, changed, applied, skipped, updated_at}`. `scope` must be `all` (else 409 `scope_layout_retired`). |
 | `PATCH /settings` `{style?, snap?}` | The synced settings (global) → `{ok, rev, changed, settings}`. |
-| `DELETE /state/layout?style=&scope=` | Re-arrange: removes one layout → `{ok, rev, changed, removed}`. |
-| `PUT /state/layout` `{style, scope, positions}` | Undo: the layout becomes exactly `positions` → `{ok, rev, changed, count}`. |
+| `DELETE /state/layout?style=&scope=all` | Re-arrange in All projects: removes the style's layout (keeping a backup of it) → `{ok, rev, changed, removed, backup_id}`. |
+| `PUT /state/layout` `{style, scope, positions, backup?}` | Undo: the layout becomes exactly `positions` → `{ok, rev, changed, count, backup_id}`. `backup: true` (a restore from Layout history) keeps the layout it replaces first. |
+| `PUT /state/layout/project` `{style, scope, project, positions, remove?, backup?}` | Card 10: a Re-arrange in a project scope (`backup: true`) or its Undo. Per block: each of `positions` (`[{id, x, y}]`, ≤ 5000) is set (one already at its spot keeps its entry), each of `remove` (block ids, ≤ 5000) is forgotten; no other block changes. `backup: true` keeps the whole style layout in Layout history first, with `project`. → `{ok, rev, changed, applied, removed, backup_id}`. Nothing changed: no backup, no revision. 400 for a malformed project (`all` included), id or coordinate, or an id in both lists; 413 past the caps; 409 `layout_history_newer` like a Re-arrange. Pushed as `kind: "rearrange"` (or `"restore"` for the Undo). |
+| `GET /state/backups?style=[&scope=]` | Layout history of one style (one list whatever the scope; an older page's `scope` is ignored), newest first → `{ok, backups: [{id, created_at, reason, project, count}], read_only}`. |
+| `GET /state/backups/{id}` | One backup of the profile → `{ok, id, style, scope, project, created_at, reason, positions: [{id, x, y}]}` (404 for another profile's or an unknown id; 400 for a malformed id). |
 | `POST /state/forget` `{ids}` | A session moved to another project: its blocks leave every layout of the profile (so each layout places it anew in its new band). |
 
 None of them touches `state.db`.
@@ -121,8 +212,30 @@ None of them touches `state.db`.
 - **Writes:** queued, sent after a 300 ms trailing debounce, consecutive upserts of one layout
   batched into one request. Nothing is sent while a block is dragged (`setDragging`); the drop is
   recorded on mouse-up and goes out 300 ms later. Auto-layout placements go as `if_absent`.
-- **Re-arrange** queues a delete of the current style + scope layout and shows a toast with Undo,
-  which queues a `PUT` of exactly what the window showed before.
+- **Re-arrange** asks first (a plain dialog naming what resets — in All projects "Every block in
+  <style> goes back to the automatic layout", in a project "The N blocks of <project> go back to
+  their automatic spots; other projects stay where they are" (N: the project's blocks the op moves
+  on the canvas, labels aside; "The 1 block … goes back to its automatic spot"; with none, "No
+  block of <project> is on the canvas, so there is nothing to re-arrange." and Re-arrange is
+  disabled; review t_5e9be878 N4) — not the SDK's ConfirmDialog, which
+  confirms on Enter and Space whichever button holds focus: Space is the pan key). The confirm
+  opens with focus on Cancel and Layout history with focus on Close, so Space, Enter or Escape
+  right after a misclick change nothing; only activating Re-arrange or Restore itself does (a
+  click, or Tab to the button and Enter or Space). In All projects it then queues a delete of the
+  style's layout and shows a toast with Undo, which queues a `PUT` of exactly what the window
+  showed before, less any block moved to another project since; in a project scope it queues the
+  scoped op (One layout per style).
+- **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
+  in Swimlanes; the toolbar has no room for a button of its own at the narrowest widths) sends this
+  window's queue first, then lists the backups of the style (one list for every scope; each row
+  "Before Re-arrange · All projects", "Before Re-arrange · <project label from `projects.tree`>",
+  "· a removed project" for one that no longer exists, or "Before a restore"), refetched on every
+  store revision. Restore fetches one backup and queues a `PUT` with `backup: true` (shown at
+  once, with an Undo toast like Re-arrange); it replaces the whole style layout, every project's
+  blocks (in a project scope the dialog says so); blocks the backup lacks are placed anew by the
+  auto-layout.
+  A Re-arrange or restore the server refuses (dropped, e.g. 409 `layout_history_newer`) also
+  removes its toast, every time, not only with the first notice of that kind.
 - **Offline (transient failures):** a request with no answer (network, timeout), a 5xx, 408 or
   429 keeps the queue in `ctx.storage`, marks the profile offline ("offline: showing last saved
   layout" banner) and retries with a backoff (1, 2, 5, 5, 10 s). Nothing is notified. The page keeps

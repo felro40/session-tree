@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { DEVICE_KEY, DevicePrefs, MAX_COLLAPSED_LANES } from '../../src/model/device-prefs.ts'
+import { DEVICE_KEY, DevicePrefs, MAX_COLLAPSED_LANES, MAX_SCOPES } from '../../src/model/device-prefs.ts'
 import { READ_ONLY_MESSAGE, SETTINGS_OFFLINE_NOTE, settingsNotes } from '../../src/settings/notes.ts'
 
 class MemoryStorage {
@@ -61,6 +61,66 @@ describe('DevicePrefs: Swimlanes lane collapse (card 5)', () => {
 
     assert.equal(capped.length, MAX_COLLAPSED_LANES)
     assert.equal(capped.at(-1), `k${MAX_COLLAPSED_LANES + 49}`)
+  })
+})
+
+describe('DevicePrefs: the project scope per profile filter (remembered when the page reopens)', () => {
+  it('a chosen scope survives a new instance (a closed and reopened page); each profile filter has its own', () => {
+    const storage = new MemoryStorage()
+    const prefs = new DevicePrefs(storage)
+    let changes = 0
+
+    prefs.subscribe(() => (changes += 1))
+    assert.equal(prefs.scope('default'), 'all')
+    prefs.setScope('default', '/repos/a')
+    prefs.setScope('*', '/repos/b')
+    prefs.setScope('default', '/repos/a') // the same scope again: no change
+    assert.equal(changes, 2)
+
+    const reopened = new DevicePrefs(storage)
+
+    assert.equal(reopened.scope('default'), '/repos/a')
+    assert.equal(reopened.scope('*'), '/repos/b')
+    assert.equal(reopened.scope('work'), 'all')
+    // All projects is the default: choosing it again forgets the entry.
+    reopened.setScope('default', 'all')
+    assert.deepEqual(new DevicePrefs(storage).get().scopes, { '*': '/repos/b' })
+  })
+
+  it('sanitizes untrusted storage and keeps the newest choices within the cap', () => {
+    const storage = new MemoryStorage()
+
+    storage.set(DEVICE_KEY, { scopes: { default: '/a', work: 7, x: '', '': '/b', y: 'all', long: 'z'.repeat(5000) } })
+    assert.deepEqual(new DevicePrefs(storage).get().scopes, { default: '/a' })
+    storage.set(DEVICE_KEY, { scopes: ['nope'] })
+    assert.deepEqual(new DevicePrefs(storage).get().scopes, {})
+
+    const prefs = new DevicePrefs(new MemoryStorage())
+
+    for (let i = 0; i < MAX_SCOPES + 5; i += 1) {
+      prefs.setScope(`p${i}`, `/s${i}`)
+    }
+
+    // A re-chosen profile moves to the newest end, so it is kept.
+    prefs.setScope('p0', '/again')
+    const kept = prefs.get().scopes
+
+    assert.equal(Object.keys(kept).length, MAX_SCOPES)
+    assert.equal(kept.p0, '/again')
+    assert.equal(kept.p1, undefined)
+    assert.equal(kept[`p${MAX_SCOPES + 4}`], `/s${MAX_SCOPES + 4}`)
+  })
+
+  it('a panel section (the Dense inspector Singles) is remembered per style, open by default', () => {
+    const storage = new MemoryStorage()
+    const prefs = new DevicePrefs(storage)
+
+    assert.equal(prefs.sectionOpen('dense', 'singles'), true)
+    prefs.setSectionOpen('dense', 'singles', false)
+    assert.equal(new DevicePrefs(storage).sectionOpen('dense', 'singles'), false)
+    assert.equal(new DevicePrefs(storage).sectionOpen('rich', 'singles'), true)
+    storage.set(DEVICE_KEY, { sectionsOpen: { 'dense:singles': 'no', 'x:y': false } })
+    assert.deepEqual(new DevicePrefs(storage).get().sectionsOpen, { 'x:y': false })
   })
 })
 

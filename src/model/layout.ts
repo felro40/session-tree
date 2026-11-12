@@ -6,13 +6,12 @@
  *   ordered by creation time. A "continued as" successor's tree is stacked under its
  *   predecessor's tree, so the dashed link runs down (Dense mockup).
  * - Families are packed top to bottom without overlap, grouped by project (project order from
- *   `projects.tree`, the scoped project first, no project last) under a group label; inside a
- *   group the most recently used family comes first.
+ *   `projects.tree`, no project last; the same in every scope, card 10) under a group label;
+ *   inside a group the most recently used family comes first.
  * - Singles are laid out only when the style shows them on the canvas ("Show all"); then they
  *   fill a grid at the foot of their project group.
  * - `mergeLayout` places new nodes without moving any node that already has a position.
  */
-import { ALL_PROJECTS } from './graph.ts'
 import type { Family, GraphModel } from './graph.ts'
 import { NO_PROJECT_ID } from './projects.ts'
 
@@ -137,15 +136,14 @@ export function layoutFamily(model: GraphModel, family: Family, spec: LayoutSpec
   return { positions, height: Math.max(0, cursorY - spec.rowGap) }
 }
 
-/** Groups in display order: the scoped project first, then `projects.tree` order, no project last. */
+/**
+ * Groups in display order: `projects.tree` order, no project last. Card 10 (A4): the scope no
+ * longer comes first. A project scope shows the one shared layout of its style, so its
+ * auto-layout must place every block exactly where All projects does.
+ */
 export function groupOrder(model: GraphModel, families: readonly Family[]): (string | undefined)[] {
   const present = new Set(families.map(family => family.projectId ?? NO_PROJECT_ID))
   const order: string[] = []
-  const scope = model.options.scope
-
-  if (scope !== ALL_PROJECTS && present.has(scope)) {
-    order.push(scope)
-  }
 
   for (const project of model.projects) {
     if (!project.isNoProject && present.has(project.id) && !order.includes(project.id)) {
@@ -241,6 +239,23 @@ export function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /**
+ * Whether any of `rects` (flow coordinates) is at least partly inside the view: `viewport` (React
+ * Flow's `x`, `y`, `zoom`: screen = flow × zoom + x) over a `width` × `height` pane. A remembered
+ * view that shows none of the map's blocks is framed instead of restored.
+ */
+export function anyInView(rects: Iterable<Rect>, viewport: { x: number; y: number; zoom: number }, width: number, height: number): boolean {
+  const view = { x: -viewport.x / viewport.zoom, y: -viewport.y / viewport.zoom, width: width / viewport.zoom, height: height / viewport.zoom }
+
+  for (const rect of rects) {
+    if (overlaps(rect, view)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
  * A label that continues a project group further down the canvas: used only when a new family
  * of a labelled group is too tall for that group's band (`mergeLayout`).
  */
@@ -251,6 +266,41 @@ export function labelGroup(id: string): string {
   const cut = id.indexOf(CONTINUATION)
 
   return cut === -1 ? id : id.slice(0, cut)
+}
+
+/**
+ * The labels to draw, in stored order: every stored label (continuations too) whose band — from
+ * it down to the next stored label — holds a shown block of its own group (`shown`: block id →
+ * `group:<project>`). A label over an empty band (its singles left the canvas with Show all off,
+ * its family was deleted or archived) is not drawn, and does not stretch the framed map; its spot
+ * stays stored, so Show all brings the singles back under it.
+ */
+export function drawnLabels(positions: ReadonlyMap<string, Point>, shown: ReadonlyMap<string, string>): GroupLabel[] {
+  const labels = [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX))
+  const tops = labels.map(([, point]) => point.y)
+  const blocks = [...shown].flatMap(([id, key]) => {
+    const point = positions.get(id)
+
+    return point ? [{ key, y: point.y }] : []
+  })
+
+  return labels
+    .filter(([id, point]) => {
+      const key = labelGroup(id)
+      const bottom = Math.min(Infinity, ...tops.filter(y => y > point.y))
+
+      return blocks.some(block => block.key === key && block.y >= point.y && block.y < bottom)
+    })
+    .map(([id]) => {
+      const projectId = labelGroup(id).slice(GROUP_PREFIX.length)
+
+      return { id, projectId: projectId === NO_PROJECT_ID ? undefined : projectId }
+    })
+}
+
+/** Shown block id → its group (`group:<project>`), for `drawnLabels`. */
+export function blockGroups(families: readonly Family[]): Map<string, string> {
+  return new Map(families.flatMap(family => family.nodeIds.map(id => [id, groupKey(family.projectId)] as const)))
 }
 
 /** Vertical room of one group label on the canvas: under it, down to the next label. */
@@ -268,10 +318,12 @@ interface Band {
  * - a new node of a known family goes next to its parent (next column, under its last
  *   sibling), predecessor or child, at the nearest free row of that column inside the band,
  *   else in the next column to the right that has one;
- * - a whole new family (or a single, with Show all) goes at the first free spot of its band,
- *   scanning columns left to right and rows top to bottom; a family taller than the band is
- *   laid out under everything with a continuation label for its project;
+ * - a whole new family (or a single, with Show all) goes at the first free spot of its group's
+ *   bands (its label's, then its continuation labels', top to bottom), scanning columns left to
+ *   right and rows top to bottom; a family that fits none is laid out under everything with a
+ *   continuation label for its project (the next such family of the project goes there too);
  * - families of a project that has no group yet are laid out under everything, labelled.
+ * Only the labels over a band with a shown block of their group are drawn (`drawnLabels`).
  * Deterministic: the same inputs give the same positions.
  */
 export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, model: GraphModel, spec: LayoutSpec): LayoutResult {
@@ -328,6 +380,13 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
     const pick = anchorY === undefined ? own[0] : (own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0])
 
     return bandUnder(pick[1].y, labels)
+  }
+
+  /** Every band of `key`'s group, top to bottom: its label's, then its continuation labels'. */
+  const bandsOf = (key: string): Band[] => {
+    const labels = labelEntries()
+
+    return labels.filter(([id]) => labelGroup(id) === key).map(([, point]) => bandUnder(point.y, labels))
   }
 
   /**
@@ -473,14 +532,15 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
     }
   }
 
-  // New families of groups that already have a label: inside that group's band.
+  // New families of groups that already have a label: inside one of that group's bands (its own,
+  // then its continuation bands, top to bottom), else under a new continuation label.
   const unlabelled: Family[] = []
 
   for (const family of newFamilies) {
     const key = groupKey(family.projectId)
-    const band = bandOf(key)
+    const bands = bandsOf(key)
 
-    if (!band) {
+    if (bands.length === 0) {
       unlabelled.push(family)
       continue
     }
@@ -488,13 +548,16 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
     const local =
       family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }
     const ids = [...local.positions.keys()]
-    const spot = findSpot(
-      ids.map(id => local.positions.get(id)!),
-      local.height,
-      band,
-      0,
-      rowsDown
-    )
+    const shape = ids.map(id => local.positions.get(id)!)
+    let spot: Point | undefined
+
+    for (const band of bands) {
+      spot = findSpot(shape, local.height, band, 0, rowsDown)
+
+      if (spot) {
+        break
+      }
+    }
 
     if (spot) {
       for (const id of ids) {
@@ -543,15 +606,6 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
     }
   }
 
-  // Labels of groups that still have blocks on the canvas.
-  const present = new Set(families.map(family => groupKey(family.projectId)))
-  const labels = [...positions.keys()]
-    .filter(id => id.startsWith(GROUP_PREFIX) && present.has(labelGroup(id)))
-    .map(id => {
-      const projectId = labelGroup(id).slice(GROUP_PREFIX.length)
-
-      return { id, projectId: projectId === NO_PROJECT_ID ? undefined : projectId }
-    })
-
-  return { positions, labels }
+  // The labels of bands that hold a shown block of their group.
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) }
 }

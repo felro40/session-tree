@@ -13,7 +13,7 @@
  */
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Locator, Page, Route } from 'playwright-core'
@@ -21,7 +21,8 @@ import type { Locator, Page, Route } from 'playwright-core'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { moveAside } from './e2e/trash.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'actions' })
@@ -291,13 +292,8 @@ async function exportBytes(s: Session, id: string, filename: string): Promise<{ 
 /** A fresh test home for this mutating suite: the previous one goes to the e2e trash. */
 function freshHome(): void {
   stopGateway(t)
-
-  if (existsSync(t.root)) {
-    const trash = join(E2E_ROOT, 'trash')
-
-    mkdirSync(trash, { recursive: true })
-    renameSync(t.root, join(trash, `${t.root.split('/').pop()}-${Date.now()}`))
-  }
+  // Card 8 (F5): into the trash, then the trash pruned to the newest copy of each home.
+  moveAside(t.root, { log: line => console.log(`  trash: ${line}`) })
 }
 
 // --- the suite ---------------------------------------------------------------------------------
@@ -306,7 +302,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The other suites' home of this role uses the same ports: make sure it is not running.
-  stopGateway(testHermes())
+  stopRoleHomes(t)
   freshHome()
   mkdirSync(shots, { recursive: true })
   console.log(`e2e actions — role ${t.role}, home ${t.home}`)

@@ -14,10 +14,10 @@ from conftest import PREFIX
 @pytest.fixture
 def state_file(plugin_api, hermes_home: Path):
     path = plugin_api._state_store().path
-    for leftover in path.parent.glob("state.json*"):
+    for leftover in [*path.parent.glob("state.json*"), *path.parent.glob("backups.json*")]:
         leftover.unlink()
     yield path
-    for leftover in path.parent.glob("state.json*"):
+    for leftover in [*path.parent.glob("state.json*"), *path.parent.glob("backups.json*")]:
         leftover.unlink()
 
 
@@ -87,20 +87,113 @@ def test_settings_patch_and_read_back(client, state_file, events):
 
 
 def test_delete_then_put_restores_the_layout(client, state_file, events):
-    patch_positions(client, {"style": "dense", "scope": "/p/x", "mode": "set",
+    patch_positions(client, {"style": "dense", "scope": "all", "mode": "set",
                              "positions": [{"id": "st-split-root", "x": 1, "y": 2}, {"id": "st-hp-root", "x": 3, "y": 4}]})
-    deleted = client.delete(f"{PREFIX}/state/layout", params={"session_profile": "default", "style": "dense", "scope": "/p/x"})
+    deleted = client.delete(f"{PREFIX}/state/layout", params={"session_profile": "default", "style": "dense", "scope": "all"})
     assert deleted.status_code == 200, deleted.text
     removed = deleted.json()["removed"]
     assert set(removed) == {"st-split-root", "st-hp-root"}
     assert "dense" not in state(client).json()["layouts"]
     restore = [{"id": block, "x": entry["x"], "y": entry["y"]} for block, entry in removed.items()]
     put = client.put(f"{PREFIX}/state/layout", params={"session_profile": "default"},
-                     json={"style": "dense", "scope": "/p/x", "positions": restore})
+                     json={"style": "dense", "scope": "all", "positions": restore})
     assert put.status_code == 200, put.text
-    layout = state(client).json()["layouts"]["dense"]["/p/x"]
+    layout = state(client).json()["layouts"]["dense"]["all"]
     assert {block: (entry["x"], entry["y"]) for block, entry in layout.items()} == {"st-split-root": (1, 2), "st-hp-root": (3, 4)}
     assert [payload["kind"] for _name, payload in events] == ["positions", "rearrange", "restore"]
+
+
+def test_backups_endpoints_list_and_restore_a_rearranged_layout(client, state_file, events):
+    patch_positions(client, {"style": "dense", "scope": "all", "mode": "set",
+                             "positions": [{"id": "st-split-root", "x": 1, "y": 2}]})
+    deleted = client.delete(f"{PREFIX}/state/layout", params={"session_profile": "default", "style": "dense", "scope": "all"}).json()
+    # Card 10: one history per style; a scope (from an older page) is accepted and ignored.
+    for params in ({"style": "dense"}, {"style": "dense", "scope": "/p/x"}):
+        listing = client.get(f"{PREFIX}/state/backups", params={"session_profile": "default", **params})
+        assert listing.status_code == 200, listing.text
+        backups = listing.json()["backups"]
+        assert [(each["id"], each["reason"], each["count"], each["project"]) for each in backups] == [(deleted["backup_id"], "rearrange", 1, None)]
+    assert isinstance(backups[0]["created_at"], float)
+    one = client.get(f"{PREFIX}/state/backups/{deleted['backup_id']}", params={"session_profile": "default"})
+    assert one.status_code == 200 and one.json()["positions"] == [{"id": "st-split-root", "x": 1, "y": 2}]
+    put = client.put(f"{PREFIX}/state/layout", params={"session_profile": "default"},
+                     json={"style": "dense", "scope": "all", "positions": one.json()["positions"], "backup": True})
+    assert put.status_code == 200, put.text
+    assert state(client).json()["layouts"]["dense"]["all"]["st-split-root"]["x"] == 1
+    # Nothing was stored when it was restored: no second backup.
+    assert put.json()["backup_id"] is None
+    assert events[-1][1]["kind"] == "restore"
+
+
+@pytest.mark.parametrize("call,status", [
+    (lambda c: c.get(f"{PREFIX}/state/backups/0123456789abcdef", params={"session_profile": "default"}), 404),
+    (lambda c: c.get(f"{PREFIX}/state/backups/not-an-id", params={"session_profile": "default"}), 400),
+    (lambda c: c.get(f"{PREFIX}/state/backups/0123456789abcdef", params={"session_profile": "nope"}), 404),
+    (lambda c: c.get(f"{PREFIX}/state/backups", params={"session_profile": "default", "style": "Dense", "scope": "all"}), 400),
+    # Card 10: the scope is optional now (one history per style); the style is still required.
+    (lambda c: c.get(f"{PREFIX}/state/backups", params={"session_profile": "default", "scope": "all"}), 422),
+    (lambda c: c.put(f"{PREFIX}/state/layout", params={"session_profile": "default"},
+                     json={"style": "dense", "scope": "all", "positions": [], "backup": "yes"}), 422),
+])
+def test_backups_endpoints_validate_input(client, state_file, call, status):
+    assert call(client).status_code == status
+    assert not state_file.exists()
+
+
+# --- card 10: one layout per style ---------------------------------------------------------------
+
+def put_project(client, body, profile="default"):
+    return client.put(f"{PREFIX}/state/layout/project", params={"session_profile": profile}, json=body)
+
+
+def test_put_project_blocks_changes_only_those_blocks_keeps_a_backup_and_pushes(client, state_file, events):
+    patch_positions(client, {"style": "dense", "scope": "all", "mode": "set",
+                             "positions": [{"id": "st-split-root", "x": 1, "y": 2}, {"id": "st-hp-root", "x": 3, "y": 4}]})
+    other = state(client).json()["layouts"]["dense"]["all"]["st-hp-root"]
+    response = put_project(client, {"style": "dense", "scope": "all", "project": "p1", "backup": True,
+                                    "positions": [{"id": "st-split-root", "x": 10, "y": 20}], "remove": []})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["changed"], body["applied"], body["removed"]) == (True, 1, 0) and body["backup_id"]
+    layout = state(client).json()["layouts"]["dense"]["all"]
+    assert (layout["st-split-root"]["x"], layout["st-split-root"]["y"]) == (10, 20) and layout["st-hp-root"] == other
+    listing = client.get(f"{PREFIX}/state/backups", params={"session_profile": "default", "style": "dense"}).json()["backups"]
+    assert [(each["id"], each["reason"], each["project"], each["count"]) for each in listing] == [(body["backup_id"], "rearrange", "p1", 2)]
+    assert events[-1] == ("layout.changed", {"epoch": body["epoch"], "rev": body["rev"], "profile": "default", "kind": "rearrange"})
+    # Its Undo: no backup, a "restore" push.
+    undo = put_project(client, {"style": "dense", "scope": "all", "project": "p1", "positions": [{"id": "st-split-root", "x": 1, "y": 2}]})
+    assert undo.status_code == 200 and undo.json()["backup_id"] is None
+    assert events[-1][1]["kind"] == "restore"
+
+
+@pytest.mark.parametrize("call", [
+    lambda c: patch_positions(c, {"style": "dense", "scope": "p1", "mode": "set", "positions": [{"id": "st-split-root", "x": 5, "y": 5}]}),
+    lambda c: c.delete(f"{PREFIX}/state/layout", params={"session_profile": "default", "style": "dense", "scope": "p1"}),
+    lambda c: c.put(f"{PREFIX}/state/layout", params={"session_profile": "default"},
+                    json={"style": "dense", "scope": "p1", "positions": [], "backup": True}),
+    lambda c: put_project(c, {"style": "dense", "scope": "p1", "project": "p1", "positions": [{"id": "st-split-root", "x": 5, "y": 5}]}),
+])
+def test_writes_to_a_retired_scope_answer_409_scope_layout_retired(client, state_file, events, call):
+    patch_positions(client, {"style": "dense", "scope": "all", "mode": "set", "positions": [{"id": "st-split-root", "x": 1, "y": 1}]})
+    before = state_file.read_bytes()
+    sent = len(events)
+    response = call(client)
+    assert response.status_code == 409 and response.json()["detail"].startswith("scope_layout_retired:")
+    assert state_file.read_bytes() == before and len(events) == sent
+
+
+@pytest.mark.parametrize("body,status", [
+    ({"style": "dense", "scope": "all", "project": "p1", "positions": [], "extra": 1}, 422),
+    ({"style": "dense", "scope": "all", "positions": []}, 422),
+    ({"style": "dense", "scope": "all", "project": "", "positions": []}, 422),
+    ({"style": "dense", "scope": "all", "project": "p1", "positions": [], "backup": "yes"}, 422),
+    ({"style": "dense", "scope": "all", "project": "p1", "positions": [{"id": "a", "x": "1", "y": 2}]}, 400),
+    ({"style": "dense", "scope": "all", "project": "p1", "positions": [], "remove": ["a\u0000"]}, 400),
+    ({"style": "dense", "scope": "all", "project": "all", "positions": []}, 400),
+])
+def test_put_project_blocks_validates_input(client, state_file, body, status):
+    assert put_project(client, body).status_code == status
+    assert not state_file.exists()
 
 
 def test_forget_endpoint(client, state_file, events):

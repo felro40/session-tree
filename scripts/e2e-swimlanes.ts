@@ -12,7 +12,7 @@
  * button and the wheel included. Screenshots go to <test root>/shots/.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Page, Request } from 'playwright-core'
@@ -21,7 +21,8 @@ import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { moveAside } from './e2e/trash.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'swim' })
@@ -88,8 +89,9 @@ async function stored(s: Session): Promise<StateSnapshot> {
   return api<StateSnapshot>(s, '/api/plugins/session-tree/state?session_profile=default')
 }
 
-const layoutOf = (state: StateSnapshot, style = 'dense', scope = 'all') =>
-  Object.fromEntries(Object.entries(state.layouts[style]?.[scope] ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
+/** A style's stored layout: one per style, under scope `all`, whatever the page's scope (card 10). */
+const layoutOf = (state: StateSnapshot, style = 'dense') =>
+  Object.fromEntries(Object.entries(state.layouts[style]?.all ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 
 async function waitFor<T>(what: string, probe: () => Promise<T>, ok: (value: T) => boolean, timeoutMs = 20_000, everyMs = 250): Promise<T> {
   const deadline = Date.now() + timeoutMs
@@ -452,13 +454,8 @@ async function themeProbe(page: Page) {
 
 function freshHome(): void {
   stopGateway(t)
-
-  if (existsSync(t.root)) {
-    const trash = join(E2E_ROOT, 'trash')
-
-    mkdirSync(trash, { recursive: true })
-    renameSync(t.root, join(trash, `${t.root.split('/').pop()}-${Date.now()}`))
-  }
+  // Card 8 (F5): into the trash, then the trash pruned to the newest copy of each home.
+  moveAside(t.root, { log: line => console.log(`  trash: ${line}`) })
 }
 
 // --- the suite ---------------------------------------------------------------------------------
@@ -467,9 +464,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  for (const variant of [undefined, 'actions', 'sync']) {
-    stopGateway(testHermes(undefined, variant ? { variant } : {}))
-  }
+  stopRoleHomes(t)
 
   freshHome()
   mkdirSync(shots, { recursive: true })

@@ -57,19 +57,19 @@ var react_default, init_react = __esm({
   }
 });
 
-// node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js
+// ../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js
 var require_use_sync_external_store_shim_production = __commonJS({
-  "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js"(exports) {
+  "../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js"(exports) {
     "use strict";
     init_define_import_meta_env();
     var React2 = (init_react(), __toCommonJS(react_exports));
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect4 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect5 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
       var value2 = getSnapshot(), _useState = useState9({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
-      return useLayoutEffect4(
+      return useLayoutEffect5(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
@@ -101,27 +101,27 @@ var require_use_sync_external_store_shim_production = __commonJS({
   }
 });
 
-// node_modules/use-sync-external-store/shim/index.js
+// ../../session-tree/node_modules/use-sync-external-store/shim/index.js
 var require_shim = __commonJS({
-  "node_modules/use-sync-external-store/shim/index.js"(exports, module) {
+  "../../session-tree/node_modules/use-sync-external-store/shim/index.js"(exports, module) {
     "use strict";
     init_define_import_meta_env();
     module.exports = require_use_sync_external_store_shim_production();
   }
 });
 
-// node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js
+// ../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js
 var require_with_selector_production = __commonJS({
-  "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js"(exports) {
+  "../../session-tree/node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js"(exports) {
     "use strict";
     init_define_import_meta_env();
     var React2 = (init_react(), __toCommonJS(react_exports)), shim = require_shim();
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef8 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef9 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef8(null);
+      var instRef = useRef9(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
@@ -164,9 +164,9 @@ var require_with_selector_production = __commonJS({
   }
 });
 
-// node_modules/use-sync-external-store/shim/with-selector.js
+// ../../session-tree/node_modules/use-sync-external-store/shim/with-selector.js
 var require_with_selector = __commonJS({
-  "node_modules/use-sync-external-store/shim/with-selector.js"(exports, module) {
+  "../../session-tree/node_modules/use-sync-external-store/shim/with-selector.js"(exports, module) {
     "use strict";
     init_define_import_meta_env();
     module.exports = require_with_selector_production();
@@ -177,7 +177,7 @@ var require_with_selector = __commonJS({
 init_define_import_meta_env();
 import { host as host6, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
-// node_modules/@xyflow/react/dist/base.css
+// ../../session-tree/node_modules/@xyflow/react/dist/base.css
 var base_default = `/* this will be exported as base.css and can be used for a basic styling */
 /* these are the necessary styles for React/Svelte Flow, they get used by base.css and style.css */
 .react-flow {
@@ -687,14 +687,14 @@ svg.react-flow__connectionline {
 
 // src/page/session-tree-page.tsx
 init_define_import_meta_env();
-import { Button as Button2, EmptyState, ErrorState, host as host4, useQuery, useValue } from "@hermes/plugin-sdk";
+import { Button as Button3, EmptyState, ErrorState, host as host4, useQuery as useQuery2, useValue } from "@hermes/plugin-sdk";
 
-// node_modules/@xyflow/react/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
 import { jsxs, Fragment, jsx } from "react/jsx-runtime";
 import { createContext, useContext, useMemo, forwardRef, useEffect, useRef, useState, useLayoutEffect, useCallback, memo } from "react";
 
-// node_modules/classcat/index.js
+// ../../session-tree/node_modules/classcat/index.js
 init_define_import_meta_env();
 function cc(names) {
   if (typeof names == "string" || typeof names == "number") return "" + names;
@@ -708,13 +708,13 @@ function cc(names) {
   return out;
 }
 
-// node_modules/@xyflow/system/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/system/dist/esm/index.js
 init_define_import_meta_env();
 
-// node_modules/d3-drag/dist/d3-drag.mjs
+// ../../session-tree/node_modules/d3-drag/dist/d3-drag.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-dispatch/dist/d3-dispatch.mjs
+// ../../session-tree/node_modules/d3-dispatch/dist/d3-dispatch.mjs
 init_define_import_meta_env();
 var noop = { value: () => {
 } };
@@ -778,7 +778,7 @@ function set(type, name, callback) {
   return callback != null && type.push({ name, value: callback }), type;
 }
 
-// node_modules/d3-selection/dist/d3-selection.mjs
+// ../../session-tree/node_modules/d3-selection/dist/d3-selection.mjs
 init_define_import_meta_env();
 var xhtml = "http://www.w3.org/1999/xhtml", namespaces = {
   svg: "http://www.w3.org/2000/svg",
@@ -1396,7 +1396,7 @@ function pointer(event, node) {
   return [event.pageX, event.pageY];
 }
 
-// node_modules/d3-drag/dist/d3-drag.mjs
+// ../../session-tree/node_modules/d3-drag/dist/d3-drag.mjs
 var nonpassive = { passive: !1 }, nonpassivecapture = { capture: !0, passive: !1 };
 function nopropagation(event) {
   event.stopImmediatePropagation();
@@ -1558,13 +1558,13 @@ function drag() {
   }, drag2;
 }
 
-// node_modules/d3-zoom/dist/d3-zoom.mjs
+// ../../session-tree/node_modules/d3-zoom/dist/d3-zoom.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-interpolate/dist/d3-interpolate.mjs
+// ../../session-tree/node_modules/d3-interpolate/dist/d3-interpolate.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-color/dist/d3-color.mjs
+// ../../session-tree/node_modules/d3-color/dist/d3-color.mjs
 init_define_import_meta_env();
 function define(constructor, factory, prototype) {
   constructor.prototype = factory.prototype = prototype, prototype.constructor = constructor;
@@ -1969,7 +1969,7 @@ define(Cubehelix, cubehelix, extend(Color, {
   }
 }));
 
-// node_modules/d3-interpolate/dist/d3-interpolate.mjs
+// ../../session-tree/node_modules/d3-interpolate/dist/d3-interpolate.mjs
 function basis(t12, v0, v1, v2, v3) {
   var t22 = t12 * t12, t32 = t22 * t12;
   return ((1 - 3 * t12 + 3 * t22 - t32) * v0 + (4 - 6 * t22 + 3 * t32) * v1 + (1 + 3 * t12 + 3 * t22 - 3 * t32) * v2 + t32 * v3) / 6;
@@ -2226,10 +2226,10 @@ function cubehelix2(hue) {
 }
 var cubehelix_default = cubehelix2(hue$1), cubehelixLong = cubehelix2(nogamma);
 
-// node_modules/d3-transition/dist/d3-transition.mjs
+// ../../session-tree/node_modules/d3-transition/dist/d3-transition.mjs
 init_define_import_meta_env();
 
-// node_modules/d3-timer/dist/d3-timer.mjs
+// ../../session-tree/node_modules/d3-timer/dist/d3-timer.mjs
 init_define_import_meta_env();
 var frame = 0, timeout$1 = 0, interval$1 = 0, pokeDelay = 1e3, taskHead, taskTail, clockLast = 0, clockNow = 0, clockSkew = 0, clock = typeof performance == "object" && performance.now ? performance : Date, setFrame = typeof window == "object" && window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : function(f) {
   setTimeout(f, 17);
@@ -2294,7 +2294,7 @@ function timeout(callback, delay, time) {
   }, delay, time), t;
 }
 
-// node_modules/d3-ease/dist/d3-ease.mjs
+// ../../session-tree/node_modules/d3-ease/dist/d3-ease.mjs
 init_define_import_meta_env();
 function cubicInOut(t) {
   return ((t *= 2) <= 1 ? t * t * t : (t -= 2) * t * t + 2) / 2;
@@ -2372,7 +2372,7 @@ var overshoot = 1.70158, backIn = (function custom4(s) {
   }, elasticInOut2;
 })(amplitude, period);
 
-// node_modules/d3-transition/dist/d3-transition.mjs
+// ../../session-tree/node_modules/d3-transition/dist/d3-transition.mjs
 var emptyOn = dispatch("start", "end", "cancel", "interrupt"), emptyTween = [], CREATED = 0, SCHEDULED = 1, STARTING = 2, STARTED = 3, RUNNING = 4, ENDING = 5, ENDED = 6;
 function schedule(node, name, id2, index2, group, timing) {
   var schedules = node.__transition;
@@ -2892,7 +2892,7 @@ function selection_transition(name) {
 selection.prototype.interrupt = selection_interrupt;
 selection.prototype.transition = selection_transition;
 
-// node_modules/d3-zoom/dist/d3-zoom.mjs
+// ../../session-tree/node_modules/d3-zoom/dist/d3-zoom.mjs
 var constant4 = (x) => () => x;
 function ZoomEvent(type, {
   sourceEvent: sourceEvent2,
@@ -3179,7 +3179,7 @@ function zoom2() {
   }, zoom3;
 }
 
-// node_modules/@xyflow/system/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/system/dist/esm/index.js
 var errorMessages = {
   error001: (lib = "react") => `Seems like you have not used ${lib === "svelte" ? "SvelteFlowProvider" : "ReactFlowProvider"} as an ancestor. Help: https://${lib}flow.dev/error#001`,
   error002: () => "It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them.",
@@ -4880,12 +4880,12 @@ function XYResizer({ domNode, nodeId, getStoreItems, onChange, onEnd }) {
   };
 }
 
-// node_modules/zustand/esm/traditional.mjs
+// ../../session-tree/node_modules/zustand/esm/traditional.mjs
 init_define_import_meta_env();
 var import_with_selector = __toESM(require_with_selector(), 1);
 import ReactExports from "react";
 
-// node_modules/zustand/esm/vanilla.mjs
+// ../../session-tree/node_modules/zustand/esm/vanilla.mjs
 init_define_import_meta_env();
 var createStoreImpl = (createState) => {
   let state, listeners = /* @__PURE__ */ new Set(), setState = (partial, replace) => {
@@ -4902,7 +4902,7 @@ var createStoreImpl = (createState) => {
   return api;
 }, createStore = (createState) => createState ? createStoreImpl(createState) : createStoreImpl;
 
-// node_modules/zustand/esm/traditional.mjs
+// ../../session-tree/node_modules/zustand/esm/traditional.mjs
 var { useDebugValue } = ReactExports, { useSyncExternalStoreWithSelector } = import_with_selector.default, identity3 = (arg) => arg;
 function useStoreWithEqualityFn(api, selector2 = identity3, equalityFn) {
   let slice = useSyncExternalStoreWithSelector(
@@ -4919,7 +4919,7 @@ var createWithEqualityFnImpl = (createState, defaultEqualityFn) => {
   return Object.assign(useBoundStoreWithEqualityFn, api), useBoundStoreWithEqualityFn;
 }, createWithEqualityFn = (createState, defaultEqualityFn) => createState ? createWithEqualityFnImpl(createState, defaultEqualityFn) : createWithEqualityFnImpl;
 
-// node_modules/zustand/esm/shallow.mjs
+// ../../session-tree/node_modules/zustand/esm/shallow.mjs
 init_define_import_meta_env();
 function shallow$1(objA, objB) {
   if (Object.is(objA, objB))
@@ -4964,7 +4964,7 @@ function createPortal(children2, container, key) {
   };
 }
 
-// node_modules/@xyflow/react/dist/esm/index.js
+// ../../session-tree/node_modules/@xyflow/react/dist/esm/index.js
 var StoreContext = createContext(null), Provider$1 = StoreContext.Provider, zustandErrorMessage = errorMessages.error001("react");
 function useStore(selector2, equalityFn) {
   let store = useContext(StoreContext);
@@ -7362,7 +7362,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef7, useState as useState8 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef8, useState as useState8 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -7506,10 +7506,17 @@ function stateTransport(ctx) {
     patchSettings: (profile, patch) => ctx.rest(`/settings?${profileQuery(profile)}`, { method: "PATCH", body: patch, timeoutMs: 15e3 }),
     deleteLayout: (profile, style2, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style: style2, scope })}`, { method: "DELETE", timeoutMs: 15e3 }),
     putLayout: (profile, body) => ctx.rest(`/state/layout?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
+    putProjectBlocks: (profile, body) => ctx.rest(`/state/layout/project?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
     forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: "POST", body: { ids }, timeoutMs: 15e3 })
   };
 }
 var LAYOUT_CHANGED_EVENT = "plugin.session-tree.layout.changed";
+function fetchBackups(ctx, profile, style2) {
+  return ctx.rest(`/state/backups?${profileQuery(profile, { style: style2 })}`, { timeoutMs: 1e4 });
+}
+function fetchBackup(ctx, profile, id2) {
+  return ctx.rest(`/state/backups/${encodeURIComponent(id2)}?${profileQuery(profile)}`, { timeoutMs: 15e3 });
+}
 function fetchDetails(ctx, profile, ids, tzOffsetMinutes) {
   return ctx.rest("/sessions/details", {
     method: "POST",
@@ -7699,70 +7706,8 @@ function settleOverrides(rows, overrides) {
   return next;
 }
 
-// src/model/device-prefs.ts
+// src/model/camera.ts
 init_define_import_meta_env();
-var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = { styleOverride: null, showAll: !1, showArchived: !1, profile: null, panelOpen: {}, collapsedLanes: [] }, MAX_COLLAPSED_LANES = 200, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
-  storage;
-  listeners = /* @__PURE__ */ new Set();
-  toggles;
-  version = 0;
-  constructor(storage) {
-    this.storage = storage, this.toggles = sanitize(storage.get(DEVICE_KEY, null));
-  }
-  get() {
-    return this.toggles;
-  }
-  get changeVersion() {
-    return this.version;
-  }
-  set(patch) {
-    this.toggles = sanitize({ ...this.toggles, ...patch }), this.storage.set(DEVICE_KEY, this.toggles), this.version += 1;
-    for (let listener of [...this.listeners])
-      listener();
-  }
-  panelOpen(style2, fallback = !0) {
-    return this.toggles.panelOpen[style2] ?? fallback;
-  }
-  setPanelOpen(style2, open) {
-    this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
-  }
-  laneCollapsed(key) {
-    return this.toggles.collapsedLanes.includes(key);
-  }
-  /** Collapses or expands one Swimlanes lane on this device. */
-  toggleLane(key) {
-    let lanes = this.toggles.collapsedLanes;
-    this.set({ collapsedLanes: lanes.includes(key) ? lanes.filter((each) => each !== key) : [...lanes, key] });
-  }
-  viewport(key) {
-    let value2 = this.storage.get(`${VIEWPORT_KEY}:${key}`, null);
-    return value2 && [value2.x, value2.y, value2.zoom].every(Number.isFinite) && value2.zoom > 0 ? { x: value2.x, y: value2.y, zoom: value2.zoom } : void 0;
-  }
-  /** Not a listener event: the viewport is the canvas's own state, only remembered here. */
-  setViewport(key, viewport) {
-    [viewport.x, viewport.y, viewport.zoom].every(Number.isFinite) && this.storage.set(`${VIEWPORT_KEY}:${key}`, { x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-  }
-  subscribe(listener) {
-    return this.listeners.add(listener), () => this.listeners.delete(listener);
-  }
-};
-function sanitize(value2) {
-  let raw = value2 && typeof value2 == "object" ? value2 : {}, panelOpen = {};
-  if (raw.panelOpen && typeof raw.panelOpen == "object")
-    for (let [style2, open] of Object.entries(raw.panelOpen))
-      typeof open == "boolean" && (panelOpen[style2] = open);
-  let collapsedLanes = Array.isArray(raw.collapsedLanes) ? [...new Set(raw.collapsedLanes.filter((key) => typeof key == "string" && key.length > 0 && key.length <= 4096))].slice(
-    -MAX_COLLAPSED_LANES
-  ) : DEFAULTS.collapsedLanes;
-  return {
-    styleOverride: typeof raw.styleOverride == "string" ? raw.styleOverride : DEFAULTS.styleOverride,
-    showAll: typeof raw.showAll == "boolean" ? raw.showAll : DEFAULTS.showAll,
-    showArchived: typeof raw.showArchived == "boolean" ? raw.showArchived : DEFAULTS.showArchived,
-    profile: typeof raw.profile == "string" ? raw.profile : DEFAULTS.profile,
-    panelOpen,
-    collapsedLanes
-  };
-}
 
 // src/model/graph.ts
 init_define_import_meta_env();
@@ -8059,8 +8004,7 @@ function layoutFamily(model, family, spec) {
   return { positions, height: Math.max(0, cursorY - spec.rowGap) };
 }
 function groupOrder(model, families) {
-  let present = new Set(families.map((family) => family.projectId ?? NO_PROJECT_ID)), order = [], scope = model.options.scope;
-  scope !== ALL_PROJECTS && present.has(scope) && order.push(scope);
+  let present = new Set(families.map((family) => family.projectId ?? NO_PROJECT_ID)), order = [];
   for (let project of model.projects)
     !project.isNoProject && present.has(project.id) && !order.includes(project.id) && order.push(project.id);
   for (let id2 of [...present].sort())
@@ -8100,27 +8044,53 @@ function rectOf(id2, point, spec) {
 function overlaps(a, b) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
+function anyInView(rects, viewport, width, height) {
+  let view = { x: -viewport.x / viewport.zoom, y: -viewport.y / viewport.zoom, width: width / viewport.zoom, height: height / viewport.zoom };
+  for (let rect of rects)
+    if (overlaps(rect, view))
+      return !0;
+  return !1;
+}
 var CONTINUATION = "";
 function labelGroup(id2) {
   let cut = id2.indexOf(CONTINUATION);
   return cut === -1 ? id2 : id2.slice(0, cut);
 }
+function drawnLabels(positions, shown) {
+  let labels = [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)), tops = labels.map(([, point]) => point.y), blocks = [...shown].flatMap(([id2, key]) => {
+    let point = positions.get(id2);
+    return point ? [{ key, y: point.y }] : [];
+  });
+  return labels.filter(([id2, point]) => {
+    let key = labelGroup(id2), bottom = Math.min(1 / 0, ...tops.filter((y) => y > point.y));
+    return blocks.some((block) => block.key === key && block.y >= point.y && block.y < bottom);
+  }).map(([id2]) => {
+    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
+    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
+  });
+}
+function blockGroups(families) {
+  return new Map(families.flatMap((family) => family.nodeIds.map((id2) => [id2, groupKey(family.projectId)])));
+}
 function mergeLayout(previous, model, spec) {
   if (!previous || previous.size === 0)
     return layoutGraph(model, spec);
-  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels2) => {
-    let next = labels2.find(([, point]) => point.y > labelY);
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels) => {
+    let next = labels.find(([, point]) => point.y > labelY);
     return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : 1 / 0 };
   }, bandOf = (key, anchorY) => {
-    let labels2 = labelEntries(), own = labels2.filter(([id2]) => labelGroup(id2) === key);
+    let labels = labelEntries(), own = labels.filter(([id2]) => labelGroup(id2) === key);
     if (own.length === 0) {
       if (anchorY === void 0)
         return;
-      let above = labels2.filter(([, point]) => point.y <= anchorY).pop();
-      return above ? bandUnder(above[1].y, labels2) : { top: -1 / 0, bottom: labels2[0] ? labels2[0][1].y - spec.rowGap : 1 / 0 };
+      let above = labels.filter(([, point]) => point.y <= anchorY).pop();
+      return above ? bandUnder(above[1].y, labels) : { top: -1 / 0, bottom: labels[0] ? labels[0][1].y - spec.rowGap : 1 / 0 };
     }
     let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0];
-    return bandUnder(pick2[1].y, labels2);
+    return bandUnder(pick2[1].y, labels);
+  }, bandsOf = (key) => {
+    let labels = labelEntries();
+    return labels.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => bandUnder(point.y, labels));
   }, findSpot = (shape, height, band, x0, rowsFor) => {
     let all = occupied(), lowest = band.bottom === 1 / 0 ? Math.max(band.top, bottomOf(all)) + step + height : band.bottom, top = band.top === -1 / 0 ? Math.min(0, ...all.map((rect) => rect.y)) : band.top, maxTop = lowest - height;
     if (maxTop < top)
@@ -8181,18 +8151,15 @@ function mergeLayout(previous, model, spec) {
   }
   let unlabelled = [];
   for (let family of newFamilies) {
-    let key = groupKey(family.projectId), band = bandOf(key);
-    if (!band) {
+    let key = groupKey(family.projectId), bands = bandsOf(key);
+    if (bands.length === 0) {
       unlabelled.push(family);
       continue;
     }
-    let local2 = family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }, ids = [...local2.positions.keys()], spot = findSpot(
-      ids.map((id2) => local2.positions.get(id2)),
-      local2.height,
-      band,
-      0,
-      rowsDown
-    );
+    let local2 = family.nodeIds.length > 1 ? layoutFamily(model, family, spec) : { positions: /* @__PURE__ */ new Map([[family.nodeIds[0], { x: 0, y: 0 }]]), height: spec.nodeHeight }, ids = [...local2.positions.keys()], shape = ids.map((id2) => local2.positions.get(id2)), spot;
+    for (let band of bands)
+      if (spot = findSpot(shape, local2.height, band, 0, rowsDown), spot)
+        break;
     if (spot)
       for (let id2 of ids) {
         let point = local2.positions.get(id2);
@@ -8216,11 +8183,757 @@ function mergeLayout(previous, model, spec) {
       [...positions].filter(([id2]) => shown.has(id2) || id2.startsWith(GROUP_PREFIX)).some(([id2, point]) => overlaps(rectOf(id2, point, spec), label)) || positions.set(key, spot);
     }
   }
-  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => {
-    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
-    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) };
+}
+
+// src/model/camera.ts
+function scopeFrameIds(model, spec, scope) {
+  if (scope === ALL_PROJECTS)
+    return;
+  let ids = laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1);
+  return ids.length > 0 ? ids : void 0;
+}
+function viewOnArrival(saved, ids, positions, size, pane) {
+  if (!saved)
+    return "fit";
+  if (pane.width <= 0 || pane.height <= 0)
+    return saved;
+  let rects = ids.flatMap((id2) => {
+    let point = positions.get(id2);
+    return point ? [{ x: point.x, y: point.y, ...size }] : [];
   });
-  return { positions, labels };
+  return anyInView(rects, saved, pane.width, pane.height) ? saved : "fit";
+}
+
+// src/model/device-prefs.ts
+init_define_import_meta_env();
+var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v2", LEGACY_VIEWPORT_KEY = "viewport.v1", DEFAULTS = {
+  styleOverride: null,
+  showAll: !1,
+  showArchived: !1,
+  profile: null,
+  scopes: {},
+  panelOpen: {},
+  sectionsOpen: {},
+  collapsedLanes: []
+}, MAX_COLLAPSED_LANES = 200, MAX_SCOPES = 100, ALL_SCOPE = "all", MAX_KEY = 4096, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
+  storage;
+  listeners = /* @__PURE__ */ new Set();
+  /** Keys whose `viewport.v1` entry was already looked at (and removed) on this page. */
+  legacyForgotten = /* @__PURE__ */ new Set();
+  toggles;
+  version = 0;
+  constructor(storage) {
+    this.storage = storage, this.toggles = sanitize(storage.get(DEVICE_KEY, null));
+  }
+  get() {
+    return this.toggles;
+  }
+  get changeVersion() {
+    return this.version;
+  }
+  set(patch) {
+    this.toggles = sanitize({ ...this.toggles, ...patch }), this.storage.set(DEVICE_KEY, this.toggles), this.version += 1;
+    for (let listener of [...this.listeners])
+      listener();
+  }
+  /** The project scope last chosen for one profile filter value; `all` when none. */
+  scope(profile) {
+    return this.toggles.scopes[profile] ?? ALL_SCOPE;
+  }
+  setScope(profile, scope) {
+    if (this.scope(profile) === scope)
+      return;
+    let others = Object.fromEntries(Object.entries(this.toggles.scopes).filter(([key]) => key !== profile));
+    this.set({ scopes: scope === ALL_SCOPE ? others : { ...others, [profile]: scope } });
+  }
+  panelOpen(style2, fallback = !0) {
+    return this.toggles.panelOpen[style2] ?? fallback;
+  }
+  setPanelOpen(style2, open) {
+    this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
+  }
+  sectionOpen(style2, section, fallback = !0) {
+    return this.toggles.sectionsOpen[`${style2}:${section}`] ?? fallback;
+  }
+  setSectionOpen(style2, section, open) {
+    this.set({ sectionsOpen: { ...this.toggles.sectionsOpen, [`${style2}:${section}`]: open } });
+  }
+  laneCollapsed(key) {
+    return this.toggles.collapsedLanes.includes(key);
+  }
+  /** Collapses or expands one Swimlanes lane on this device. */
+  toggleLane(key) {
+    let lanes = this.toggles.collapsedLanes;
+    this.set({ collapsedLanes: lanes.includes(key) ? lanes.filter((each) => each !== key) : [...lanes, key] });
+  }
+  viewport(key) {
+    this.forgetLegacyViewports([key]);
+    let value2 = this.storage.get(`${VIEWPORT_KEY}:${key}`, null);
+    return value2 && [value2.x, value2.y, value2.zoom].every(Number.isFinite) && value2.zoom > 0 ? { x: value2.x, y: value2.y, zoom: value2.zoom } : void 0;
+  }
+  /**
+   * Removes the `viewport.v1` entries of these keys (`viewportKey(style, profile, scope)`), once
+   * per key per page: the storage cannot list its keys, so the page names the ones it knows.
+   */
+  forgetLegacyViewports(keys) {
+    for (let key of keys)
+      this.legacyForgotten.has(key) || (this.legacyForgotten.add(key), this.storage.get(`${LEGACY_VIEWPORT_KEY}:${key}`, null) !== null && (this.storage.remove ? this.storage.remove(`${LEGACY_VIEWPORT_KEY}:${key}`) : this.storage.set(`${LEGACY_VIEWPORT_KEY}:${key}`, null)));
+  }
+  /** Not a listener event: the viewport is the canvas's own state, only remembered here. */
+  setViewport(key, viewport) {
+    [viewport.x, viewport.y, viewport.zoom].every(Number.isFinite) && this.storage.set(`${VIEWPORT_KEY}:${key}`, { x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+  }
+  subscribe(listener) {
+    return this.listeners.add(listener), () => this.listeners.delete(listener);
+  }
+};
+function booleans(value2) {
+  let out = {};
+  if (value2 && typeof value2 == "object" && !Array.isArray(value2))
+    for (let [key, open] of Object.entries(value2))
+      typeof open == "boolean" && key.length <= MAX_KEY && (out[key] = open);
+  return out;
+}
+function scopes(value2) {
+  if (!value2 || typeof value2 != "object" || Array.isArray(value2))
+    return {};
+  let entries = Object.entries(value2).filter(
+    (entry) => entry[0].length > 0 && entry[0].length <= MAX_KEY && typeof entry[1] == "string" && entry[1].length > 0 && entry[1].length <= MAX_KEY && entry[1] !== ALL_SCOPE
+  );
+  return Object.fromEntries(entries.slice(-MAX_SCOPES));
+}
+function sanitize(value2) {
+  let raw = value2 && typeof value2 == "object" ? value2 : {}, collapsedLanes = Array.isArray(raw.collapsedLanes) ? [...new Set(raw.collapsedLanes.filter((key) => typeof key == "string" && key.length > 0 && key.length <= MAX_KEY))].slice(
+    -MAX_COLLAPSED_LANES
+  ) : DEFAULTS.collapsedLanes;
+  return {
+    styleOverride: typeof raw.styleOverride == "string" ? raw.styleOverride : DEFAULTS.styleOverride,
+    showAll: typeof raw.showAll == "boolean" ? raw.showAll : DEFAULTS.showAll,
+    showArchived: typeof raw.showArchived == "boolean" ? raw.showArchived : DEFAULTS.showArchived,
+    profile: typeof raw.profile == "string" ? raw.profile : DEFAULTS.profile,
+    scopes: scopes(raw.scopes),
+    panelOpen: booleans(raw.panelOpen),
+    sectionsOpen: booleans(raw.sectionsOpen),
+    collapsedLanes
+  };
+}
+
+// src/model/layout-sync.ts
+init_define_import_meta_env();
+var layoutRef = (profile, style2) => ({ profile, style: style2, scope: "all" });
+var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
+function refusalKind(error) {
+  let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
+  if (!match)
+    return null;
+  let status = Number(match[1]);
+  return status < 400 || status > 499 || status === 401 || status === 403 || status === 408 || status === 429 ? null : status === 409 && match[2].includes(NEWER_SCHEMA) ? NEWER_SCHEMA : match[1];
+}
+function randomId() {
+  return globalThis.crypto?.randomUUID?.() ?? `w${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+}
+var LayoutSync = class {
+  profiles = /* @__PURE__ */ new Map();
+  pending = [];
+  /** Changes made while the store is read-only: shown here, never sent, never persisted. */
+  localOnly = [];
+  listeners = /* @__PURE__ */ new Set();
+  replaceRefusedListeners = /* @__PURE__ */ new Set();
+  watched = /* @__PURE__ */ new Map();
+  dragging = /* @__PURE__ */ new Set();
+  cancelFlush;
+  flushing = !1;
+  failures = 0;
+  /** Bumps when an acknowledged write changes the snapshot: a fetch begun before it is stale. */
+  writeSeq = 0;
+  disposed = !1;
+  version = 0;
+  readOnly = !1;
+  /** `layout + key` of auto-layout placements the backend refused: never queued again. */
+  refusedPlacements = /* @__PURE__ */ new Set();
+  notified = /* @__PURE__ */ new Set();
+  /** The ops in this window's slot as last written (to tell an adoption by another window). */
+  persistedOps = /* @__PURE__ */ new Set();
+  ownsSlot = !1;
+  lastDropAt = 0;
+  transport;
+  storage;
+  timers;
+  options;
+  windowId;
+  now;
+  constructor(transport, storage, timers, options = {}) {
+    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.windowId = options.windowId ?? randomId(), this.now = options.now ?? Date.now, this.adoptOrphans() && this.schedule(0);
+  }
+  // --- subscription -------------------------------------------------------------------------
+  /** Called after every change a reader can see (positions, settings, status). */
+  subscribe(listener) {
+    return this.listeners.add(listener), () => this.listeners.delete(listener);
+  }
+  /**
+   * Called every time a Re-arrange or a restore from Layout history is refused and dropped (not
+   * only the first time, unlike `onRefused`); never for an Undo `PUT`, nor on the read-only
+   * `newer_schema` path, which keeps the op (review t_b632e3ac N2).
+   */
+  onReplaceRefused(listener) {
+    return this.replaceRefusedListeners.add(listener), () => this.replaceRefusedListeners.delete(listener);
+  }
+  /** Bumps on every visible change: a cheap memo key for React. */
+  get changeVersion() {
+    return this.version;
+  }
+  emit() {
+    this.version += 1;
+    for (let listener of [...this.listeners])
+      listener();
+  }
+  // --- reads --------------------------------------------------------------------------------
+  profile(profile) {
+    let state = this.profiles.get(profile);
+    if (!state) {
+      let cached = this.storage.get(`${CACHE_KEY}:${profile}`, null);
+      state = { server: isSnapshot(cached) ? cached : null, settled: !1, status: "loading" }, this.profiles.set(profile, state);
+    }
+    return state;
+  }
+  status(profile) {
+    return this.profile(profile).status;
+  }
+  /** The store revision of this window's snapshot of `profile` (`null`: none yet). */
+  revision(profile) {
+    return this.profile(profile).server?.rev ?? null;
+  }
+  /** Whether the page may lay out: a fetch answered or failed (then the cache, or nothing). */
+  settled(profile) {
+    return this.profile(profile).settled;
+  }
+  /** Whether this profile's layouts come from the cache because the backend is unreachable. */
+  offline(profile) {
+    return this.profile(profile).status === "offline";
+  }
+  /** The store was written by a newer Session Tree: nothing is saved from this page (B1). */
+  get storeReadOnly() {
+    return this.readOnly;
+  }
+  /** This window's ops a reader sees: the unsent queue, then the read-only local changes. */
+  overlay() {
+    return this.localOnly.length > 0 ? [...this.pending, ...this.localOnly] : this.pending;
+  }
+  /** The synced settings as this window has them (its own unsent changes included). */
+  settings(profile) {
+    let base = { ...this.profile(profile).server?.settings ?? this.anySettings() };
+    for (let op of this.overlay())
+      op.kind === "settings" && Object.assign(base, op.patch);
+    return base;
+  }
+  /** Settings are global: any profile's snapshot holds them. */
+  anySettings() {
+    let best = null;
+    for (let state of this.profiles.values())
+      state.server && (!best || state.server.rev > best.rev) && (best = state.server);
+    return best?.settings ?? EMPTY_SETTINGS;
+  }
+  /** The positions of one layout, by layout key: the server's, this window's unsent changes on top. */
+  positions(ref) {
+    let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+    for (let op of this.overlay())
+      (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
+    return out;
+  }
+  // --- local changes ------------------------------------------------------------------------
+  /**
+   * Lay out against the stored positions and keep what the layout placed. Called while the page
+   * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
+   * style that saves nothing, Swimlanes). `keys` maps the layout's block ids to layout keys;
+   * `compute` and the answer speak block ids.
+   */
+  place(ref, compute, { save = !0, keys = IDENTITY_KEYS } = {}) {
+    let stored = this.positions(ref), previous = keys === IDENTITY_KEYS ? stored : new Map([...stored].map(([key, point]) => [keys.fromStore(key), point])), result = compute(previous.size > 0 ? previous : void 0);
+    if (!save)
+      return result;
+    let placed = [];
+    for (let [id2, point] of result.positions) {
+      let key = keys.toStore(id2);
+      !stored.has(key) && !this.refusedPlacements.has(entryKey(ref, key)) && placed.push([key, { x: point.x, y: point.y }]);
+    }
+    return placed.length > 0 && this.queue({ kind: "upsert", ref, mode: "if_absent", entries: placed }, !1), result;
+  }
+  /** A drop: these blocks (by layout key) now sit here. */
+  drop(ref, moves) {
+    if (moves.size === 0)
+      return;
+    let at = Math.max(this.now(), this.lastDropAt + 1);
+    this.lastDropAt = at, this.readOnly || this.recordDrops(ref, [...moves.keys()], at), this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), at }, !0);
+  }
+  /** Re-arrange: forget this layout. Answers what was shown (by layout key), for Undo. */
+  rearrange(ref) {
+    let previous = this.positions(ref);
+    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: null }, !0), previous;
+  }
+  /** Forgets the refused auto-layout placements of one layout (a Re-arrange, a stored PUT). */
+  clearRefused(ref) {
+    let prefix = `${refKey(ref)}\0`;
+    for (let key of [...this.refusedPlacements])
+      key.startsWith(prefix) && this.refusedPlacements.delete(key);
+  }
+  /** Undo of a Re-arrange: the layout becomes `previous` again. */
+  restore(ref, previous) {
+    this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
+  }
+  /**
+   * A restore from Layout history: the layout becomes a backup's positions (by layout key); the
+   * server keeps the layout it replaces as a backup first. Answers what was shown, for Undo.
+   */
+  restoreBackup(ref, positions) {
+    let previous = this.positions(ref);
+    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: [...positions].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), backup: !0 }, !0), previous;
+  }
+  /**
+   * Card 10 (A5): a Re-arrange in a project scope. `keys` are every layout key of that project
+   * (its blocks, its group labels); `spots` are where a fresh full auto-layout (All order) puts
+   * them. Those that have a spot go there; those it does not place are forgotten; every other
+   * block stays. One op, applied per block on the server, which keeps the whole style layout in
+   * Layout history first. Answers what Undo needs.
+   */
+  rearrangeProject(ref, project, keys, spots) {
+    let shown = this.positions(ref), touched = [...new Set(keys)], previous = new Map(touched.filter((key) => shown.has(key)).map((key) => [key, shown.get(key)])), entries = touched.filter((key) => spots.has(key)).map((key) => [key, { x: spots.get(key).x, y: spots.get(key).y }]), remove2 = touched.filter((key) => !spots.has(key) && shown.has(key));
+    return this.clearRefused(ref), this.queue({ kind: "project", ref, project, entries, remove: remove2, backup: !0 }, !0), { project, previous: new Map([...previous].map(([key, point]) => [key, { x: point.x, y: point.y }])), touched };
+  }
+  /** Card 10 (A6): Undo of a scoped Re-arrange: exactly that project's previous entries, no backup. */
+  restoreProject(ref, undo) {
+    let entries = [...undo.previous].map(([key, point]) => [key, { x: point.x, y: point.y }]), remove2 = undo.touched.filter((key) => !undo.previous.has(key));
+    this.queue({ kind: "project", ref, project: undo.project, entries, remove: remove2, backup: !1 }, !0);
+  }
+  /**
+   * A block moved to another project: forget its stored spot (by layout key) in every layout of
+   * the profile (here and on the server), so each layout places it anew in its new band.
+   */
+  forget(profile, key) {
+    this.queue({ kind: "forget", profile, ids: [key] }, !0);
+  }
+  setSettings(profile, patch) {
+    this.queue({ kind: "settings", profile, patch }, !0);
+  }
+  /** While blocks are dragged nothing is sent, and a refresh keeps their spots. */
+  setDragging(ids) {
+    let was = this.dragging.size > 0;
+    this.dragging = new Set(ids ?? []), was && this.dragging.size === 0 && this.pending.length > 0 && this.schedule(this.options.debounceMs ?? 300);
+  }
+  get isDragging() {
+    return this.dragging.size > 0;
+  }
+  queue(op, notify) {
+    isRetiredOp(op) || (this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit());
+  }
+  // --- the device's pending queue (NB1) ------------------------------------------------------
+  readSlots() {
+    let raw = this.storage.get(PENDING_KEY, null), slots = {};
+    if (raw && typeof raw == "object" && raw.slots && typeof raw.slots == "object")
+      for (let [owner, value2] of Object.entries(raw.slots)) {
+        let slot = value2;
+        slot && typeof slot.beat == "number" && Array.isArray(slot.ops) && (slots[owner] = { beat: slot.beat, ops: slot.ops.filter(isOp) });
+      }
+    return slots;
+  }
+  writeSlots(slots) {
+    this.storage.set(PENDING_KEY, { slots });
+  }
+  /**
+   * Another window adopted this window's slot (it looked orphaned, e.g. a long-hidden tab): it
+   * sends those ops, so this window keeps only what it queued since.
+   */
+  reconcileSlot(slots) {
+    this.ownsSlot && !(this.windowId in slots) && (this.pending = this.pending.filter((op) => !this.persistedOps.has(op)), this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set());
+  }
+  /** Rewrites this window's slot only (and refreshes its heartbeat). */
+  persistPending(beat = this.now()) {
+    let slots = this.readSlots();
+    this.reconcileSlot(slots), this.pending.length > 0 ? (slots[this.windowId] = { beat, ops: this.pending }, this.ownsSlot = !0, this.persistedOps = new Set(this.pending)) : (delete slots[this.windowId], this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set()), this.writeSlots(slots);
+  }
+  /** Takes over the slots of closed windows (and the card-4 shared queue). True: adopted some. */
+  adoptOrphans() {
+    let slots = this.readSlots(), now2 = this.now(), adopted = [], legacy = this.storage.get(LEGACY_PENDING_KEY, null);
+    Array.isArray(legacy) && (adopted.push(...legacy.filter(isOp)), this.storage.set(LEGACY_PENDING_KEY, null));
+    for (let [owner, slot] of Object.entries(slots))
+      owner !== this.windowId && now2 - slot.beat > ORPHAN_MS && (adopted.push(...slot.ops), delete slots[owner]);
+    if (adopted.length === 0)
+      return !1;
+    this.writeSlots(slots);
+    let kept = adopted.filter((op) => !isRetiredOp(op));
+    return kept.length === 0 ? !1 : (this.pending = [...kept, ...this.pending], this.persistPending(), !0);
+  }
+  recordDrops(ref, keys, at) {
+    let record = { ...this.storage.get(DROPS_KEY, {}) };
+    for (let key of keys) {
+      let name = entryKey(ref, key);
+      record[name] = Math.max(typeof record[name] == "number" ? record[name] : 0, at);
+    }
+    let kept = Object.entries(record).filter(([, when]) => typeof when == "number" && at - when < DROP_RECORD_MS).sort((a, b) => b[1] - a[1]).slice(0, DROP_RECORD_MAX);
+    this.storage.set(DROPS_KEY, Object.fromEntries(kept));
+  }
+  /**
+   * Discards queued drops that a newer drop of the same block on this device (any window)
+   * supersedes, before anything is sent: last write wins per block on the server, so an older
+   * drop sent late would overwrite the newer one.
+   */
+  supersede() {
+    let record = this.storage.get(DROPS_KEY, {}), changed = !1;
+    this.pending = this.pending.flatMap((op) => {
+      if (op.kind !== "upsert" || op.mode !== "set" || typeof op.at != "number")
+        return [op];
+      let at = op.at, entries = op.entries.filter(([key]) => !((record[entryKey(op.ref, key)] ?? 0) > at));
+      return entries.length === op.entries.length ? [op] : (changed = !0, entries.length > 0 ? [{ ...op, entries }] : []);
+    }), changed && (this.persistPending(), this.emit());
+  }
+  /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
+  schedule(ms) {
+    this.disposed || this.readOnly || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
+      this.cancelFlush = void 0, this.flush();
+    }, ms));
+  }
+  // --- sending ------------------------------------------------------------------------------
+  /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
+  async flush() {
+    if (!(this.flushing || this.disposed || this.readOnly) && !(this.dragging.size > 0)) {
+      this.flushing = !0;
+      try {
+        for (this.pending.length > 0 && this.persistPending(); this.pending.length > 0 && this.dragging.size === 0 && !this.disposed && !this.readOnly && (this.supersede(), this.pending.length !== 0); ) {
+          let [op, count] = this.nextBatch(), batch = this.pending.slice(0, count);
+          try {
+            await this.send(op), this.ack(op), this.dequeue(batch), this.failures = 0, this.markOnline(opProfile(op)), op.kind === "replace" && this.clearRefused(op.ref);
+          } catch (error) {
+            let kind = refusalKind(error);
+            if (kind === NEWER_SCHEMA) {
+              this.enterReadOnly(error);
+              return;
+            }
+            if (kind !== null) {
+              if (this.dequeue(batch), op.kind === "upsert" && op.mode === "if_absent")
+                for (let [key] of op.entries)
+                  this.refusedPlacements.add(entryKey(op.ref, key));
+              this.notifyOnce(kind, error), this.emit(), this.replaceRefused(op);
+              continue;
+            }
+            this.markOffline(opProfile(op)), this.retry();
+            return;
+          }
+        }
+      } finally {
+        this.flushing = !1;
+      }
+      this.pending.length > 0 && this.dragging.size === 0 && this.schedule(0);
+    }
+  }
+  /** Removes these ops (sent or refused); gone already if another window took them over. */
+  dequeue(batch) {
+    let sent = new Set(batch);
+    this.pending = this.pending.filter((op) => !sent.has(op)), this.persistPending();
+  }
+  /** A dropped Re-arrange or restore from Layout history: tells the page (review t_b632e3ac N2). */
+  replaceRefused(op) {
+    if (op.kind === "project") {
+      if (op.backup)
+        for (let listener of [...this.replaceRefusedListeners])
+          listener({ ref: { profile: op.ref.profile, style: op.ref.style, scope: op.ref.scope }, action: "rearrange", project: op.project });
+      return;
+    }
+    if (op.kind !== "replace")
+      return;
+    let action = op.entries === null ? "rearrange" : op.backup === !0 ? "restore" : null;
+    if (action !== null)
+      for (let listener of [...this.replaceRefusedListeners])
+        listener({ ref: { profile: op.ref.profile, style: op.ref.style, scope: op.ref.scope }, action });
+  }
+  notifyOnce(kind, error) {
+    this.notified.has(kind) || (this.notified.add(kind), this.options.onRefused?.(error, kind));
+  }
+  /** B1: a newer Session Tree wrote the store. Send nothing more; keep changes local. */
+  enterReadOnly(error) {
+    this.readOnly || (this.readOnly = !0, this.cancelFlush?.(), this.cancelFlush = void 0, this.notifyOnce(NEWER_SCHEMA, error ?? new Error(`409: ${NEWER_SCHEMA}`)), this.emit());
+  }
+  leaveReadOnly() {
+    this.readOnly && (this.readOnly = !1, this.localOnly = [], this.failures = 0, this.pending.length > 0 && this.schedule(0));
+  }
+  /** The first pending op merged with the consecutive upserts of the same layout and mode. */
+  nextBatch() {
+    let first = this.pending[0];
+    if (first.kind !== "upsert")
+      return [first, 1];
+    let merged = new Map(first.entries), count = 1;
+    for (; count < this.pending.length; ) {
+      let next = this.pending[count];
+      if (next.kind !== "upsert" || next.mode !== first.mode || !sameRef(next.ref, first.ref) || merged.size + next.entries.length > BATCH_LIMIT)
+        break;
+      for (let [id2, point] of next.entries)
+        (first.mode === "set" || !merged.has(id2)) && merged.set(id2, point);
+      count += 1;
+    }
+    return [{ ...first, entries: [...merged] }, count];
+  }
+  async send(op) {
+    if (op.kind === "settings")
+      await this.transport.patchSettings(op.profile, op.patch);
+    else if (op.kind === "forget")
+      await this.transport.forgetBlocks(op.profile, op.ids);
+    else if (op.kind === "upsert")
+      for (let start2 = 0; start2 < op.entries.length; start2 += BATCH_LIMIT)
+        await this.transport.patchPositions(op.ref.profile, {
+          style: op.ref.style,
+          scope: op.ref.scope,
+          mode: op.mode,
+          positions: op.entries.slice(start2, start2 + BATCH_LIMIT).map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
+        });
+    else op.kind === "project" ? await this.transport.putProjectBlocks(op.ref.profile, {
+      style: op.ref.style,
+      scope: op.ref.scope,
+      project: op.project,
+      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
+      remove: op.remove,
+      backup: op.backup
+    }) : op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
+      style: op.ref.style,
+      scope: op.ref.scope,
+      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
+      ...op.backup ? { backup: !0 } : {}
+    });
+  }
+  /** The server applied `op`: fold it into the snapshot this window keeps (the next fetch corrects it). */
+  ack(op) {
+    let now2 = Date.now() / 1e3;
+    if (this.writeSeq += 1, op.kind === "settings") {
+      for (let state2 of this.profiles.values())
+        state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
+      return;
+    }
+    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes2]) => Object.keys(scopes2).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
+    for (let ref of refs) {
+      let scopes2 = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes2[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
+      applyOp(current, op), current.size === 0 ? delete scopes2[ref.scope] : scopes2[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes2).length === 0 && delete server.layouts[ref.style];
+    }
+    state.server = server, this.cache(opProfile(op));
+  }
+  retry() {
+    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+    this.failures += 1, this.schedule(ms);
+  }
+  markOnline(profile) {
+    let state = this.profile(profile);
+    state.status !== "online" && (state.status = "online", state.settled = !0, this.emit());
+  }
+  markOffline(profile) {
+    let state = this.profile(profile);
+    (state.status !== "offline" || !state.settled) && (state.status = "offline", state.settled = !0, this.emit());
+  }
+  cache(profile) {
+    let server = this.profile(profile).server;
+    server && !server.read_only && this.storage.set(`${CACHE_KEY}:${profile}`, server);
+  }
+  // --- fetching -----------------------------------------------------------------------------
+  /** Fetch (or re-check) one profile's state. A failure leaves the cache in place, offline. */
+  async refresh(profile) {
+    if (this.disposed)
+      return;
+    let state = this.profile(profile), server = state.server, known = state.settled && state.status === "online" && server?.epoch ? { rev: server.rev, epoch: server.epoch } : void 0, seq = this.writeSeq;
+    try {
+      let answer = await this.transport.getState(profile, known);
+      if (seq !== this.writeSeq) {
+        this.refresh(profile);
+        return;
+      }
+      let full = !("unchanged" in answer);
+      full && (state.server = answer, this.cache(profile));
+      let wasOnline = state.status === "online", changed = full || !wasOnline || !state.settled;
+      state.status = "online", state.settled = !0, full && answer.read_only ? this.enterReadOnly(null) : full && this.leaveReadOnly(), !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
+    } catch {
+      this.markOffline(profile), this.watched.has(profile) && this.retryRefresh(profile);
+    }
+  }
+  refreshTimers = /* @__PURE__ */ new Map();
+  retryRefresh(profile) {
+    if (this.refreshTimers.has(profile) || this.disposed)
+      return;
+    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+    this.refreshTimers.set(
+      profile,
+      this.timers.setTimeout(() => {
+        this.refreshTimers.delete(profile), this.refresh(profile);
+      }, ms)
+    );
+  }
+  /** A page or settings view shows `profile`: load it now, and poll / follow pushes for it. */
+  watch(profile) {
+    return this.watched.set(profile, (this.watched.get(profile) ?? 0) + 1), (!this.profile(profile).settled || this.profile(profile).status !== "online") && this.refresh(profile), () => {
+      let count = (this.watched.get(profile) ?? 1) - 1;
+      count <= 0 ? this.watched.delete(profile) : this.watched.set(profile, count);
+    };
+  }
+  /** The poll: every watched profile, cheaply (`since_rev` + `epoch`); closed windows' queues. */
+  poll() {
+    this.adoptOrphans() ? this.schedule(0) : this.pending.length > 0 && !this.flushing && this.persistPending();
+    for (let profile of this.watched.keys())
+      this.refresh(profile);
+  }
+  /** A push from the backend: refresh what it touched, unless this window already has it. */
+  onRemoteChange(payload) {
+    let { rev, epoch, profile } = payload ?? {};
+    for (let name of this.watched.keys()) {
+      let server = this.profile(name).server, sameFile = typeof epoch == "string" && server?.epoch === epoch;
+      typeof rev == "number" && sameFile && rev <= (server?.rev ?? -1) || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
+    }
+  }
+  /**
+   * The page is going away (`pagehide`: a reload, a closed tab): mark this window's slot as
+   * orphaned, so the next window (the reloaded page) adopts the queue at once instead of after
+   * `ORPHAN_MS`. If the page comes back (the back/forward cache), its next write reclaims the slot
+   * unless another window adopted it meanwhile.
+   */
+  release() {
+    this.pending.length > 0 && this.persistPending(0);
+  }
+  dispose() {
+    this.disposed = !0, this.cancelFlush?.(), this.release();
+    for (let cancel of this.refreshTimers.values())
+      cancel();
+    this.refreshTimers.clear(), this.listeners.clear(), this.replaceRefusedListeners.clear();
+  }
+  /** Test and debug view: what is still waiting to be sent. */
+  get pendingCount() {
+    return this.pending.length;
+  }
+};
+function applyOp(target, op) {
+  if (op.kind === "forget") {
+    for (let id2 of op.ids)
+      target.delete(id2);
+    return;
+  }
+  if (op.kind === "replace") {
+    target.clear();
+    for (let [id2, point] of op.entries ?? [])
+      target.set(id2, point);
+    return;
+  }
+  if (op.kind === "project") {
+    for (let id2 of op.remove)
+      target.delete(id2);
+    for (let [id2, point] of op.entries)
+      target.set(id2, point);
+    return;
+  }
+  for (let [id2, point] of op.entries)
+    (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
+}
+function opProfile(op) {
+  return op.kind === "settings" || op.kind === "forget" ? op.profile : op.ref.profile;
+}
+function isSnapshot(value2) {
+  let snapshot = value2;
+  return !!(snapshot && typeof snapshot.rev == "number" && snapshot.settings && typeof snapshot.layouts == "object" && snapshot.layouts);
+}
+function isOp(value2) {
+  let op = value2;
+  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : op.kind === "project" ? !!op.ref && typeof op.project == "string" && Array.isArray(op.entries) && Array.isArray(op.remove) && op.remove.every((id2) => typeof id2 == "string") && typeof op.backup == "boolean" : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
+}
+function isRetiredOp(op) {
+  return op.kind !== "settings" && op.kind !== "forget" && op.ref.scope !== "all";
+}
+
+// src/model/layout-undo.ts
+init_define_import_meta_env();
+function blockProjects(model) {
+  return new Map(model.nodes.map((node) => [node.layoutKey, node.projectId ?? NO_PROJECT_ID]));
+}
+var movedSince = (key, then, now2) => then.has(key) && now2.has(key) && then.get(key) !== now2.get(key);
+function undoPositions(previous, then, now2) {
+  return new Map([...previous].filter(([key]) => !movedSince(key, then, now2)).map(([key, point]) => [key, { x: point.x, y: point.y }]));
+}
+function undoProject(undo, then, now2) {
+  return { project: undo.project, previous: undoPositions(undo.previous, then, now2), touched: undo.touched.filter((key) => !movedSince(key, then, now2)) };
+}
+
+// src/model/project-rearrange.ts
+init_define_import_meta_env();
+var scopeGroupKey = (scope) => groupKey(scope === NO_PROJECT_ID ? void 0 : scope);
+function projectReset(model, scope, fresh, stored, keys) {
+  let group = scopeGroupKey(scope), ids = model.nodes.filter((node) => !node.outOfScope && (node.kind === "session" || node.kind === "standin")).map((node) => node.id), inGroup = (key) => key.startsWith(GROUP_PREFIX) && labelGroup(key) === group, out = new Set(ids.map((id2) => keys.toStore(id2)));
+  for (let key of [...stored.keys(), ...fresh.positions.keys()])
+    inGroup(key) && out.add(key);
+  let spots = /* @__PURE__ */ new Map();
+  for (let [id2, point] of fresh.positions) {
+    let key = id2.startsWith(GROUP_PREFIX) ? id2 : keys.toStore(id2);
+    out.has(key) && spots.set(key, { x: point.x, y: point.y });
+  }
+  let blocks = ids.filter((id2) => fresh.positions.has(id2)).length;
+  return { keys: [...out], spots, blocks };
+}
+
+// src/model/selection.ts
+init_define_import_meta_env();
+var EMPTY_SELECTION = Object.freeze({ ids: Object.freeze([]), primary: null }), make = (ids, primary) => ids.length === 0 ? EMPTY_SELECTION : { ids, primary: primary !== null && ids.includes(primary) ? primary : ids[ids.length - 1] };
+function canvasSelectable(model, shown, id2) {
+  let node = model.nodeById.get(id2);
+  return !!(node && shown.has(id2) && node.kind === "session" && !node.readOnly);
+}
+function reduceSelection(selection2, action, selectable, plainSelectable = selectable) {
+  switch (action.type) {
+    case "only":
+      return plainSelectable(action.id) ? make([action.id], action.id) : EMPTY_SELECTION;
+    case "toggle": {
+      if (selection2.ids.includes(action.id)) {
+        let ids = selection2.ids.filter((id2) => id2 !== action.id);
+        return make(ids, selection2.primary === action.id ? null : selection2.primary);
+      }
+      return selectable(action.id) ? make([...selection2.ids.filter(selectable), action.id], action.id) : selection2;
+    }
+    case "box": {
+      let boxed = unique(action.ids.filter(selectable));
+      if (!action.additive)
+        return make(boxed, boxed[0] ?? null);
+      if (boxed.length === 0)
+        return selection2;
+      let kept = selection2.ids.filter(selectable), added = boxed.filter((id2) => !kept.includes(id2));
+      return make([...kept, ...added], added[0] ?? selection2.primary);
+    }
+    case "all": {
+      let ids = unique(action.ids.filter(selectable));
+      return make(ids, selection2.primary);
+    }
+    case "clear":
+      return EMPTY_SELECTION;
+  }
+}
+function unique(ids) {
+  return [...new Set(ids)];
+}
+function singleSelected(selection2) {
+  return selection2.ids.length === 1 ? selection2.ids[0] : null;
+}
+function keepShown(selection2, selectable, singleOk = selectable) {
+  if (selection2.ids.length === 0)
+    return selection2;
+  if (selection2.ids.length === 1)
+    return singleOk(selection2.ids[0]) ? selection2 : EMPTY_SELECTION;
+  let ids = selection2.ids.filter(selectable);
+  return ids.length === selection2.ids.length ? selection2 : make(ids, selection2.primary);
+}
+function boxOf(a, b) {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+}
+function fullyInside(rects, box) {
+  let right = box.x + box.width, bottom = box.y + box.height, out = [];
+  for (let [id2, rect] of rects)
+    rect.x >= box.x && rect.y >= box.y && rect.x + rect.width <= right && rect.y + rect.height <= bottom && out.push(id2);
+  return out;
+}
+function snapPoint(point, grid) {
+  return { x: grid * Math.round(point.x / grid), y: grid * Math.round(point.y / grid) };
+}
+function groupPositions(starts, grabbedId, grabbedNow, snap, grid) {
+  let origin = starts.get(grabbedId) ?? grabbedNow, target = snap ? snapPoint(grabbedNow, grid) : grabbedNow, dx = target.x - origin.x, dy = target.y - origin.y, out = /* @__PURE__ */ new Map();
+  for (let [id2, start2] of starts)
+    out.set(id2, id2 === grabbedId ? { x: target.x, y: target.y } : { x: start2.x + dx, y: start2.y + dy });
+  return out;
 }
 
 // src/model/status.ts
@@ -8826,7 +9539,6 @@ function DenseLink({ id: id2, source, target, data }) {
 // src/styles/dense/inspector.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon3 } from "@hermes/plugin-sdk";
-import { useState as useState2 } from "react";
 
 // src/page/labels.ts
 init_define_import_meta_env();
@@ -9054,11 +9766,21 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }) {
     ] })
   ] });
 }
+function SelectionList({ model, ids, onSelect, onOpen, nowMs }) {
+  return /* @__PURE__ */ jsxs4("div", { className: "st-multi", "data-testid": "session-tree-inspector-multi", "data-count": ids.length, children: [
+    /* @__PURE__ */ jsxs4("div", { className: "st-it", "data-field": "selected-count", children: [
+      ids.length,
+      " selected"
+    ] }),
+    /* @__PURE__ */ jsx4("div", { className: "st-sec", children: ids.map((id2) => /* @__PURE__ */ jsx4(NodeLink, { model, id: id2, relation: "", onSelect: (id3) => onSelect(id3), onOpen, nowMs }, id2)) })
+  ] });
+}
 function DenseInspector(props) {
-  let { model, selectedId, statusOf, onSelect, onOpen, nowMs } = props, [singlesOpen, setSinglesOpen] = useState2(!0), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model);
-  return /* @__PURE__ */ jsxs4("aside", { className: "st-insp", "data-testid": "session-tree-inspector", "data-selected-id": node?.id ?? "", children: [
+  let { model, selectedId, selectedIds, statusOf, onSelect, onOpen, nowMs, sectionOpen, onSection } = props, singlesOpen = sectionOpen("singles"), node = selectedId ? model.nodeById.get(selectedId) : void 0, singles = singlesInScope(model), several = selectedIds.length > 1;
+  return /* @__PURE__ */ jsxs4("aside", { className: "st-insp", "data-testid": "session-tree-inspector", "data-selected-id": node?.id ?? "", "data-selected-count": selectedIds.length, children: [
     /* @__PURE__ */ jsxs4("div", { className: "st-ib", children: [
-      !node && /* @__PURE__ */ jsxs4("div", { className: "st-empty", "data-testid": "session-tree-inspector-empty", children: [
+      several && /* @__PURE__ */ jsx4(SelectionList, { model, ids: selectedIds, onSelect, onOpen, nowMs }),
+      !node && !several && /* @__PURE__ */ jsxs4("div", { className: "st-empty", "data-testid": "session-tree-inspector-empty", children: [
         "Select a session to inspect it.",
         /* @__PURE__ */ jsx4("br", {}),
         "Click a block · double-click opens it in a tab"
@@ -9066,7 +9788,7 @@ function DenseInspector(props) {
       node?.kind === "session" && /* @__PURE__ */ jsx4(SessionDetails, { ...props, node, status: statusOf(node) })
     ] }),
     /* @__PURE__ */ jsxs4("div", { className: `st-singles${singlesOpen ? "" : " is-collapsed"}`, "data-testid": "session-tree-singles", children: [
-      /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-singles-toggle", onClick: () => setSinglesOpen((open) => !open), "aria-expanded": singlesOpen, children: [
+      /* @__PURE__ */ jsxs4("button", { type: "button", className: "st-singles-toggle", onClick: () => onSection("singles", !singlesOpen), "aria-expanded": singlesOpen, children: [
         /* @__PURE__ */ jsx4(Codicon3, { name: singlesOpen ? "chevron-down" : "chevron-right", size: 12 }),
         /* @__PURE__ */ jsx4("b", { children: "Singles" }),
         /* @__PURE__ */ jsx4("span", { "data-testid": "session-tree-singles-count", children: singles.length }),
@@ -9109,7 +9831,7 @@ init_define_import_meta_env();
 
 // src/styles/rich/context.tsx
 init_define_import_meta_env();
-import { createContext as createContext4, useContext as useContext4, useEffect as useEffect2, useMemo as useMemo3, useState as useState3, useSyncExternalStore } from "react";
+import { createContext as createContext4, useContext as useContext4, useEffect as useEffect2, useMemo as useMemo3, useState as useState2, useSyncExternalStore } from "react";
 
 // src/page/plugin-context.ts
 init_define_import_meta_env();
@@ -9313,7 +10035,7 @@ function useDetails(id2) {
   );
 }
 function RichProvider({ model, children: children2 }) {
-  let ctx = usePluginCtx(), [store] = useState3(
+  let ctx = usePluginCtx(), [store] = useState2(
     () => new DetailsStore(
       (profile, ids, tz) => fetchDetails(ctx, profile, ids, tz),
       { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms), now: () => Date.now() },
@@ -9895,7 +10617,7 @@ init_define_import_meta_env();
 
 // src/styles/subway/context.tsx
 init_define_import_meta_env();
-import { createContext as createContext5, useContext as useContext5, useMemo as useMemo5, useState as useState4, useSyncExternalStore as useSyncExternalStore2 } from "react";
+import { createContext as createContext5, useContext as useContext5, useMemo as useMemo5, useState as useState3, useSyncExternalStore as useSyncExternalStore2 } from "react";
 
 // src/styles/subway/plan.ts
 init_define_import_meta_env();
@@ -9973,7 +10695,7 @@ function useLabelSpot(id2) {
   return useSyncExternalStore2(store ? (listener) => store.subscribe(id2, listener) : NO_SUBSCRIBE2, store ? () => store.get(id2) : NOTHING2, NOTHING2);
 }
 function SubwayProvider({ model, children: children2 }) {
-  let [labels] = useState4(() => new LabelStore()), value2 = useMemo5(() => ({ model, plan: () => subwayPlan(model), labels }), [model, labels]);
+  let [labels] = useState3(() => new LabelStore()), value2 = useMemo5(() => ({ model, plan: () => subwayPlan(model), labels }), [model, labels]);
   return /* @__PURE__ */ jsx8(SubwayCtx.Provider, { value: value2, children: children2 });
 }
 
@@ -10100,6 +10822,12 @@ function mergeSubwayLayout(previous, model, spec) {
       return;
     let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0], next = all.find(([, point]) => point.y > pick2[1].y);
     return { top: pick2[1].y + 26, bottom: next ? next[1].y : 1 / 0 };
+  }, bandsOf = (key) => {
+    let all = labelsSorted();
+    return all.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => {
+      let next = all.find(([, other]) => other.y > point.y);
+      return { top: point.y + 26, bottom: next ? next[1].y : 1 / 0 };
+    });
   }, inBand = (point, band) => footprint(point).y >= band.top && point.y + 20 + 4 <= band.bottom, free = (point) => index2.hits(footprint(point)).length === 0, place = (id2, point) => {
     positions.set(id2, point);
     let rect = footprint(point);
@@ -10141,9 +10869,11 @@ function mergeSubwayLayout(previous, model, spec) {
       place(id2, spot ?? { x: 0, y: continueGroup(key) });
     }
   }
+  let order = groupOrder(model, families).map((projectId) => projectId ?? NO_PROJECT_ID), rank = (family) => order.indexOf(family.projectId ?? NO_PROJECT_ID);
+  newFamilies.sort((a, b) => rank(a) - rank(b));
   for (let family of newFamilies) {
-    let key = groupKey(family.projectId), cells = [...familyGrid(model, family).cells], band = bandOf(key), spot;
-    if (band) {
+    let key = groupKey(family.projectId), cells = [...familyGrid(model, family).cells], bands = bandsOf(key), spot;
+    for (let band of bands) {
       let first = band.top - 26 + 100;
       for (let row = 0; row < 400 && !spot; row += 1) {
         let y = first + row * 100;
@@ -10154,9 +10884,11 @@ function mergeSubwayLayout(previous, model, spec) {
           cells.every(([, cell]) => inBand({ x: at.x + cell.col * 250, y: at.y + cell.row * 100 }, band) && free({ x: at.x + cell.col * 250, y: at.y + cell.row * 100 })) && (spot = at);
         }
       }
+      if (spot)
+        break;
     }
     if (!spot)
-      if (band)
+      if (bands.length > 0)
         spot = { x: 0, y: continueGroup(key) };
       else {
         let label = { x: 0, y: bottom + 75 };
@@ -10165,11 +10897,7 @@ function mergeSubwayLayout(previous, model, spec) {
     for (let [id2, cell] of cells)
       place(id2, { x: spot.x + cell.col * 250, y: spot.y + cell.row * 100 });
   }
-  let present = new Set(families.map((family) => groupKey(family.projectId))), labels = [...positions.keys()].filter((id2) => id2.startsWith(GROUP_PREFIX) && present.has(labelGroup(id2))).map((id2) => {
-    let projectId = labelGroup(id2).slice(GROUP_PREFIX.length);
-    return { id: id2, projectId: projectId === NO_PROJECT_ID ? void 0 : projectId };
-  });
-  return { positions, labels };
+  return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 function layoutSubway(model, previous, spec) {
   return previous && previous.size > 0 ? mergeSubwayLayout(previous, model, spec) : freshSubwayLayout(model, spec);
@@ -10180,9 +10908,44 @@ function labelRect(point, spot) {
   let at = LABEL_SPOTS.find((each) => each.key === spot) ?? LABEL_SPOTS[0];
   return { x: point.x + at.x, y: point.y + at.y, width: 168, height: 46 };
 }
-var area = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-function placeLabels(stations, blocked = []) {
-  let obstacles = new RectIndex2(), placed = new RectIndex2();
+var area = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)), INSET = 0.5;
+function segmentCrosses(a, b, rect) {
+  let dx = b.x - a.x, dy = b.y - a.y, edges = [
+    [-dx, a.x - (rect.x + INSET)],
+    [dx, rect.x + rect.width - INSET - a.x],
+    [-dy, a.y - (rect.y + INSET)],
+    [dy, rect.y + rect.height - INSET - a.y]
+  ], lo = 0, hi = 1;
+  for (let [p, q] of edges) {
+    if (p === 0) {
+      if (q <= 0)
+        return !1;
+    } else p < 0 ? lo = Math.max(lo, q / p) : hi = Math.min(hi, q / p);
+    if (lo >= hi)
+      return !1;
+  }
+  return !0;
+}
+function piecesOf(tracks) {
+  let index2 = new RectIndex2();
+  for (let { source, target, path } of tracks) {
+    let points = path.segs.every((seg) => seg.kind === "L") ? [path.start, ...path.segs.map((seg) => seg.to)] : samplePath(path);
+    for (let i = 1; i < points.length; i += 1) {
+      let [a, b] = [points[i - 1], points[i]], piece = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y), a, b, source, target };
+      index2.add(piece);
+    }
+  }
+  return index2;
+}
+function trackHits(pieces, rect, id2) {
+  let own = /* @__PURE__ */ new Set(), other = /* @__PURE__ */ new Set(), probe = { x: rect.x - 1, y: rect.y - 1, width: rect.width + 2, height: rect.height + 2 };
+  for (let piece of pieces.hits(probe))
+    segmentCrosses(piece.a, piece.b, rect) && (piece.source === id2 || piece.target === id2 ? own : other).add(`${piece.source}>${piece.target}`);
+  return [own.size, other.size];
+}
+var better = (a, b) => a[0] < b[0] || a[0] === b[0] && (a[1] < b[1] || a[1] === b[1] && a[2] < b[2]);
+function placeLabels(stations, blocked = [], tracks = []) {
+  let obstacles = new RectIndex2(), placed = new RectIndex2(), pieces = piecesOf(tracks);
   for (let point of stations.values())
     obstacles.add({ x: point.x, y: point.y, width: 40, height: 20 });
   for (let rect of blocked)
@@ -10191,24 +10954,32 @@ function placeLabels(stations, blocked = []) {
   for (let [id2, point] of order) {
     let best;
     for (let candidate of LABEL_SPOTS) {
-      let rect = labelRect(point, candidate.key), overlap = [...obstacles.hits(rect), ...placed.hits(rect)].reduce((sum, other) => sum + area(rect, other), 0);
-      if ((!best || overlap < best.overlap) && (best = { spot: candidate.key, rect, overlap }), overlap === 0)
+      let rect = labelRect(point, candidate.key), score = [[...obstacles.hits(rect), ...placed.hits(rect)].reduce((sum, other) => sum + area(rect, other), 0), ...trackHits(pieces, rect, id2)];
+      if ((!best || better(score, best.score)) && (best = { spot: candidate.key, rect, score }), score.every((each) => each === 0))
         break;
     }
-    placed.add(best.rect), out.set(id2, { spot: best.spot, rect: best.rect, clear: best.overlap === 0 });
+    placed.add(best.rect), out.set(id2, { spot: best.spot, rect: best.rect, clear: best.score[0] === 0 });
+  }
+  return out;
+}
+function labelTracks(links, routes) {
+  let out = [];
+  for (let link2 of links) {
+    let routed = routes.get(link2.id);
+    routed && out.push({ source: link2.source, target: link2.target, path: routed.route.path });
   }
   return out;
 }
 
 // src/styles/subway/layer.tsx
 import { Fragment as Fragment6, jsx as jsx9, jsxs as jsxs7 } from "react/jsx-runtime";
-function useLabelDriver({ positions, shown }) {
+function useLabelDriver({ positions, shown, links, routes }) {
   let env = useSubwayEnv(), placements = useMemo6(() => {
     let stations = /* @__PURE__ */ new Map(), blocked = [];
     for (let [id2, point] of positions)
       id2.startsWith(GROUP_PREFIX) ? blocked.push({ x: point.x, y: point.y, width: LABEL_WIDTH, height: 26 }) : shown.has(id2) && stations.set(id2, point);
-    return placeLabels(stations, blocked);
-  }, [positions, shown]);
+    return placeLabels(stations, blocked, labelTracks(links, routes));
+  }, [positions, shown, links, routes]);
   useLayoutEffect2(() => {
     env?.labels.set(placements);
   }, [env, placements]);
@@ -11271,7 +12042,7 @@ function resolveStyleId(override, synced) {
 
 // src/page/graph-canvas.tsx
 init_define_import_meta_env();
-import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo7, useRef as useRef4, useState as useState6 } from "react";
+import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo7, useRef as useRef4, useState as useState5 } from "react";
 
 // src/page/canvas-routing.ts
 init_define_import_meta_env();
@@ -11342,7 +12113,7 @@ import {
   icons,
   PROFILE_SWATCHES
 } from "@hermes/plugin-sdk";
-import { useCallback as useCallback3, useState as useState5 } from "react";
+import { useCallback as useCallback3, useState as useState4 } from "react";
 import { Fragment as Fragment9, jsx as jsx13, jsxs as jsxs11 } from "react/jsx-runtime";
 function nodeIdAt(target) {
   let element = target?.closest?.(".react-flow__node, [data-st-node]");
@@ -11454,7 +12225,7 @@ function MenuItems({ node, actions, labels }) {
   ] });
 }
 function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) {
-  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState5(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback3(
+  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState4(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback3(
     (event) => {
       let id2 = actions?.takeRequestedMenuNode() ?? null ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
       if (!actions || !actions.canAct(target)) {
@@ -11485,9 +12256,14 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) 
 
 // src/page/graph-canvas.tsx
 import { jsx as jsx14, jsxs as jsxs12 } from "react/jsx-runtime";
-var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350;
+var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350, PAN_KEYS = ["Space", "Alt"];
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+}
+var NOT_TEXT_INPUTS = /* @__PURE__ */ new Set(["button", "checkbox", "color", "file", "image", "radio", "range", "reset", "submit"]);
+function isTextField(target) {
+  let element = target?.closest?.('input, textarea, [contenteditable=""], [contenteditable="true"]');
+  return !!(element && !(element instanceof HTMLInputElement && NOT_TEXT_INPUTS.has(element.type)));
 }
 function StyleProviders({ model, children: children2 }) {
   return registeredStyles().reduceRight((inner, each) => {
@@ -11496,7 +12272,20 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState6(initialViewport), ctx = usePluginCtx(), wrapper = useRef4(null), [drag2, setDrag] = useState6(), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef4(!1), [spaceHeld, setSpaceHeld] = useState6(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), baseNodes = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState5(initialViewport), [mountFit] = useState5(() => ({
+    padding: style2.fitPadding ?? 0.08,
+    maxZoom: 1.25,
+    ...fitIds && fitIds.length > 0 ? { nodes: fitIds.map((id2) => ({ id: id2 })) } : {}
+  })), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState5(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState5(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState5(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState5(null), active = frame2 ? activeExtra : null, [routing] = useState5(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
+    let out = /* @__PURE__ */ new Map();
+    for (let [id2, rect] of rects)
+      canvasSelectable(model, shown, id2) && out.set(id2, rect);
+    return out;
+  }, [model, shown, rects]), selectableRef = useRef4(selectableRects);
+  useEffect5(() => {
+    boxSelectRef.current = boxSelect, selectableRef.current = selectableRects;
+  }, [boxSelect, selectableRects]);
+  let baseNodes = useMemo7(() => {
     let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -11536,7 +12325,7 @@ function GraphCanvas(props) {
         draggable: style2.draggable && !node.readOnly,
         selectable: !node.readOnly,
         connectable: !1,
-        selected: node.id === selectedId && !node.readOnly,
+        selected: selectedIds.has(node.id) && !node.readOnly,
         width,
         height,
         measured: { width, height },
@@ -11544,10 +12333,10 @@ function GraphCanvas(props) {
       });
     }
     return frame2 && frameLayout && nodes2.push(...frame2.extraNodes(frameLayout)), nodes2;
-  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
+  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, selectedIds, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
-    return spaceHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
-  }, [baseNodes, drag2, spaceHeld]), edges = useMemo7(
+    return panKeyHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
+  }, [baseNodes, drag2, panKeyHeld]), edges = useMemo7(
     () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
       let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
       return {
@@ -11570,35 +12359,51 @@ function GraphCanvas(props) {
     [model, shown, style2, lineage, routes]
   ), nodeTypes = style2.nodeTypes, edgeTypes = style2.edgeTypes, hideTooltip = useCallback4(() => {
     tooltipTimer.current?.(), tooltipTimer.current = void 0, setTooltip(void 0);
-  }, []), onNodesChange = useCallback4((changes) => {
-    let moves = changes.filter(
-      (change) => change.type === "position" && !!change.position && change.dragging === !0
-    );
-    moves.length > 0 && setDrag((previous) => {
-      let next = new Map(previous);
-      for (let move of moves)
-        next.set(move.id, move.position);
-      return next;
-    });
-  }, []), onNodeDragStart = useCallback4(
-    (_event, _node, dragged) => {
-      hideTooltip(), onDragging(dragged.map((item) => item.id).filter((id2) => !id2.startsWith(GROUP_PREFIX)));
+  }, []), onNodesChange = useCallback4(
+    (changes) => {
+      let moves = changes.filter(
+        (change) => change.type === "position" && !!change.position && change.dragging === !0
+      );
+      if (moves.length === 0)
+        return;
+      let group = dragGroup.current, grabbed = group ? moves.find((move) => move.id === group.grabbed) : void 0;
+      if (!group || !grabbed) {
+        setDrag((previous) => {
+          let next2 = new Map(previous);
+          for (let move of moves)
+            next2.set(move.id, move.position);
+          return next2;
+        });
+        return;
+      }
+      let next = groupPositions(group.starts, group.grabbed, grabbed.position, snap, style2.grid), latest = group.latest;
+      latest && latest.size === next.size && [...next].every(([id2, point]) => latest.get(id2)?.x === point.x && latest.get(id2)?.y === point.y) || (group.latest = next, setDrag(next));
     },
-    [hideTooltip, onDragging]
+    [snap, style2.grid]
+  ), onNodeDragStart = useCallback4(
+    (_event, node, dragged) => {
+      hideTooltip();
+      let blocks = dragged.filter((item) => !item.id.startsWith(GROUP_PREFIX));
+      dragGroup.current = { grabbed: node.id, starts: new Map(blocks.map((item) => [item.id, { x: item.position.x, y: item.position.y }])) }, selectedIds.has(node.id) || onSelection({ type: "only", id: node.id }), onDragging(blocks.map((item) => item.id));
+    },
+    [hideTooltip, onDragging, onSelection, selectedIds]
   ), onNodeDragStop = useCallback4(
     (_event, _node, dragged) => {
-      let moves = /* @__PURE__ */ new Map();
+      let latest = dragGroup.current?.latest, moves = /* @__PURE__ */ new Map();
       for (let item of dragged)
-        item.id.startsWith(GROUP_PREFIX) || moves.set(item.id, { x: item.position.x, y: item.position.y });
-      setDrag(void 0), moves.size > 0 && onMove(moves), onDragging(null);
+        if (!item.id.startsWith(GROUP_PREFIX)) {
+          let point = latest?.get(item.id) ?? item.position;
+          moves.set(item.id, { x: point.x, y: point.y });
+        }
+      dragGroup.current = null, setDrag(void 0), moves.size > 0 && onMove(moves), onDragging(null);
     },
     [onMove, onDragging]
   ), graphNode = useCallback4((flowNode) => model.nodeById.get(flowNode.id), [model]), onNodeClick = useCallback4(
-    (_event, flowNode) => {
+    (event, flowNode) => {
       let node = graphNode(flowNode);
-      node && !node.readOnly && onSelect(node.id);
+      node && !node.readOnly && onSelection(event.shiftKey ? { type: "toggle", id: node.id } : { type: "only", id: node.id });
     },
-    [graphNode, onSelect]
+    [graphNode, onSelection]
   ), onNodeDoubleClick = useCallback4(
     (_event, flowNode) => {
       let node = graphNode(flowNode);
@@ -11627,9 +12432,24 @@ function GraphCanvas(props) {
     []
   ), onMenuOpen = useCallback4(
     (node) => {
-      hideTooltip(), onSelect(node.id);
+      hideTooltip(), selectedIds.has(node.id) || onSelection({ type: "only", id: node.id });
     },
-    [hideTooltip, onSelect]
+    [hideTooltip, onSelection, selectedIds]
+  ), onSelectionStart = useCallback4(
+    (event) => {
+      let rect = flowStore.getState().userSelectionRect;
+      boxStart.current = rect ? { at: { x: rect.startX, y: rect.startY }, additive: event.shiftKey } : null, hideTooltip();
+    },
+    [flowStore, hideTooltip]
+  ), onSelectionEnd = useCallback4(
+    (event) => {
+      let start2 = boxStart.current;
+      if (boxStart.current = null, !start2)
+        return;
+      let end = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: !1 }), ids = fullyInside(selectableRef.current, boxOf(start2.at, end));
+      onSelection({ type: "box", ids, additive: start2.additive });
+    },
+    [flow, onSelection]
   ), restoreFocus = useCallback4(() => {
     let attempt = () => {
       let active2 = document.activeElement;
@@ -11670,34 +12490,53 @@ function GraphCanvas(props) {
         "pointerdown",
         (event) => {
           let pointer2 = event, target = pointer2.target;
-          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && onSelect(null);
+          releaseSelect(), !(pointer2.button !== 0 || spaceDown.current || altDown.current || pointer2.altKey || !target) && target.closest(".react-flow__pane") && !target.closest(".react-flow__node") && !(boxSelectRef.current && pointer2.shiftKey) && onSelection({ type: "clear" });
         },
         !0
       ),
+      // Card 9: Esc clears the selection; Ctrl/⌘+A selects every editable block shown. Neither
+      // acts while the focus is in a text field (Rename, search: Ctrl/⌘+A selects its text there)
+      // or in an open menu or dialog. Delete and Backspace never delete sessions (React Flow's
+      // delete key is off and nothing here listens for them).
+      ctx.addEventListener(window, "keydown", (event) => {
+        let key = event, target = key.target;
+        !(!target || target === document.body || target === document.documentElement || wrapper.current?.closest(".session-tree")?.contains(target)) || key.defaultPrevented || isTextField(target) || target?.closest?.('[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]') || (key.key === "Escape" ? onSelection({ type: "clear" }) : (key.ctrlKey || key.metaKey) && !key.altKey && !key.shiftKey && key.key.toLowerCase() === "a" && (key.preventDefault(), onSelection({ type: "all", ids: [...selectableRef.current.keys()] })));
+      }),
       ctx.addEventListener(
         window,
         "keydown",
         (event) => {
+          if (event.key === "Alt") {
+            altDown.current = !0, setPanKeyHeld(!0);
+            return;
+          }
           if (event.code === "Space") {
             if (releaseSelect(event.target)) {
               event.preventDefault(), event.stopPropagation(), document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: !0 }));
               return;
             } else if (isTypingTarget(event.target))
               return;
-            spaceDown.current = !0, setSpaceHeld(!0);
+            spaceDown.current = !0, setPanKeyHeld(!0);
           }
         },
         !0
       ),
       ctx.addEventListener(window, "keyup", (event) => {
-        event.code === "Space" && (spaceDown.current = !1, setSpaceHeld(!1));
+        let key = event;
+        if (key.code === "Space")
+          spaceDown.current = !1;
+        else if (key.key === "Alt")
+          altDown.current = !1;
+        else
+          return;
+        setPanKeyHeld(spaceDown.current || altDown.current);
       }),
       ctx.addEventListener(window, "blur", () => {
-        spaceDown.current = !1, setSpaceHeld(!1);
+        spaceDown.current = !1, altDown.current = !1, setPanKeyHeld(!1);
       })
     ];
     return () => offs.forEach((off) => off());
-  }, [ctx, onSelect]), useEffect5(() => () => tooltipTimer.current?.(), []);
+  }, [ctx, onSelection]), useEffect5(() => () => tooltipTimer.current?.(), []);
   let Under = frame2?.Under, Over = frame2?.Over, Layer = style2.Layer;
   return /* @__PURE__ */ jsx14(SessionMenu, { model, onOpenFor: onMenuOpen, onRestoreFocus: restoreFocus, children: /* @__PURE__ */ jsxs12(
     "div",
@@ -11710,6 +12549,10 @@ function GraphCanvas(props) {
       "data-snap": snap ? "on" : "off",
       "data-grid": style2.grid,
       "data-draggable": style2.draggable ? "true" : "false",
+      "data-box-select": boxSelect ? "true" : "false",
+      "data-selected-count": selection2.ids.length,
+      "data-selected": selection2.ids.join(" "),
+      "data-route-passes": routing.routed,
       children: [
         /* @__PURE__ */ jsxs12(FrameUiCtx.Provider, { value: frameUi, children: [
           Under && frameLayout && /* @__PURE__ */ jsx14(Under, { layout: frameLayout, nowMs }),
@@ -11730,14 +12573,17 @@ function GraphCanvas(props) {
               onNodeMouseLeave: hideTooltip,
               onMoveStart,
               onInit,
+              onSelectionStart,
+              onSelectionEnd,
               nodesDraggable: style2.draggable,
               panOnDrag: [1],
-              panActivationKeyCode: "Space",
+              panActivationKeyCode: PAN_KEYS,
               zoomOnScroll: !0,
               panOnScroll: !1,
               zoomOnDoubleClick: !1,
               zoomOnPinch: !0,
-              selectionOnDrag: !1,
+              selectionOnDrag: boxSelect,
+              selectionMode: SelectionMode.Full,
               selectionKeyCode: null,
               multiSelectionKeyCode: null,
               deleteKeyCode: null,
@@ -11745,13 +12591,13 @@ function GraphCanvas(props) {
               nodesFocusable: !1,
               edgesFocusable: !1,
               elevateNodesOnSelect: !1,
-              snapToGrid: snap,
+              snapToGrid: !1,
               snapGrid: [style2.grid, style2.grid],
               minZoom: MIN_ZOOM,
               maxZoom: MAX_ZOOM,
               onlyRenderVisibleElements: nodes.length > VISIBLE_ONLY_ABOVE,
               fitView: !mountViewport && !style2.frame,
-              fitViewOptions: { padding: style2.fitPadding ?? 0.08, maxZoom: 1.25 },
+              fitViewOptions: mountFit,
               defaultViewport: mountViewport,
               onMoveEnd,
               proOptions: { hideAttribution: !0 },
@@ -11763,6 +12609,8 @@ function GraphCanvas(props) {
                     model,
                     positions,
                     shown,
+                    links,
+                    routes,
                     nodeSize: style2.nodeSize,
                     showAll: spec.includeSingles,
                     selectedId,
@@ -11805,23 +12653,194 @@ function GraphCanvas(props) {
   ) });
 }
 
+// src/page/layout-history.tsx
+init_define_import_meta_env();
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from "@hermes/plugin-sdk";
+import { useState as useState6 } from "react";
+
+// src/page/history-labels.ts
+init_define_import_meta_env();
+var REMOVED_PROJECT = "a removed project";
+function backupLabel(backup, projectLabel) {
+  return backup.reason === "restore" ? "Before a restore" : `Before Re-arrange · ${backup.project ? projectLabel(backup.project) ?? REMOVED_PROJECT : "All projects"}`;
+}
+var KEPT = "The current arrangement is kept in Layout history, so you can bring it back.";
+function rearrangeText(viewLabel, project) {
+  return project ? project.count === 0 ? { text: `No block of ${project.label} is on the canvas, so there is nothing to re-arrange.`, canConfirm: !1 } : { text: `${project.count === 1 ? `The 1 block of ${project.label} goes back to its automatic spot` : `The ${project.count} blocks of ${project.label} go back to their automatic spots`}; other projects stay where they are. ${KEPT}`, canConfirm: !0 } : { text: `Every block in ${viewLabel} goes back to the automatic layout. ${KEPT}`, canConfirm: !0 };
+}
+
+// src/page/layout-history.tsx
+import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
+var BACKUPS_KEPT = 10;
+function focusOn(testId) {
+  return (event) => {
+    let target = event.target?.querySelector(`[data-testid="${testId}"]`);
+    target && (event.preventDefault(), target.focus());
+  };
+}
+function RearrangeConfirm({
+  open,
+  viewLabel,
+  project,
+  onClose,
+  onConfirm,
+  onHistory
+}) {
+  let { text, canConfirm } = rearrangeText(viewLabel, project);
+  return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
+    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
+      /* @__PURE__ */ jsx15(DialogTitle, { children: project ? "Re-arrange this project?" : "Re-arrange this layout?" }),
+      /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsx15("span", { "data-testid": "session-tree-rearrange-text", children: text }) })
+    ] }),
+    /* @__PURE__ */ jsxs13(DialogFooter, { children: [
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          variant: "ghost",
+          className: "st-dlg-left",
+          "data-testid": "session-tree-rearrange-history",
+          onClick: () => {
+            onClose(), onHistory();
+          },
+          children: "Layout history…"
+        }
+      ),
+      /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", "data-testid": "session-tree-rearrange-cancel", onClick: onClose, children: "Cancel" }),
+      /* @__PURE__ */ jsx15(
+        Button,
+        {
+          type: "button",
+          "data-testid": "session-tree-rearrange-confirm",
+          disabled: !canConfirm,
+          onClick: () => {
+            onClose(), onConfirm();
+          },
+          children: "Re-arrange"
+        }
+      )
+    ] })
+  ] }) });
+}
+function LayoutHistoryDialog({
+  ctx,
+  layout,
+  revision,
+  viewLabel,
+  scopeLabel,
+  projectLabel,
+  nowMs,
+  flush,
+  onClose,
+  onRestore
+}) {
+  let [restoring, setRestoring] = useState6(null), [error, setError] = useState6(null), list = useQuery({
+    queryKey: ["session-tree", "backups", layout.profile, layout.style, revision],
+    queryFn: async () => (await flush(), fetchBackups(ctx, layout.profile, layout.style)),
+    retry: !1,
+    refetchOnWindowFocus: !1,
+    // A new revision keeps the list on screen until the new one arrives.
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey.slice(0, 4).join("\0") === ["session-tree", "backups", layout.profile, layout.style].join("\0") ? previous : void 0
+  }), restore = async (backup) => {
+    if (!restoring) {
+      setRestoring(backup.id), setError(null);
+      try {
+        let full = await fetchBackup(ctx, layout.profile, backup.id);
+        if (full.style !== layout.style || full.scope !== layout.scope)
+          throw new Error("That backup belongs to another view.");
+        onRestore(new Map(full.positions.map((entry) => [entry.id, { x: entry.x, y: entry.y }]))), onClose();
+      } catch (err) {
+        setError(restErrorText(err));
+      } finally {
+        setRestoring(null);
+      }
+    }
+  }, backups = list.data?.backups ?? [];
+  return /* @__PURE__ */ jsx15(Dialog, { open: !0, onOpenChange: (open) => !open && !restoring && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-lg", "data-testid": "session-tree-history-dialog", onOpenAutoFocus: focusOn("session-tree-history-close"), children: [
+    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
+      /* @__PURE__ */ jsx15(DialogTitle, { children: "Layout history" }),
+      /* @__PURE__ */ jsxs13(DialogDescription, { children: [
+        "Earlier arrangements of ",
+        viewLabel,
+        ", one list for every project scope. Each Re-arrange or restore keeps the arrangement it replaces (up to the last ",
+        BACKUPS_KEPT,
+        ", shared by your devices). Restoring replaces the current arrangement, which is kept here too.",
+        scopeLabel && /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-history-scope-note", children: [
+          " ",
+          "Restoring replaces the whole layout, every project’s blocks, not only ",
+          scopeLabel,
+          "’s."
+        ] })
+      ] })
+    ] }),
+    list.isPending && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-loading", children: "Loading…" }),
+    list.isError && !list.data && /* @__PURE__ */ jsxs13("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-error", children: [
+      "Could not load the layout history: ",
+      restErrorText(list.error)
+    ] }),
+    list.data && backups.length === 0 && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-empty", children: "No earlier arrangements of this view yet. Re-arrange keeps the one it replaces here." }),
+    backups.length > 0 && /* @__PURE__ */ jsx15("ul", { className: "st-hist-list", "data-testid": "session-tree-history-list", children: backups.map((backup) => /* @__PURE__ */ jsxs13(
+      "li",
+      {
+        className: "st-hist-row",
+        "data-testid": "session-tree-history-row",
+        "data-backup-id": backup.id,
+        "data-count": backup.count,
+        "data-reason": backup.reason,
+        "data-project": backup.project ?? void 0,
+        children: [
+          /* @__PURE__ */ jsxs13("span", { className: "st-hist-when", children: [
+            /* @__PURE__ */ jsx15("b", { children: dateTimeLabel(backup.created_at) }),
+            /* @__PURE__ */ jsx15("span", { className: "st-hist-ago", children: agoLabel(backup.created_at, nowMs) })
+          ] }),
+          /* @__PURE__ */ jsxs13("span", { className: "st-hist-what", "data-testid": "session-tree-history-what", children: [
+            backup.count,
+            " block",
+            backup.count === 1 ? "" : "s",
+            " · ",
+            backupLabel(backup, projectLabel)
+          ] }),
+          /* @__PURE__ */ jsx15(
+            Button,
+            {
+              type: "button",
+              variant: "outline",
+              size: "sm",
+              disabled: !!restoring,
+              "data-testid": "session-tree-history-restore",
+              onClick: () => {
+                restore(backup);
+              },
+              children: restoring === backup.id ? "Restoring…" : "Restore"
+            }
+          )
+        ]
+      },
+      backup.id
+    )) }),
+    list.data?.read_only && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-read-only", children: "The history was written by a newer Session Tree: it reads as empty here." }),
+    error && /* @__PURE__ */ jsx15("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-restore-error", children: error }),
+    /* @__PURE__ */ jsx15(DialogFooter, { children: /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", disabled: !!restoring, "data-testid": "session-tree-history-close", onClick: onClose, children: "Close" }) })
+  ] }) });
+}
+
 // src/page/session-actions.tsx
 init_define_import_meta_env();
 import {
-  Button,
+  Button as Button2,
   ConfirmDialog,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog as Dialog2,
+  DialogContent as DialogContent2,
+  DialogFooter as DialogFooter2,
+  DialogHeader as DialogHeader2,
+  DialogTitle as DialogTitle2,
   host as host2,
   Input,
   isSubmitEnter,
   randomUuid
 } from "@hermes/plugin-sdk";
 import { useEffect as useEffect6, useMemo as useMemo8, useRef as useRef5, useState as useState7 } from "react";
-import { Fragment as Fragment10, jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
+import { Fragment as Fragment10, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
 var errorText = (error) => restErrorText(error), rpcReason = (error) => error?.data?.reason;
 function useRowOverrides(serverRows) {
   let [overrides, setOverrides] = useState7(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState7(serverRows);
@@ -11962,8 +12981,8 @@ function useSessionActionsController(options) {
       () => fetchMutationSnapshot(ctx, node.profile, row.id),
       (identity4) => postRename(ctx, node.profile, row.id, title, identity4)
     ))?.title;
-  }, dialogs = /* @__PURE__ */ jsxs13(Fragment10, { children: [
-    /* @__PURE__ */ jsx15(
+  }, dialogs = /* @__PURE__ */ jsxs14(Fragment10, { children: [
+    /* @__PURE__ */ jsx16(
       RenameDialog,
       {
         node: renaming,
@@ -11984,7 +13003,7 @@ function useSessionActionsController(options) {
       },
       renaming?.id ?? "none"
     ),
-    /* @__PURE__ */ jsx15(
+    /* @__PURE__ */ jsx16(
       DeleteDialog,
       {
         node: deleting,
@@ -12033,9 +13052,9 @@ function RenameDialog({
       setBusy(!1);
     }
   };
-  return /* @__PURE__ */ jsx15(Dialog, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
-    /* @__PURE__ */ jsx15(DialogHeader, { children: /* @__PURE__ */ jsx15(DialogTitle, { children: labels.renameTitle }) }),
-    /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(Dialog2, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs14(DialogContent2, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
+    /* @__PURE__ */ jsx16(DialogHeader2, { children: /* @__PURE__ */ jsx16(DialogTitle2, { children: labels.renameTitle }) }),
+    /* @__PURE__ */ jsx16(
       Input,
       {
         autoFocus: !0,
@@ -12050,10 +13069,10 @@ function RenameDialog({
         }
       }
     ),
-    error && /* @__PURE__ */ jsx15("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
-    /* @__PURE__ */ jsxs13(DialogFooter, { children: [
-      /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
-      /* @__PURE__ */ jsx15(Button, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
+    error && /* @__PURE__ */ jsx16("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
+    /* @__PURE__ */ jsxs14(DialogFooter2, { children: [
+      /* @__PURE__ */ jsx16(Button2, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
+      /* @__PURE__ */ jsx16(Button2, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
         submit();
       }, children: labels.save })
     ] })
@@ -12069,12 +13088,12 @@ function DeleteDialog({
 }) {
   let note = branchNote(branches), description = node ? [labels.deleteDesc(node.title), note, blocked ?? ""].filter(Boolean).join(`
 `) : "";
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     ConfirmDialog,
     {
       open: !!node,
       title: labels.deleteTitle,
-      description: /* @__PURE__ */ jsx15("span", { "data-testid": "session-tree-delete-text", children: description }),
+      description: /* @__PURE__ */ jsx16("span", { "data-testid": "session-tree-delete-text", children: description }),
       confirmLabel: labels.delete,
       busyLabel: labels.deleting,
       doneLabel: labels.deleted,
@@ -12090,455 +13109,6 @@ function DeleteDialog({
 init_define_import_meta_env();
 import { host as host3 } from "@hermes/plugin-sdk";
 import { useCallback as useCallback5, useSyncExternalStore as useSyncExternalStore3 } from "react";
-
-// src/model/layout-sync.ts
-init_define_import_meta_env();
-var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
-function refusalKind(error) {
-  let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
-  if (!match)
-    return null;
-  let status = Number(match[1]);
-  return status < 400 || status > 499 || status === 401 || status === 403 || status === 408 || status === 429 ? null : status === 409 && match[2].includes(NEWER_SCHEMA) ? NEWER_SCHEMA : match[1];
-}
-function randomId() {
-  return globalThis.crypto?.randomUUID?.() ?? `w${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-}
-var LayoutSync = class {
-  profiles = /* @__PURE__ */ new Map();
-  pending = [];
-  /** Changes made while the store is read-only: shown here, never sent, never persisted. */
-  localOnly = [];
-  listeners = /* @__PURE__ */ new Set();
-  watched = /* @__PURE__ */ new Map();
-  dragging = /* @__PURE__ */ new Set();
-  cancelFlush;
-  flushing = !1;
-  failures = 0;
-  /** Bumps when an acknowledged write changes the snapshot: a fetch begun before it is stale. */
-  writeSeq = 0;
-  disposed = !1;
-  version = 0;
-  readOnly = !1;
-  /** `layout + key` of auto-layout placements the backend refused: never queued again. */
-  refusedPlacements = /* @__PURE__ */ new Set();
-  notified = /* @__PURE__ */ new Set();
-  /** The ops in this window's slot as last written (to tell an adoption by another window). */
-  persistedOps = /* @__PURE__ */ new Set();
-  ownsSlot = !1;
-  lastDropAt = 0;
-  transport;
-  storage;
-  timers;
-  options;
-  windowId;
-  now;
-  constructor(transport, storage, timers, options = {}) {
-    this.transport = transport, this.storage = storage, this.timers = timers, this.options = options, this.windowId = options.windowId ?? randomId(), this.now = options.now ?? Date.now, this.adoptOrphans() && this.schedule(0);
-  }
-  // --- subscription -------------------------------------------------------------------------
-  /** Called after every change a reader can see (positions, settings, status). */
-  subscribe(listener) {
-    return this.listeners.add(listener), () => this.listeners.delete(listener);
-  }
-  /** Bumps on every visible change: a cheap memo key for React. */
-  get changeVersion() {
-    return this.version;
-  }
-  emit() {
-    this.version += 1;
-    for (let listener of [...this.listeners])
-      listener();
-  }
-  // --- reads --------------------------------------------------------------------------------
-  profile(profile) {
-    let state = this.profiles.get(profile);
-    if (!state) {
-      let cached = this.storage.get(`${CACHE_KEY}:${profile}`, null);
-      state = { server: isSnapshot(cached) ? cached : null, settled: !1, status: "loading" }, this.profiles.set(profile, state);
-    }
-    return state;
-  }
-  status(profile) {
-    return this.profile(profile).status;
-  }
-  /** The store revision of this window's snapshot of `profile` (`null`: none yet). */
-  revision(profile) {
-    return this.profile(profile).server?.rev ?? null;
-  }
-  /** Whether the page may lay out: a fetch answered or failed (then the cache, or nothing). */
-  settled(profile) {
-    return this.profile(profile).settled;
-  }
-  /** Whether this profile's layouts come from the cache because the backend is unreachable. */
-  offline(profile) {
-    return this.profile(profile).status === "offline";
-  }
-  /** The store was written by a newer Session Tree: nothing is saved from this page (B1). */
-  get storeReadOnly() {
-    return this.readOnly;
-  }
-  /** This window's ops a reader sees: the unsent queue, then the read-only local changes. */
-  overlay() {
-    return this.localOnly.length > 0 ? [...this.pending, ...this.localOnly] : this.pending;
-  }
-  /** The synced settings as this window has them (its own unsent changes included). */
-  settings(profile) {
-    let base = { ...this.profile(profile).server?.settings ?? this.anySettings() };
-    for (let op of this.overlay())
-      op.kind === "settings" && Object.assign(base, op.patch);
-    return base;
-  }
-  /** Settings are global: any profile's snapshot holds them. */
-  anySettings() {
-    let best = null;
-    for (let state of this.profiles.values())
-      state.server && (!best || state.server.rev > best.rev) && (best = state.server);
-    return best?.settings ?? EMPTY_SETTINGS;
-  }
-  /** The positions of one layout, by layout key: the server's, this window's unsent changes on top. */
-  positions(ref) {
-    let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
-    for (let op of this.overlay())
-      (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
-    return out;
-  }
-  // --- local changes ------------------------------------------------------------------------
-  /**
-   * Lay out against the stored positions and keep what the layout placed. Called while the page
-   * renders, so it never notifies; new placements are queued as `if_absent` (`save: false` for a
-   * style that saves nothing, Swimlanes). `keys` maps the layout's block ids to layout keys;
-   * `compute` and the answer speak block ids.
-   */
-  place(ref, compute, { save = !0, keys = IDENTITY_KEYS } = {}) {
-    let stored = this.positions(ref), previous = keys === IDENTITY_KEYS ? stored : new Map([...stored].map(([key, point]) => [keys.fromStore(key), point])), result = compute(previous.size > 0 ? previous : void 0);
-    if (!save)
-      return result;
-    let placed = [];
-    for (let [id2, point] of result.positions) {
-      let key = keys.toStore(id2);
-      !stored.has(key) && !this.refusedPlacements.has(entryKey(ref, key)) && placed.push([key, { x: point.x, y: point.y }]);
-    }
-    return placed.length > 0 && this.queue({ kind: "upsert", ref, mode: "if_absent", entries: placed }, !1), result;
-  }
-  /** A drop: these blocks (by layout key) now sit here. */
-  drop(ref, moves) {
-    if (moves.size === 0)
-      return;
-    let at = Math.max(this.now(), this.lastDropAt + 1);
-    this.lastDropAt = at, this.readOnly || this.recordDrops(ref, [...moves.keys()], at), this.queue({ kind: "upsert", ref, mode: "set", entries: [...moves].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), at }, !0);
-  }
-  /** Re-arrange: forget this layout. Answers what was shown (by layout key), for Undo. */
-  rearrange(ref) {
-    let previous = this.positions(ref);
-    return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: null }, !0), previous;
-  }
-  /** Forgets the refused auto-layout placements of one layout (a Re-arrange, a stored PUT). */
-  clearRefused(ref) {
-    let prefix = `${refKey(ref)}\0`;
-    for (let key of [...this.refusedPlacements])
-      key.startsWith(prefix) && this.refusedPlacements.delete(key);
-  }
-  /** Undo of a Re-arrange: the layout becomes `previous` again. */
-  restore(ref, previous) {
-    this.queue({ kind: "replace", ref, entries: [...previous].map(([id2, point]) => [id2, { x: point.x, y: point.y }]) }, !0);
-  }
-  /**
-   * A block moved to another project: forget its stored spot (by layout key) in every layout of
-   * the profile (here and on the server), so each layout places it anew in its new band.
-   */
-  forget(profile, key) {
-    this.queue({ kind: "forget", profile, ids: [key] }, !0);
-  }
-  setSettings(profile, patch) {
-    this.queue({ kind: "settings", profile, patch }, !0);
-  }
-  /** While blocks are dragged nothing is sent, and a refresh keeps their spots. */
-  setDragging(ids) {
-    let was = this.dragging.size > 0;
-    this.dragging = new Set(ids ?? []), was && this.dragging.size === 0 && this.pending.length > 0 && this.schedule(this.options.debounceMs ?? 300);
-  }
-  get isDragging() {
-    return this.dragging.size > 0;
-  }
-  queue(op, notify) {
-    this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit();
-  }
-  // --- the device's pending queue (NB1) ------------------------------------------------------
-  readSlots() {
-    let raw = this.storage.get(PENDING_KEY, null), slots = {};
-    if (raw && typeof raw == "object" && raw.slots && typeof raw.slots == "object")
-      for (let [owner, value2] of Object.entries(raw.slots)) {
-        let slot = value2;
-        slot && typeof slot.beat == "number" && Array.isArray(slot.ops) && (slots[owner] = { beat: slot.beat, ops: slot.ops.filter(isOp) });
-      }
-    return slots;
-  }
-  writeSlots(slots) {
-    this.storage.set(PENDING_KEY, { slots });
-  }
-  /**
-   * Another window adopted this window's slot (it looked orphaned, e.g. a long-hidden tab): it
-   * sends those ops, so this window keeps only what it queued since.
-   */
-  reconcileSlot(slots) {
-    this.ownsSlot && !(this.windowId in slots) && (this.pending = this.pending.filter((op) => !this.persistedOps.has(op)), this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set());
-  }
-  /** Rewrites this window's slot only (and refreshes its heartbeat). */
-  persistPending(beat = this.now()) {
-    let slots = this.readSlots();
-    this.reconcileSlot(slots), this.pending.length > 0 ? (slots[this.windowId] = { beat, ops: this.pending }, this.ownsSlot = !0, this.persistedOps = new Set(this.pending)) : (delete slots[this.windowId], this.ownsSlot = !1, this.persistedOps = /* @__PURE__ */ new Set()), this.writeSlots(slots);
-  }
-  /** Takes over the slots of closed windows (and the card-4 shared queue). True: adopted some. */
-  adoptOrphans() {
-    let slots = this.readSlots(), now2 = this.now(), adopted = [], legacy = this.storage.get(LEGACY_PENDING_KEY, null);
-    Array.isArray(legacy) && (adopted.push(...legacy.filter(isOp)), this.storage.set(LEGACY_PENDING_KEY, null));
-    for (let [owner, slot] of Object.entries(slots))
-      owner !== this.windowId && now2 - slot.beat > ORPHAN_MS && (adopted.push(...slot.ops), delete slots[owner]);
-    return adopted.length === 0 ? !1 : (this.writeSlots(slots), this.pending = [...adopted, ...this.pending], this.persistPending(), !0);
-  }
-  recordDrops(ref, keys, at) {
-    let record = { ...this.storage.get(DROPS_KEY, {}) };
-    for (let key of keys) {
-      let name = entryKey(ref, key);
-      record[name] = Math.max(typeof record[name] == "number" ? record[name] : 0, at);
-    }
-    let kept = Object.entries(record).filter(([, when]) => typeof when == "number" && at - when < DROP_RECORD_MS).sort((a, b) => b[1] - a[1]).slice(0, DROP_RECORD_MAX);
-    this.storage.set(DROPS_KEY, Object.fromEntries(kept));
-  }
-  /**
-   * Discards queued drops that a newer drop of the same block on this device (any window)
-   * supersedes, before anything is sent: last write wins per block on the server, so an older
-   * drop sent late would overwrite the newer one.
-   */
-  supersede() {
-    let record = this.storage.get(DROPS_KEY, {}), changed = !1;
-    this.pending = this.pending.flatMap((op) => {
-      if (op.kind !== "upsert" || op.mode !== "set" || typeof op.at != "number")
-        return [op];
-      let at = op.at, entries = op.entries.filter(([key]) => !((record[entryKey(op.ref, key)] ?? 0) > at));
-      return entries.length === op.entries.length ? [op] : (changed = !0, entries.length > 0 ? [{ ...op, entries }] : []);
-    }), changed && (this.persistPending(), this.emit());
-  }
-  /** (Re)starts the flush timer: trailing debounce, so a burst of drops goes out as one batch. */
-  schedule(ms) {
-    this.disposed || this.readOnly || (this.cancelFlush?.(), this.cancelFlush = this.timers.setTimeout(() => {
-      this.cancelFlush = void 0, this.flush();
-    }, ms));
-  }
-  // --- sending ------------------------------------------------------------------------------
-  /** Sends the queue in order; consecutive upserts of one layout and mode go as one request. */
-  async flush() {
-    if (!(this.flushing || this.disposed || this.readOnly) && !(this.dragging.size > 0)) {
-      this.flushing = !0;
-      try {
-        for (this.pending.length > 0 && this.persistPending(); this.pending.length > 0 && this.dragging.size === 0 && !this.disposed && !this.readOnly && (this.supersede(), this.pending.length !== 0); ) {
-          let [op, count] = this.nextBatch(), batch = this.pending.slice(0, count);
-          try {
-            await this.send(op), this.ack(op), this.dequeue(batch), this.failures = 0, this.markOnline(opProfile(op)), op.kind === "replace" && this.clearRefused(op.ref);
-          } catch (error) {
-            let kind = refusalKind(error);
-            if (kind === NEWER_SCHEMA) {
-              this.enterReadOnly(error);
-              return;
-            }
-            if (kind !== null) {
-              if (this.dequeue(batch), op.kind === "upsert" && op.mode === "if_absent")
-                for (let [key] of op.entries)
-                  this.refusedPlacements.add(entryKey(op.ref, key));
-              this.notifyOnce(kind, error), this.emit();
-              continue;
-            }
-            this.markOffline(opProfile(op)), this.retry();
-            return;
-          }
-        }
-      } finally {
-        this.flushing = !1;
-      }
-      this.pending.length > 0 && this.dragging.size === 0 && this.schedule(0);
-    }
-  }
-  /** Removes these ops (sent or refused); gone already if another window took them over. */
-  dequeue(batch) {
-    let sent = new Set(batch);
-    this.pending = this.pending.filter((op) => !sent.has(op)), this.persistPending();
-  }
-  notifyOnce(kind, error) {
-    this.notified.has(kind) || (this.notified.add(kind), this.options.onRefused?.(error, kind));
-  }
-  /** B1: a newer Session Tree wrote the store. Send nothing more; keep changes local. */
-  enterReadOnly(error) {
-    this.readOnly || (this.readOnly = !0, this.cancelFlush?.(), this.cancelFlush = void 0, this.notifyOnce(NEWER_SCHEMA, error ?? new Error(`409: ${NEWER_SCHEMA}`)), this.emit());
-  }
-  leaveReadOnly() {
-    this.readOnly && (this.readOnly = !1, this.localOnly = [], this.failures = 0, this.pending.length > 0 && this.schedule(0));
-  }
-  /** The first pending op merged with the consecutive upserts of the same layout and mode. */
-  nextBatch() {
-    let first = this.pending[0];
-    if (first.kind !== "upsert")
-      return [first, 1];
-    let merged = new Map(first.entries), count = 1;
-    for (; count < this.pending.length; ) {
-      let next = this.pending[count];
-      if (next.kind !== "upsert" || next.mode !== first.mode || !sameRef(next.ref, first.ref) || merged.size + next.entries.length > BATCH_LIMIT)
-        break;
-      for (let [id2, point] of next.entries)
-        (first.mode === "set" || !merged.has(id2)) && merged.set(id2, point);
-      count += 1;
-    }
-    return [{ ...first, entries: [...merged] }, count];
-  }
-  async send(op) {
-    if (op.kind === "settings")
-      await this.transport.patchSettings(op.profile, op.patch);
-    else if (op.kind === "forget")
-      await this.transport.forgetBlocks(op.profile, op.ids);
-    else if (op.kind === "upsert")
-      for (let start2 = 0; start2 < op.entries.length; start2 += BATCH_LIMIT)
-        await this.transport.patchPositions(op.ref.profile, {
-          style: op.ref.style,
-          scope: op.ref.scope,
-          mode: op.mode,
-          positions: op.entries.slice(start2, start2 + BATCH_LIMIT).map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
-        });
-    else op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
-      style: op.ref.style,
-      scope: op.ref.scope,
-      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
-    });
-  }
-  /** The server applied `op`: fold it into the snapshot this window keeps (the next fetch corrects it). */
-  ack(op) {
-    let now2 = Date.now() / 1e3;
-    if (this.writeSeq += 1, op.kind === "settings") {
-      for (let state2 of this.profiles.values())
-        state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
-      return;
-    }
-    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes]) => Object.keys(scopes).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
-    for (let ref of refs) {
-      let scopes = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
-      applyOp(current, op), current.size === 0 ? delete scopes[ref.scope] : scopes[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes).length === 0 && delete server.layouts[ref.style];
-    }
-    state.server = server, this.cache(opProfile(op));
-  }
-  retry() {
-    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
-    this.failures += 1, this.schedule(ms);
-  }
-  markOnline(profile) {
-    let state = this.profile(profile);
-    state.status !== "online" && (state.status = "online", state.settled = !0, this.emit());
-  }
-  markOffline(profile) {
-    let state = this.profile(profile);
-    (state.status !== "offline" || !state.settled) && (state.status = "offline", state.settled = !0, this.emit());
-  }
-  cache(profile) {
-    let server = this.profile(profile).server;
-    server && !server.read_only && this.storage.set(`${CACHE_KEY}:${profile}`, server);
-  }
-  // --- fetching -----------------------------------------------------------------------------
-  /** Fetch (or re-check) one profile's state. A failure leaves the cache in place, offline. */
-  async refresh(profile) {
-    if (this.disposed)
-      return;
-    let state = this.profile(profile), server = state.server, known = state.settled && state.status === "online" && server?.epoch ? { rev: server.rev, epoch: server.epoch } : void 0, seq = this.writeSeq;
-    try {
-      let answer = await this.transport.getState(profile, known);
-      if (seq !== this.writeSeq) {
-        this.refresh(profile);
-        return;
-      }
-      let full = !("unchanged" in answer);
-      full && (state.server = answer, this.cache(profile));
-      let wasOnline = state.status === "online", changed = full || !wasOnline || !state.settled;
-      state.status = "online", state.settled = !0, full && answer.read_only ? this.enterReadOnly(null) : full && this.leaveReadOnly(), !wasOnline && this.pending.length > 0 && !this.flushing && (this.failures = 0, this.schedule(0)), changed && this.emit();
-    } catch {
-      this.markOffline(profile), this.watched.has(profile) && this.retryRefresh(profile);
-    }
-  }
-  refreshTimers = /* @__PURE__ */ new Map();
-  retryRefresh(profile) {
-    if (this.refreshTimers.has(profile) || this.disposed)
-      return;
-    let ms = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
-    this.refreshTimers.set(
-      profile,
-      this.timers.setTimeout(() => {
-        this.refreshTimers.delete(profile), this.refresh(profile);
-      }, ms)
-    );
-  }
-  /** A page or settings view shows `profile`: load it now, and poll / follow pushes for it. */
-  watch(profile) {
-    return this.watched.set(profile, (this.watched.get(profile) ?? 0) + 1), (!this.profile(profile).settled || this.profile(profile).status !== "online") && this.refresh(profile), () => {
-      let count = (this.watched.get(profile) ?? 1) - 1;
-      count <= 0 ? this.watched.delete(profile) : this.watched.set(profile, count);
-    };
-  }
-  /** The poll: every watched profile, cheaply (`since_rev` + `epoch`); closed windows' queues. */
-  poll() {
-    this.adoptOrphans() ? this.schedule(0) : this.pending.length > 0 && !this.flushing && this.persistPending();
-    for (let profile of this.watched.keys())
-      this.refresh(profile);
-  }
-  /** A push from the backend: refresh what it touched, unless this window already has it. */
-  onRemoteChange(payload) {
-    let { rev, epoch, profile } = payload ?? {};
-    for (let name of this.watched.keys()) {
-      let server = this.profile(name).server, sameFile = typeof epoch == "string" && server?.epoch === epoch;
-      typeof rev == "number" && sameFile && rev <= (server?.rev ?? -1) || (profile === "*" || profile === name || typeof profile != "string") && this.refresh(name);
-    }
-  }
-  /**
-   * The page is going away (`pagehide`: a reload, a closed tab): mark this window's slot as
-   * orphaned, so the next window (the reloaded page) adopts the queue at once instead of after
-   * `ORPHAN_MS`. If the page comes back (the back/forward cache), its next write reclaims the slot
-   * unless another window adopted it meanwhile.
-   */
-  release() {
-    this.pending.length > 0 && this.persistPending(0);
-  }
-  dispose() {
-    this.disposed = !0, this.cancelFlush?.(), this.release();
-    for (let cancel of this.refreshTimers.values())
-      cancel();
-    this.refreshTimers.clear(), this.listeners.clear();
-  }
-  /** Test and debug view: what is still waiting to be sent. */
-  get pendingCount() {
-    return this.pending.length;
-  }
-};
-function applyOp(target, op) {
-  if (op.kind === "forget") {
-    for (let id2 of op.ids)
-      target.delete(id2);
-    return;
-  }
-  if (op.kind === "replace") {
-    target.clear();
-    for (let [id2, point] of op.entries ?? [])
-      target.set(id2, point);
-    return;
-  }
-  for (let [id2, point] of op.entries)
-    (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
-}
-function opProfile(op) {
-  return op.kind === "settings" || op.kind === "forget" ? op.profile : op.ref.profile;
-}
-function isSnapshot(value2) {
-  let snapshot = value2;
-  return !!(snapshot && typeof snapshot.rev == "number" && snapshot.settings && typeof snapshot.layouts == "object" && snapshot.layouts);
-}
-function isOp(value2) {
-  let op = value2;
-  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
-}
 
 // src/settings/notes.ts
 init_define_import_meta_env();
@@ -12577,8 +13147,91 @@ function usePrefsVersion(prefs) {
 // src/page/toolbar.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon10 } from "@hermes/plugin-sdk";
-import { Fragment as Fragment11, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
-var noFocus = (event) => event.preventDefault();
+import { useLayoutEffect as useLayoutEffect4, useRef as useRef6 } from "react";
+
+// src/page/toolbar-layout.ts
+init_define_import_meta_env();
+function barLayout({ room, gap, brand, pickers, tools, scope }) {
+  let fits = (width) => width + 0.05 <= room, left = (brandWidth) => brandWidth + pickers.reduce((sum, each) => sum + each + gap, 0);
+  return fits(left(brand.full) + gap + scope + gap + tools.full) ? { lines: "row", brandText: !0, toolText: !0 } : fits(left(brand.full) + gap + tools.full) ? { lines: "stacked", brandText: !0, toolText: !0 } : fits(left(brand.icon) + gap + tools.full) ? { lines: "stacked", brandText: !1, toolText: !0 } : fits(left(brand.icon) + gap + tools.icon) ? { lines: "stacked", brandText: !1, toolText: !1 } : { lines: "wrapped", brandText: fits(left(brand.full)), toolText: fits(tools.full) };
+}
+function fadeEdges(scrollLeft, clientWidth, scrollWidth) {
+  let left = scrollLeft > 0.5, right = scrollLeft + clientWidth < scrollWidth - 0.5;
+  return left && right ? "both" : left ? "left" : right ? "right" : void 0;
+}
+function revealBy(view, target, pad) {
+  return target.left < view.left + pad ? target.left - (view.left + pad) : target.right > view.right - pad ? Math.min(target.right - (view.right - pad), target.left - (view.left + pad)) : 0;
+}
+var LINE_PX = 16;
+function wheelScroll(deltaX, deltaY, deltaMode, pageWidth, shiftKey = !1) {
+  return shiftKey || Math.abs(deltaX) >= Math.abs(deltaY) ? 0 : deltaY * (deltaMode === 1 ? LINE_PX : deltaMode === 2 ? pageWidth : 1);
+}
+function cssScale(rectWidth, layoutWidth, cssZoom) {
+  if (!(rectWidth > 0) || !(layoutWidth > 0))
+    return 1;
+  let measured = rectWidth / layoutWidth, tolerance = 1 / layoutWidth + 2e-3;
+  return cssZoom !== void 0 && cssZoom > 0 && Math.abs(measured - cssZoom) <= tolerance * Math.max(1, cssZoom) ? cssZoom : Math.abs(measured - 1) <= tolerance ? 1 : measured;
+}
+
+// src/page/toolbar.tsx
+import { Fragment as Fragment11, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
+var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx17("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0;
+function zoomOf(element) {
+  let own = element.currentCSSZoom;
+  if (typeof own == "number" && own > 0)
+    return own;
+  let zoom3 = 1;
+  for (let node = element; node; node = node.parentElement) {
+    let value2 = Number.parseFloat(getComputedStyle(node).zoom);
+    value2 > 0 && (zoom3 *= value2);
+  }
+  return zoom3;
+}
+var rectScaleOf = (element) => cssScale(element.getBoundingClientRect().width, element.offsetWidth, zoomOf(element));
+function contentWidth(group, width) {
+  let items = [...group.children], gaps = Math.max(0, items.length - 1) * px(getComputedStyle(group).columnGap);
+  return items.reduce((sum, item) => {
+    let style2 = getComputedStyle(item);
+    return sum + width(item) + px(style2.marginLeft) + px(style2.marginRight);
+  }, gaps);
+}
+function sized(item, shown, textShown, width) {
+  let text = [...item.querySelectorAll(".st-label")].reduce(
+    (sum, label) => sum + width(label) + px(getComputedStyle(label.parentElement).columnGap),
+    0
+  );
+  return textShown ? { full: shown, icon: shown - text } : { full: shown + text, icon: shown };
+}
+function measureBar({ bar, brand, pickers, tools, strip }) {
+  let scale = rectScaleOf(bar), width = (element) => element.getBoundingClientRect().width / scale, style2 = getComputedStyle(bar), stripStyle = getComputedStyle(strip), chips = [...strip.children], scope = chips.reduce((sum, chip) => sum + width(chip), 0) + Math.max(0, chips.length - 1) * px(stripStyle.columnGap) + px(stripStyle.paddingLeft) + px(stripStyle.paddingRight) + px(stripStyle.borderLeftWidth) + px(stripStyle.borderRightWidth);
+  return {
+    room: width(bar) - px(style2.borderLeftWidth) - px(style2.borderRightWidth) - px(style2.paddingLeft) - px(style2.paddingRight),
+    gap: px(style2.columnGap),
+    brand: sized(brand, width(brand), bar.dataset.brand !== "icon", width),
+    pickers: pickers.map(width),
+    tools: sized(tools, contentWidth(tools, width), bar.dataset.tools !== "icons", width),
+    scope
+  };
+}
+function applyFade(strip) {
+  let fade = fadeEdges(strip.scrollLeft, strip.clientWidth, strip.scrollWidth);
+  fade ? strip.dataset.fade = fade : delete strip.dataset.fade;
+}
+function revealSelected(strip) {
+  let chip = strip.querySelector('[aria-checked="true"]');
+  if (chip && strip.scrollWidth > strip.clientWidth) {
+    let scale = rectScaleOf(strip), by = revealBy(strip.getBoundingClientRect(), chip.getBoundingClientRect(), REVEAL_PAD * scale) / scale;
+    by !== 0 && (strip.scrollLeft += by);
+  }
+  applyFade(strip);
+}
+var setFlag = (element, key, value2) => {
+  value2 === void 0 ? delete element.dataset[key] : element.dataset[key] = value2;
+};
+function layoutBar(parts, resized) {
+  let { bar, strip } = parts, layout = barLayout(measureBar(parts)), before = `${bar.dataset.layout}|${bar.dataset.brand}|${bar.dataset.tools}`;
+  bar.dataset.layout = layout.lines, setFlag(bar, "brand", layout.brandText ? void 0 : "icon"), setFlag(bar, "tools", layout.toolText ? void 0 : "icons"), resized || before !== `${bar.dataset.layout}|${bar.dataset.brand}|${bar.dataset.tools}` ? revealSelected(strip) : applyFade(strip);
+}
 function ToolButton({
   testId,
   title,
@@ -12587,7 +13240,7 @@ function ToolButton({
   children: children2,
   className
 }) {
-  return /* @__PURE__ */ jsx16(
+  return /* @__PURE__ */ jsx17(
     "button",
     {
       type: "button",
@@ -12604,49 +13257,91 @@ function ToolButton({
 }
 var ZOOM_STEP = 1.2;
 function Toolbar(props) {
-  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope);
-  return /* @__PURE__ */ jsxs14("div", { className: "st-bar", "data-testid": "session-tree-toolbar", children: [
-    /* @__PURE__ */ jsxs14("span", { className: "st-brand", children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "type-hierarchy", size: 14 }),
-      "Session tree"
+  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope), barRef = useRef6(null), stripRef = useRef6(null), contents = [
+    scoped.map((project) => `${project.id}\0${project.label}`).join(""),
+    props.profiles.join(""),
+    props.styles.map((style2) => style2.label).join(""),
+    props.canRearrange !== !1,
+    props.hasPanel,
+    !!props.snapUnavailable
+  ].join("");
+  return useLayoutEffect4(() => {
+    let bar = barRef.current, strip = stripRef.current, brand = bar?.querySelector(":scope > .st-brand"), tools = bar?.querySelector(":scope > .st-tools");
+    if (!bar || !strip || !brand || !tools)
+      return;
+    let parts = { bar, brand, pickers: [...bar.querySelectorAll(":scope > .st-profile")], tools, strip }, width = bar.clientWidth, live = !0;
+    layoutBar(parts, !0);
+    let observer = new ResizeObserver(() => {
+      let now2 = bar.clientWidth;
+      layoutBar(parts, now2 !== width), width = now2;
+    });
+    observer.observe(bar.parentElement ?? bar);
+    for (let element of bar.querySelectorAll('.st-label, .st-profile, .codicon, .st-scope > button, [data-testid="session-tree-zoom"]'))
+      observer.observe(element);
+    return document.fonts?.ready.then(() => {
+      live && layoutBar(parts, !1);
+    }), () => {
+      live = !1, observer.disconnect();
+    };
+  }, [contents]), useLayoutEffect4(() => {
+    stripRef.current && revealSelected(stripRef.current);
+  }, [props.scope]), /* @__PURE__ */ jsxs15("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
+    /* @__PURE__ */ jsxs15("span", { className: "st-brand", title: "Session tree", children: [
+      /* @__PURE__ */ jsx17(Codicon10, { name: "type-hierarchy", size: 14 }),
+      /* @__PURE__ */ jsx17(Label, { children: "Session tree" })
     ] }),
-    /* @__PURE__ */ jsxs14("div", { className: "st-scope", role: "radiogroup", "aria-label": "Project scope", "data-testid": "session-tree-scope", children: [
-      /* @__PURE__ */ jsx16(
-        "button",
-        {
-          type: "button",
-          role: "radio",
-          "aria-checked": props.scope === ALL_PROJECTS,
-          className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
-          "data-scope": ALL_PROJECTS,
-          title: "All projects",
-          onMouseDown: noFocus,
-          onClick: () => props.onScope(ALL_PROJECTS),
-          children: "All"
-        }
-      ),
-      scoped.map((project) => /* @__PURE__ */ jsxs14(
-        "button",
-        {
-          type: "button",
-          role: "radio",
-          "aria-checked": props.scope === project.id,
-          className: props.scope === project.id ? "is-on" : void 0,
-          "data-scope": project.id,
-          title: `Project: ${project.label}`,
-          onMouseDown: noFocus,
-          onClick: () => props.onScope(project.id),
-          children: [
-            /* @__PURE__ */ jsx16(ProjectGlyph, { project, size: 11 }),
-            project.label
-          ]
+    /* @__PURE__ */ jsx17("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs15(
+      "div",
+      {
+        className: "st-scope",
+        role: "radiogroup",
+        "aria-label": "Project scope",
+        "data-testid": "session-tree-scope",
+        ref: stripRef,
+        onWheel: (event) => {
+          let strip = event.currentTarget, by = wheelScroll(event.deltaX, event.deltaY, event.deltaMode, strip.clientWidth, event.shiftKey);
+          by !== 0 && strip.scrollWidth > strip.clientWidth && (strip.scrollLeft += by);
         },
-        project.id
-      ))
-    ] }),
-    /* @__PURE__ */ jsxs14("label", { className: "st-profile", title: "Profile", children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "account", size: 12 }),
-      /* @__PURE__ */ jsxs14(
+        onScroll: (event) => applyFade(event.currentTarget),
+        children: [
+          /* @__PURE__ */ jsx17(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": props.scope === ALL_PROJECTS,
+              className: props.scope === ALL_PROJECTS ? "is-on" : void 0,
+              "data-scope": ALL_PROJECTS,
+              title: "All projects",
+              onMouseDown: noFocus,
+              onClick: () => props.onScope(ALL_PROJECTS),
+              children: "All"
+            }
+          ),
+          scoped.map((project) => /* @__PURE__ */ jsxs15(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": props.scope === project.id,
+              className: props.scope === project.id ? "is-on" : void 0,
+              "data-scope": project.id,
+              title: `Project: ${project.label}`,
+              onMouseDown: noFocus,
+              onClick: () => props.onScope(project.id),
+              children: [
+                /* @__PURE__ */ jsx17(ProjectGlyph, { project, size: 11 }),
+                project.label
+              ]
+            },
+            project.id
+          ))
+        ]
+      }
+    ) }),
+    /* @__PURE__ */ jsxs15("label", { className: "st-profile", title: "Profile", children: [
+      /* @__PURE__ */ jsx17(Codicon10, { name: "account", size: 12 }),
+      /* @__PURE__ */ jsxs15(
         "select",
         {
           "data-testid": "session-tree-profile",
@@ -12659,20 +13354,20 @@ function Toolbar(props) {
             event.key === "Escape" && event.currentTarget.blur();
           },
           children: [
-            props.profiles.map((name) => /* @__PURE__ */ jsx16("option", { value: name, children: name }, name)),
-            /* @__PURE__ */ jsx16("option", { value: ALL_PROFILES, children: "All profiles" })
+            props.profiles.map((name) => /* @__PURE__ */ jsx17("option", { value: name, children: name }, name)),
+            /* @__PURE__ */ jsx17("option", { value: ALL_PROFILES, children: "All profiles" })
           ]
         }
       )
     ] }),
-    /* @__PURE__ */ jsxs14(
+    /* @__PURE__ */ jsxs15(
       "label",
       {
         className: "st-profile st-style",
         title: props.styleSource === "device" ? "View style (this device only — Settings → Plugins → Session Tree)" : "View style (synced to every device)",
         children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "layout", size: 12 }),
-          /* @__PURE__ */ jsx16(
+          /* @__PURE__ */ jsx17(Codicon10, { name: "layout", size: 12 }),
+          /* @__PURE__ */ jsx17(
             "select",
             {
               "data-testid": "session-tree-style",
@@ -12685,112 +13380,117 @@ function Toolbar(props) {
               onKeyDown: (event) => {
                 event.key === "Escape" && event.currentTarget.blur();
               },
-              children: props.styles.map((style2) => /* @__PURE__ */ jsx16("option", { value: style2.id, children: style2.label }, style2.id))
+              children: props.styles.map((style2) => /* @__PURE__ */ jsx17("option", { value: style2.id, children: style2.label }, style2.id))
             }
           )
         ]
       }
     ),
-    /* @__PURE__ */ jsx16("span", { className: "st-spacer" }),
-    /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-show-all",
-        title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
-        pressed: props.showAll,
-        onClick: () => props.onShowAll(!props.showAll),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "list-flat", size: 13 }),
-          "Show all"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-show-archived",
-        title: "Show archived",
-        pressed: props.showArchived,
-        onClick: () => props.onShowArchived(!props.showArchived),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "archive", size: 13 }),
-          "Archived"
-        ]
-      }
-    ),
-    props.canRearrange !== !1 && /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx16(Codicon10, { name: "refresh", size: 13 }) }),
-    /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-    props.snapUnavailable ? (
-      // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
-      /* @__PURE__ */ jsx16("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs14(
-        "button",
-        {
-          type: "button",
-          className: "st-tb is-disabled",
-          "data-testid": "session-tree-snap",
-          title: props.snapUnavailable,
-          "aria-label": `Snap to grid — ${props.snapUnavailable}`,
-          "aria-disabled": "true",
-          disabled: !0,
-          onMouseDown: noFocus,
-          children: [
-            /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-            "Snap"
-          ]
-        }
-      ) })
-    ) : /* @__PURE__ */ jsxs14(
-      ToolButton,
-      {
-        testId: "session-tree-snap",
-        title: `Snap to grid (${props.snap ? "on" : "off"})`,
-        pressed: props.snap,
-        onClick: () => props.onSnap(!props.snap),
-        children: [
-          /* @__PURE__ */ jsx16(Codicon10, { name: "symbol-numeric", size: 13 }),
-          "Snap"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
-      zoomTo(clamp2(getZoom() / ZOOM_STEP));
-    }, children: "−" }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
-      zoomTo(1);
-    }, className: "st-zoom", children: /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-zoom", children: [
-      Math.round(zoom3 * 100),
-      "%"
-    ] }) }),
-    /* @__PURE__ */ jsx16(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
-      zoomTo(clamp2(getZoom() * ZOOM_STEP));
-    }, children: "+" }),
-    /* @__PURE__ */ jsxs14(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-      /* @__PURE__ */ jsx16(Codicon10, { name: "screen-full", size: 13 }),
-      "Fit"
-    ] }),
-    props.hasPanel && /* @__PURE__ */ jsxs14(Fragment11, { children: [
-      /* @__PURE__ */ jsx16("span", { className: "st-sep" }),
-      /* @__PURE__ */ jsx16(
+    /* @__PURE__ */ jsxs15("div", { className: "st-tools", children: [
+      /* @__PURE__ */ jsxs15("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsxs15(
+          ToolButton,
+          {
+            testId: "session-tree-show-all",
+            title: `Show all: put the ${props.singlesCount} sessions without branches on the canvas`,
+            pressed: props.showAll,
+            onClick: () => props.onShowAll(!props.showAll),
+            children: [
+              /* @__PURE__ */ jsx17(Codicon10, { name: "list-flat", size: 13 }),
+              /* @__PURE__ */ jsx17(Label, { children: "Show all" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs15(
+          ToolButton,
+          {
+            testId: "session-tree-show-archived",
+            title: "Show archived",
+            pressed: props.showArchived,
+            onClick: () => props.onShowArchived(!props.showArchived),
+            children: [
+              /* @__PURE__ */ jsx17(Codicon10, { name: "archive", size: 13 }),
+              /* @__PURE__ */ jsx17(Label, { children: "Archived" })
+            ]
+          }
+        ),
+        props.canRearrange !== !1 && /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout; asks first, and opens Layout history)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx17(Codicon10, { name: "refresh", size: 13 }) })
+      ] }),
+      /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
+      props.snapUnavailable ? (
+        // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
+        /* @__PURE__ */ jsx17("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs15(
+          "button",
+          {
+            type: "button",
+            className: "st-tb is-disabled",
+            "data-testid": "session-tree-snap",
+            title: props.snapUnavailable,
+            "aria-label": `Snap to grid — ${props.snapUnavailable}`,
+            "aria-disabled": "true",
+            disabled: !0,
+            onMouseDown: noFocus,
+            children: [
+              /* @__PURE__ */ jsx17(Codicon10, { name: "symbol-numeric", size: 13 }),
+              /* @__PURE__ */ jsx17(Label, { children: "Snap" })
+            ]
+          }
+        ) })
+      ) : /* @__PURE__ */ jsxs15(
         ToolButton,
         {
-          testId: "session-tree-panel",
-          title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
-          pressed: props.panelOpen,
-          onClick: () => props.onPanel(!props.panelOpen),
-          children: /* @__PURE__ */ jsx16(Codicon10, { name: "layout-sidebar-right", size: 13 })
+          testId: "session-tree-snap",
+          title: `Snap to grid (${props.snap ? "on" : "off"})`,
+          pressed: props.snap,
+          onClick: () => props.onSnap(!props.snap),
+          children: [
+            /* @__PURE__ */ jsx17(Codicon10, { name: "symbol-numeric", size: 13 }),
+            /* @__PURE__ */ jsx17(Label, { children: "Snap" })
+          ]
         }
-      )
+      ),
+      /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsxs15("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+          zoomTo(clamp2(getZoom() / ZOOM_STEP));
+        }, children: "−" }),
+        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+          zoomTo(1);
+        }, className: "st-zoom", children: /* @__PURE__ */ jsxs15("span", { "data-testid": "session-tree-zoom", children: [
+          Math.round(zoom3 * 100),
+          "%"
+        ] }) }),
+        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+          zoomTo(clamp2(getZoom() * ZOOM_STEP));
+        }, children: "+" }),
+        /* @__PURE__ */ jsxs15(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+          /* @__PURE__ */ jsx17(Codicon10, { name: "screen-full", size: 13 }),
+          /* @__PURE__ */ jsx17(Label, { children: "Fit" })
+        ] })
+      ] }),
+      props.hasPanel && /* @__PURE__ */ jsxs15(Fragment11, { children: [
+        /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
+        /* @__PURE__ */ jsx17(
+          ToolButton,
+          {
+            testId: "session-tree-panel",
+            title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
+            pressed: props.panelOpen,
+            onClick: () => props.onPanel(!props.panelOpen),
+            children: /* @__PURE__ */ jsx17(Codicon10, { name: "layout-sidebar-right", size: 13 })
+          }
+        )
+      ] })
     ] })
   ] });
 }
 
 // src/page/use-live-refresh.ts
 init_define_import_meta_env();
-import { useEffect as useEffect7, useRef as useRef6 } from "react";
+import { useEffect as useEffect7, useRef as useRef7 } from "react";
 var POLL_MS2 = 1e4;
 function useLiveRefresh(ctx, refresh) {
-  let latest = useRef6(refresh);
+  let latest = useRef7(refresh);
   useEffect7(() => {
     latest.current = refresh;
   }), useEffect7(() => {
@@ -12806,27 +13506,27 @@ function useLiveRefresh(ctx, refresh) {
 }
 
 // src/page/session-tree-page.tsx
-import { Fragment as Fragment12, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
 var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", REFRESH_FAILED_MESSAGE = "Couldn’t refresh — showing the last data", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx, services }) {
-  return /* @__PURE__ */ jsx17(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx17(ReactFlowProvider, { children: /* @__PURE__ */ jsx17(PageBody, { ctx, services }) }) });
+  return /* @__PURE__ */ jsx18(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx18(ReactFlowProvider, { children: /* @__PURE__ */ jsx18(PageBody, { ctx, services }) }) });
 }
 function PageBody({ ctx, services: { sync, prefs } }) {
   let activeProfile = useValue(host4.state.profile) || "default", syncVersion = useSyncVersion(sync);
   usePrefsVersion(prefs);
-  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, [scopeChoice, setScope] = useState8(ALL_PROJECTS), [selectedChoice, setSelectedId] = useState8(null), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
+  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, scopeChoice = prefs.scope(profile), [selectionChoice, setSelection] = useState8(EMPTY_SELECTION), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), [confirmRearrange, setConfirmRearrange] = useState8(!1), [historyOpen, setHistoryOpen] = useState8(!1), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
   useEffect8(() => sync.watch(profile), [sync, profile]);
-  let health = useQuery({
+  let health = useQuery2({
     queryKey: ["session-tree", "health", activeProfile],
     queryFn: () => fetchHealth(ctx, activeProfile),
     retry: !1,
     refetchOnWindowFocus: !1
-  }), profiles = useQuery({
+  }), profiles = useQuery2({
     queryKey: ["session-tree", "profiles"],
     queryFn: () => fetchProfiles(ctx),
     retry: !1,
     refetchOnWindowFocus: !1
-  }), sessions = useQuery({
+  }), sessions = useQuery2({
     queryKey: ["session-tree", "sessions", profile, showArchived],
     queryFn: () => fetchSessions(ctx, { profile, includeArchived: showArchived }),
     // Show archived refetches with the same profile: keep the canvas (viewport, selection,
@@ -12837,7 +13537,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   }), profileNames = useMemo9(() => {
     let names = new Set(profiles.data?.profiles ?? []);
     return names.add(activeProfile), profile !== ALL_PROFILES && names.add(profile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
-  }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery({
+  }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery2({
     queryKey: ["session-tree", "projects", projectProfiles.join(",")],
     queryFn: () => fetchProjects(projectProfiles, ctx),
     // The gateway socket may still be connecting on a cold page load.
@@ -12856,7 +13556,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   let projectList = useMemo9(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo9(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo9(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo9(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo9(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo9(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo9(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo9(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState8(createFrameCache), frameLayout = useMemo9(
+  ), spec = useMemo9(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo9(() => layoutRef(profile, style2.id), [profile, style2]), keys = useMemo9(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo9(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState8(createFrameCache), frameLayout = useMemo9(
     () => ready && style2.frame ? frameCache.get({ frame: style2.frame, model, showAll, collapsed, nowMs }) : void 0,
     [ready, style2, model, showAll, collapsed, nowMs, frameCache]
   ), layout = useMemo9(
@@ -12877,19 +13577,34 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       needsInput
     }),
     [busy, busyBySession, focusedSessionId, focusedStoredSessionId, needsInput]
-  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), selectedId = selectedChoice && model.nodeById.get(selectedChoice)?.readOnly === !1 ? selectedChoice : null, fit = useCallback6(() => {
+  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), canvasIds = useMemo9(
+    () => frameLayout?.shown ?? new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)),
+    [frameLayout, model, spec]
+  ), selectable = useCallback6((id2) => canvasSelectable(model, canvasIds, id2), [model, canvasIds]), plainSelectable = useCallback6((id2) => model.nodeById.get(id2)?.readOnly === !1, [model]), selectionKey = `${profile}\0${scope}\0${style2.id}`, [selectionFor, setSelectionFor] = useState8(selectionKey);
+  selectionFor !== selectionKey && (setSelectionFor(selectionKey), setSelection(EMPTY_SELECTION));
+  let selection2 = useMemo9(() => keepShown(selectionChoice, selectable, plainSelectable), [selectionChoice, selectable, plainSelectable]), selectedId = singleSelected(selection2), onSelection = useCallback6(
+    (action) => setSelection((previous) => reduceSelection(keepShown(previous, selectable, plainSelectable), action, selectable, plainSelectable)),
+    [selectable, plainSelectable, setSelection]
+  ), scopeIds = useMemo9(() => style2.frame ? void 0 : scopeFrameIds(model, spec, scope), [scope, style2, model, spec]), fit = useCallback6(() => {
     if (frameLayout) {
       let { width, height } = flowStore.getState();
       width > 0 && height > 0 && flow.setViewport(frameLayout.fit(width, height, MIN_ZOOM), { duration: 0 });
       return;
     }
-    let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
-    flow.fitView({ ...FIT_OPTIONS, ...style2.fitPadding ? { padding: style2.fitPadding } : {}, nodes: inScope && inScope.length > 0 ? inScope : void 0 });
-  }, [flow, flowStore, frameLayout, model, spec, scope, style2]);
+    flow.fitView({ ...FIT_OPTIONS, ...style2.fitPadding ? { padding: style2.fitPadding } : {}, nodes: scopeIds?.map((id2) => ({ id: id2 })) });
+  }, [flow, flowStore, frameLayout, scopeIds, style2]);
   useEffect8(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
-  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef7(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef7(null), appliedScope = useRef7(scope);
+  let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), showsMap = useCallback6(
+    (viewport) => {
+      if (style2.frame)
+        return !0;
+      let { width, height } = flowStore.getState(), ids = scopeIds ?? laidOutFamilies(model, spec).flatMap((family) => family.nodeIds);
+      return viewOnArrival(viewport, ids, layout.positions, style2.nodeSize, { width, height }) !== "fit";
+    },
+    [flowStore, layout, model, spec, style2, scopeIds]
+  ), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
   useEffect8(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
       appliedKey.current = null;
@@ -12897,44 +13612,99 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     }
     if (appliedKey.current === null) {
       appliedKey.current = vpKey, appliedScope.current = scope;
+      let saved = prefs.viewport(vpKey);
+      saved && !showsMap(saved) && fit();
       return;
     }
     if (appliedKey.current !== vpKey) {
       let refit = !!style2.frame && appliedScope.current !== scope;
       appliedKey.current = vpKey, appliedScope.current = scope;
       let saved = prefs.viewport(vpKey);
-      saved && !refit ? flow.setViewport(saved, { duration: 0 }) : fit();
+      saved && !refit && showsMap(saved) ? flow.setViewport(saved, { duration: 0 }) : fit();
     }
-  }, [vpKey, canvasShown, prefs, flow, fit, scope, style2]);
-  let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback6(
+  }, [vpKey, canvasShown, prefs, flow, fit, scope, style2, showsMap]);
+  let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]);
+  useEffect8(() => {
+    let scopes2 = [ALL_PROJECTS, ...projectList.map((project) => project.id)], names = [...profileNames, ALL_PROFILES];
+    prefs.forgetLegacyViewports(
+      registeredStyles().flatMap((each) => names.flatMap((name) => scopes2.map((projectScope) => viewportKey(each.id, name, projectScope))))
+    );
+  }, [prefs, profileNames, projectList]);
+  let onSelect = useCallback6(
     (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;
       if (id2 && (!node || node.readOnly))
         return;
-      setSelectedId(id2);
+      setSelection(id2 ? { ids: [id2], primary: id2 } : EMPTY_SELECTION);
       let point = id2 ? layout.positions.get(id2) : void 0;
       if (reveal2 && point) {
         let { zoom: zoom3 } = flow.getViewport();
         flow.setCenter(point.x + style2.nodeSize.width / 2, point.y + style2.nodeSize.height / 2, { zoom: zoom3, duration: 0 });
       }
     },
-    [model, layout, flow, style2, setSelectedId]
+    [model, layout, flow, style2, setSelection]
   ), onMove = useCallback6(
     (moves) => sync.drop(ref, new Map([...moves].map(([id2, point]) => [keys.toStore(id2), point]))),
     [sync, ref, keys]
-  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), onRearrange = useCallback6(() => {
+  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), modelRef = useRef8(model);
+  useEffect8(() => {
+    modelRef.current = model;
+  });
+  let onRearrange = useCallback6(() => {
     if (!style2.savesLayout)
       return;
-    let previous = sync.rearrange(ref), id2 = Date.now();
+    if (scope !== ALL_PROJECTS) {
+      let reset = projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys), undo = sync.rearrangeProject(ref, scope, reset.keys, reset.spots), then2 = blockProjects(model);
+      requestFit(), setToast({
+        id: Date.now(),
+        message: "Project re-arranged",
+        history: !0,
+        action: "rearrange",
+        layout: refKey(ref),
+        project: scope,
+        undo: () => {
+          sync.restoreProject(ref, undoProject(undo, then2, blockProjects(modelRef.current))), setToast(void 0), requestFit();
+        }
+      });
+      return;
+    }
+    let previous = sync.rearrange(ref), then = blockProjects(model), id2 = Date.now();
     requestFit(), setToast({
       id: id2,
       message: "Layout re-arranged",
+      history: !0,
+      action: "rearrange",
+      layout: refKey(ref),
       undo: () => {
-        sync.restore(ref, previous), setToast(void 0), requestFit();
+        sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current))), setToast(void 0), requestFit();
       }
     });
-  }, [sync, ref, style2, requestFit, setToast]);
-  useEffect8(() => {
+  }, [sync, ref, style2, scope, model, spec, keys, requestFit, setToast]), rearrangeCount = useMemo9(
+    () => confirmRearrange && style2.savesLayout && scope !== ALL_PROJECTS ? projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys).blocks : 0,
+    [confirmRearrange, style2, scope, model, spec, sync, ref, keys]
+  ), onRestoreBackup = useCallback6(
+    (positions) => {
+      let previous = sync.restoreBackup(ref, positions), then = blockProjects(modelRef.current);
+      requestFit(), setToast({
+        id: Date.now(),
+        message: "Earlier layout restored",
+        action: "restore",
+        layout: refKey(ref),
+        undo: () => {
+          sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current))), setToast(void 0), requestFit();
+        }
+      });
+    },
+    [sync, ref, requestFit, setToast]
+  ), flushSync = useCallback6(() => sync.flush(), [sync]);
+  useEffect8(
+    () => sync.onReplaceRefused(
+      (refusal) => setToast(
+        (current) => current?.action === refusal.action && current.layout === refKey(refusal.ref) && current.project === refusal.project ? void 0 : current
+      )
+    ),
+    [sync, setToast]
+  ), useEffect8(() => {
     if (toast)
       return ctx.setTimeout(() => setToast((current) => current?.id === toast.id ? void 0 : current), UNDO_TOAST_MS);
   }, [ctx, toast]);
@@ -12944,7 +13714,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     },
     [activeProfile]
   ), [pendingSelect, setPendingSelect] = useState8(null), [reveal, setReveal] = useState8(null);
-  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelectedId(pendingSelect), setReveal({ id: pendingSelect })), useEffect8(() => {
+  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelection({ ids: [pendingSelect], primary: pendingSelect }), setReveal({ id: pendingSelect })), useEffect8(() => {
     let point = reveal ? layout.positions.get(reveal.id) : void 0;
     if (point) {
       let { zoom: zoom3 } = flow.getViewport();
@@ -12965,32 +13735,32 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     },
     onBranched: (id2) => setPendingSelect(id2),
     onMoved: (id2) => sync.forget(profile, keys.toStore(id2)),
-    onRemoved: (id2) => setSelectedId((current) => current === id2 ? null : current)
+    onRemoved: (id2) => setSelection((current) => current.ids.includes(id2) ? reduceSelection(current, { type: "toggle", id: id2 }, () => !1) : current)
   }), visibleCount = useMemo9(() => visibleRows(rows).length, [rows]), onCanvas = useMemo9(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
-  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
+  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), sectionOpen = useCallback6((section) => prefs.sectionOpen(style2.id, section), [prefs, style2]), onSection = useCallback6((section, open) => prefs.setSectionOpen(style2.id, section, open), [prefs, style2]), profileSuffix = profile === ALL_PROFILES ? " · All profiles" : profile !== activeProfile ? ` · ${profile}` : "", scopeProjectLabel = scope === ALL_PROJECTS ? void 0 : projectList.find((project) => project.id === scope)?.label ?? scope, viewLabel = `${style2.label} · ${scopeProjectLabel ?? "All projects"}${profileSuffix}`, historyLabel = `${style2.label}${profileSuffix}`, projectLabel = useCallback6((id2) => projectList.find((project) => project.id === id2)?.label, [projectList]), offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
     (id2) => {
       prefs.get().styleOverride ? prefs.set({ styleOverride: id2 }) : sync.setSettings(profile, { style: id2 });
     },
     [prefs, sync, profile]
   );
   if (health.isError)
-    return /* @__PURE__ */ jsx17("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx17(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
+    return /* @__PURE__ */ jsx18("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx18(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
   let body, sessionsFailed = sessions.isError && !sessions.data, projectsFailed = projects.isError && !projects.data;
   if (sessionsFailed || projectsFailed) {
     let failed = sessionsFailed ? sessions : projects;
-    body = /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessionsFailed ? "sessions" : "projects", children: /* @__PURE__ */ jsx17(ErrorState, { title: sessionsFailed ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx17(Button2, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
+    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessionsFailed ? "sessions" : "projects", children: /* @__PURE__ */ jsx18(ErrorState, { title: sessionsFailed ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx18(Button3, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
       failed.refetch();
     }, children: failed.isFetching ? "Retrying…" : "Retry" }) }) });
   } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile))
-    body = /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx17(EmptyState, { title: "Loading sessions…" }) });
+    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx18(EmptyState, { title: "Loading sessions…" }) });
   else if (model.nodes.length === 0)
-    body = /* @__PURE__ */ jsx17("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx17(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
+    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx18(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
   else {
     let saved = prefs.viewport(vpKey);
-    body = /* @__PURE__ */ jsxs15(Fragment12, { children: [
-      /* @__PURE__ */ jsx17(
+    body = /* @__PURE__ */ jsxs16(Fragment12, { children: [
+      /* @__PURE__ */ jsx18(
         GraphCanvas,
         {
           style: style2,
@@ -12998,7 +13768,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           model,
           positions: layout.positions,
           labels: layout.labels,
-          selectedId,
+          selection: selection2,
+          onSelection,
           onSelect,
           onMove,
           onDragging,
@@ -13007,6 +13778,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           snap,
           nowMs,
           initialViewport: saved,
+          fitIds: scopeIds,
           onViewport,
           frameLayout,
           onToggleLane,
@@ -13014,10 +13786,10 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           onPanel
         }
       ),
-      onCanvas === 0 && /* @__PURE__ */ jsx17("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : style2.singles === "depot" ? "No branched sessions here — the sessions without branches are in the depot below." : "No branched sessions here — the sessions without branches are listed on the right." })
+      onCanvas === 0 && /* @__PURE__ */ jsx18("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : style2.singles === "depot" ? "No branched sessions here — the sessions without branches are in the depot below." : "No branched sessions here — the sessions without branches are listed on the right." })
     ] });
   }
-  return /* @__PURE__ */ jsx17(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs15(
+  return /* @__PURE__ */ jsx18(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs16(
     "div",
     {
       className: "session-tree",
@@ -13034,16 +13806,16 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       "data-refresh-failed": refreshFailed ? "true" : void 0,
       title: projects.isError ? `projects.tree: ${errorText2(projects.error)}` : void 0,
       children: [
-        /* @__PURE__ */ jsx17(
+        /* @__PURE__ */ jsx18(
           Toolbar,
           {
             projects: projectList,
             scope,
-            onScope: setScope,
+            onScope: (next) => prefs.setScope(profile, next),
             profiles: profileNames,
             profile,
             onProfile: (next) => {
-              prefs.set({ profile: next === activeProfile ? null : next }), setScope(ALL_PROJECTS), setSelectedId(null);
+              prefs.set({ profile: next === activeProfile ? null : next }), setSelection(EMPTY_SELECTION);
             },
             showAll,
             onShowAll: (on) => {
@@ -13056,7 +13828,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             minZoom: MIN_ZOOM,
             maxZoom: MAX_ZOOM,
             onFit: fit,
-            onRearrange,
+            onRearrange: () => setConfirmRearrange(!0),
             canRearrange: style2.savesLayout,
             snapUnavailable: style2.draggable ? void 0 : style2.snapUnavailable,
             singlesCount: model.singles.length,
@@ -13069,21 +13841,62 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             onPanel: (open) => prefs.setPanelOpen(style2.id, open)
           }
         ),
-        offline && /* @__PURE__ */ jsx17("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
-        sync.storeReadOnly && /* @__PURE__ */ jsx17("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
-        /* @__PURE__ */ jsxs15("div", { className: "session-tree__main", children: [
-          /* @__PURE__ */ jsxs15("div", { className: "session-tree__stage", children: [
+        offline && /* @__PURE__ */ jsx18("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
+        sync.storeReadOnly && /* @__PURE__ */ jsx18("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
+        /* @__PURE__ */ jsxs16("div", { className: "session-tree__main", children: [
+          /* @__PURE__ */ jsxs16("div", { className: "session-tree__stage", children: [
             body,
-            refreshFailed && /* @__PURE__ */ jsx17("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
+            refreshFailed && /* @__PURE__ */ jsx18("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
           ] }),
-          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx17(Panel2, { model, selectedId, onSelect, onOpen, statusOf, nowMs })
+          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx18(
+            Panel2,
+            {
+              model,
+              selectedId,
+              selectedIds: selection2.ids,
+              onSelect,
+              onOpen,
+              statusOf,
+              nowMs,
+              sectionOpen,
+              onSection
+            }
+          )
         ] }),
-        toast && /* @__PURE__ */ jsxs15("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
-          /* @__PURE__ */ jsx17("span", { children: toast.message }),
-          /* @__PURE__ */ jsx17("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
-          /* @__PURE__ */ jsx17("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
+        toast && /* @__PURE__ */ jsxs16("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
+          /* @__PURE__ */ jsx18("span", { children: toast.message }),
+          /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
+          toast.history && style2.savesLayout && /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-toast-history", onClick: () => setHistoryOpen(!0), children: "Layout history" }),
+          /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
         ] }),
-        dialogs
+        dialogs,
+        /* @__PURE__ */ jsx18(
+          RearrangeConfirm,
+          {
+            open: confirmRearrange && style2.savesLayout,
+            viewLabel,
+            project: scopeProjectLabel === void 0 ? void 0 : { label: scopeProjectLabel, count: rearrangeCount },
+            onClose: () => setConfirmRearrange(!1),
+            onConfirm: onRearrange,
+            onHistory: () => setHistoryOpen(!0)
+          }
+        ),
+        historyOpen && style2.savesLayout && /* @__PURE__ */ jsx18(
+          LayoutHistoryDialog,
+          {
+            ctx,
+            layout: ref,
+            revision: sync.revision(profile),
+            viewLabel: historyLabel,
+            scopeLabel: scopeProjectLabel,
+            projectLabel,
+            nowMs,
+            flush: flushSync,
+            onClose: () => setHistoryOpen(!1),
+            onRestore: onRestoreBackup
+          },
+          `${ref.profile}\0${ref.style}\0${scope}`
+        )
       ]
     }
   ) });
@@ -13096,29 +13909,29 @@ function errorText2(error) {
 init_define_import_meta_env();
 import { host as host5, ListRow, SegmentedControl, ToggleRow, useValue as useValue2 } from "@hermes/plugin-sdk";
 import { useEffect as useEffect9 } from "react";
-import { jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
+import { jsx as jsx19, jsxs as jsxs17 } from "react/jsx-runtime";
 var USE_SYNCED = "synced";
 function SettingsPage({ services: { sync, prefs } }) {
   let profile = useValue2(host5.state.profile) || "default";
   useSyncVersion(sync), usePrefsVersion(prefs), useEffect9(() => sync.watch(profile), [sync, profile]);
   let styles = registeredStyles().map((style2) => ({ id: style2.id, label: style2.label })), settings = sync.settings(profile), synced = isRegisteredStyle(settings.style) ? settings.style : DEFAULT_STYLE_ID, override = prefs.get().styleOverride, device = isRegisteredStyle(override) ? override : USE_SYNCED, offline = sync.offline(profile);
-  return /* @__PURE__ */ jsxs16("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
-    /* @__PURE__ */ jsx18(
+  return /* @__PURE__ */ jsxs17("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
+    /* @__PURE__ */ jsx19(
       ListRow,
       {
         id: "session-tree-view-style",
         title: "View style",
         description: "How the session graph is drawn, on every device that uses this Hermes.",
-        action: /* @__PURE__ */ jsx18("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx18(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
+        action: /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx19(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
       }
     ),
-    /* @__PURE__ */ jsx18(
+    /* @__PURE__ */ jsx19(
       ListRow,
       {
         id: "session-tree-device-style",
         title: "On this device",
         description: "Use the synced style here, or pick one for this device only.",
-        action: /* @__PURE__ */ jsx18("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx18(
+        action: /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx19(
           SegmentedControl,
           {
             options: [{ id: USE_SYNCED, label: "Use synced style" }, ...styles],
@@ -13128,7 +13941,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         ) })
       }
     ),
-    /* @__PURE__ */ jsx18("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx18(
+    /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx19(
       ToggleRow,
       {
         id: "session-tree-snap-default",
@@ -13138,7 +13951,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         onChange: (on) => sync.setSettings(profile, { snap: on })
       }
     ) }),
-    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx18("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
+    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx19("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
   ] });
 }
 
@@ -13215,8 +14028,19 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   --xy-handle-background-color: transparent;
   --xy-handle-border-color: transparent;
   --xy-selection-background-color: var(--ui-selection-background);
-  --xy-selection-border: 1px dotted var(--ui-stroke-secondary);
+  /* Card 9: the selection box (Dense, Subway, Rich cards). */
+  --xy-selection-border: 1px dashed var(--ui-accent);
   --xy-attribution-background-color: transparent;
+}
+
+/* Card 9: React Flow's own frame around a finished selection is not used: it would catch clicks
+   and drags on the empty canvas between the selected blocks. A selected block shows itself. */
+.session-tree .react-flow__nodesselection {
+  display: none;
+}
+
+.session-tree .react-flow__pane.selection {
+  cursor: default;
 }
 
 .session-tree .react-flow__node {
@@ -13251,6 +14075,74 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
   border-bottom: 1px solid var(--ui-stroke-tertiary);
   background: var(--ui-bg-chrome);
   overflow: hidden;
+}
+
+/* No item ever shrinks below its content (a button's min-width would let it): when the bar is
+   too narrow, the layout changes instead (toolbar-layout.ts: data-layout, data-brand,
+   data-tools on the bar). */
+.st-bar > * {
+  flex: none;
+}
+
+.st-bar > .st-scope-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The tools sit at the right end of their line. */
+.st-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.st-tool-group {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* stacked: the scope strip on its own line below the controls. wrapped: the tools on a line of
+   their own between the two (and wrapping by group if even that is too narrow). */
+.st-bar[data-layout='stacked'],
+.st-bar[data-layout='wrapped'] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 34px;
+  padding: 5px 6px;
+  row-gap: 5px;
+}
+
+.st-bar[data-layout='stacked'] > .st-scope-slot,
+.st-bar[data-layout='wrapped'] > .st-scope-slot {
+  order: 1;
+  flex: 0 0 100%;
+}
+
+.st-bar[data-layout='wrapped'] > .st-tools {
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  row-gap: 5px;
+  margin-left: 0;
+}
+
+.st-brand,
+.st-tools .st-tb {
+  position: relative;
+}
+
+/* Text given up for room: out of the flow but still laid out (the layout measures it), anchored
+   at the right edge so it adds no scrollable overflow. The tooltip keeps the name. */
+.st-bar[data-brand='icon'] .st-brand .st-label,
+.st-bar[data-tools='icons'] .st-tools .st-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .st-brand {
@@ -13329,8 +14221,22 @@ var styles_default = `/* Session Tree — own styles. Colours only through the a
 }
 
 .st-scope button {
+  flex: none;
   height: 20px;
   border-radius: 4px;
+}
+
+/* A scrolling strip fades out at the end(s) that hide chips. */
+.st-scope[data-fade='right'] {
+  mask-image: linear-gradient(to left, transparent, #000 18px);
+}
+
+.st-scope[data-fade='left'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px);
+}
+
+.st-scope[data-fade='both'] {
+  mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 18px), transparent);
 }
 
 .st-profile {
@@ -14001,6 +14907,14 @@ g.is-dimmed {
   pointer-events: none;
 }
 
+/* Card 8 (F1): with the Rich cards singles drawer open (300 px, on the stage's right edge), the
+   note moves left of it, 10 px clear, and stays inside the canvas (it wraps if the canvas is
+   narrow). Closed, and in the other styles, it stays where it is above. */
+.session-tree__stage:has(.st-rc-drawer.is-open) .session-tree__note {
+  right: calc(300px + 10px);
+  max-width: calc(100% - 300px - 20px);
+}
+
 .session-tree__toast {
   position: absolute;
   bottom: 18px;
@@ -14031,6 +14945,58 @@ g.is-dimmed {
 
 .st-toast-btn:hover {
   background: var(--ui-bg-tertiary);
+}
+
+/* Layout history (the backups a Re-arrange or a restore keeps). */
+.st-hist-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 360px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 7px;
+}
+
+.st-hist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
+  font-size: 12.5px;
+}
+
+.st-hist-row + .st-hist-row {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+
+.st-hist-when {
+  display: flex;
+  flex-direction: column;
+  min-width: 112px;
+}
+
+.st-hist-ago,
+.st-hist-what {
+  color: var(--ui-text-secondary);
+  font-size: 11.5px;
+}
+
+.st-hist-what {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-hist-note {
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+/* The Re-arrange confirm: Layout history… on the left, Cancel and Re-arrange on the right. */
+.st-dlg-left {
+  margin-right: auto;
 }
 
 .st-style select {
@@ -14878,19 +15844,23 @@ g.is-dimmed {
   margin-left: auto;
 }
 
+/* Card 8 (F4): the bar's full extent is a 1 px outline in the tertiary text colour (≥ 3:1 against
+   the card, light and dark; drawn outside the box, so the 54 px width is unchanged), over a clear
+   track, and the fill is the full accent (≥ 3:1 against that track). */
 .st-rc-bar {
   display: block;
   height: 4px;
   overflow: hidden;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-text-primary) 10%, transparent);
+  outline: 1px solid var(--ui-text-tertiary);
+  background: transparent;
 }
 
 .st-rc-bar b {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--ui-accent) 75%, transparent);
+  background: var(--ui-accent);
 }
 
 /* The stand-in: a dashed skeleton card. Faded by its see-through fill, the dashes and the italic
@@ -15601,7 +16571,7 @@ var subway_default = `/* --- Subway map (card 7; mockup variants/subway-map/) --
 `;
 
 // src/plugin.tsx
-import { jsx as jsx19 } from "react/jsx-runtime";
+import { jsx as jsx20 } from "react/jsx-runtime";
 var PLUGIN_ID = "session-tree", ROUTE_PATH = "/session-tree";
 function injectStyles(ctx) {
   let style2 = document.createElement("style");
@@ -15621,7 +16591,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx19(SessionTreePage, { ctx, services })
+        render: () => /* @__PURE__ */ jsx20(SessionTreePage, { ctx, services })
       },
       {
         id: "nav",
@@ -15642,7 +16612,7 @@ var plugin = {
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx19(SettingsPage, { services })
+      render: () => /* @__PURE__ */ jsx20(SettingsPage, { services })
     });
   }
 }, plugin_default = plugin;

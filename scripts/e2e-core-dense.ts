@@ -19,7 +19,7 @@ import { compactNumber, costLabel } from '../src/model/format.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids } from './e2e/harness.ts'
+import { seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const OUT_OF_SCOPE_TIP = 'Outside this project — switch to All projects to edit'
@@ -210,6 +210,16 @@ async function clickToolbar(page: Page, testId: string): Promise<void> {
   await page.waitForTimeout(250)
 }
 
+/** Re-arrange asks first: the toolbar button, then the confirm's Re-arrange. */
+async function rearrange(page: Page): Promise<void> {
+  await page.locator('[data-testid="session-tree-rearrange"]').click()
+  const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
+  await dialog.locator('[data-testid="session-tree-rearrange-confirm"]').click()
+  await dialog.waitFor({ state: 'detached', timeout: 5000 })
+  await page.waitForTimeout(250)
+}
+
 async function setScope(page: Page, label: string): Promise<void> {
   await page.locator('[data-testid="session-tree-scope"] button', { hasText: label }).first().click()
   await page.waitForTimeout(400)
@@ -311,6 +321,8 @@ async function main(): Promise<void> {
   mkdirSync(shots, { recursive: true })
   const realBefore = snapshotRealHermes()
 
+  // The role's other homes use the same ports: make sure they are not running.
+  stopRoleHomes(t)
   console.log(`e2e core + Dense — role ${t.role}, home ${t.home}`)
   setup(t)
   const s = await launch({ colorScheme: 'light' })
@@ -492,21 +504,29 @@ async function main(): Promise<void> {
       return { pan: { x: after.x - before.x, y: after.y - before.y }, middle }
     })
 
-    await check('R3: left-drag on empty canvas does not pan and clears the selection', async () => {
+    await check('R3 + card 9: a left-drag on empty canvas does not pan; it draws a selection box, and a box around no block leaves nothing selected', async () => {
       await page.locator(BLOCK('st-hp-root')).click()
       await page.locator('[data-testid="session-tree-inspector"][data-selected-id="st-hp-root"]').waitFor({ timeout: 5000 })
       const spot = await emptySpot(page)
       const before = await viewport(page)
 
-      await drag(page, spot, { x: 120, y: 70 })
+      await page.mouse.move(spot.x, spot.y)
+      await page.mouse.down()
+      await page.mouse.move(spot.x + 60, spot.y + 35, { steps: 10 })
+      await page.mouse.move(spot.x + 120, spot.y + 70, { steps: 10 })
+      const drawn = await page.evaluate(() => (document.querySelector('.react-flow__selection')?.getBoundingClientRect().width ?? 0) > 2)
+
+      await page.mouse.up()
       await page.waitForTimeout(300)
       const after = await viewport(page)
       const selected = await page.getAttribute('[data-testid="session-tree-inspector"]', 'data-selected-id')
+      const count = await page.getAttribute('[data-testid="session-tree-canvas"]', 'data-selected-count')
 
       assert(after.x === before.x && after.y === before.y, `viewport moved ${after.x - before.x},${after.y - before.y}`)
-      assert(selected === '', `selection kept: ${selected}`)
+      assert(drawn, 'no selection box was drawn')
+      assert(selected === '' && count === '0', `selection kept: ${selected} (${count})`)
 
-      return { selected }
+      return { selected, drawn }
     })
 
     await check('R3: Space + left-drag pans (trackpad fallback)', async () => {
@@ -552,7 +572,68 @@ async function main(): Promise<void> {
       const dragged = await flowPosition(page, 'st-sys-tip')
 
       assert(dragged.y > position.y + 30, `no block drag after Space: ${dragged.y - position.y}`)
-      await clickToolbar(page, 'session-tree-rearrange')
+      await rearrange(page)
+      await page.waitForTimeout(300)
+
+      return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
+    })
+
+    await check('R3: Alt + left-drag pans (a laptop touchpad has no middle button); the selection stays', async () => {
+      await page.locator(BLOCK('st-hp-root')).click()
+      await page.locator('[data-testid="session-tree-inspector"][data-selected-id="st-hp-root"]').waitFor({ timeout: 5000 })
+      const spot = await emptySpot(page)
+      const before = await viewport(page)
+
+      await page.mouse.move(spot.x, spot.y)
+      await page.keyboard.down('Alt')
+      await page.waitForTimeout(100)
+      await drag(page, spot, { x: 120, y: -70 })
+      await page.keyboard.up('Alt')
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+      const selected = await page.getAttribute('[data-testid="session-tree-inspector"]', 'data-selected-id')
+
+      assert(near(after.x - before.x, 120, 3) && near(after.y - before.y, -70, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+      assert(selected === 'st-hp-root', `the selection changed: ${selected}`)
+
+      // Alt released: a plain left-drag on empty canvas does not pan.
+      const plain = await emptySpot(page)
+
+      await drag(page, plain, { x: 90, y: 40 })
+      await page.waitForTimeout(300)
+      const still = await viewport(page)
+
+      assert(still.x === after.x && still.y === after.y, `a plain left-drag panned ${still.x - after.x},${still.y - after.y}`)
+      await clickToolbar(page, 'session-tree-fit')
+
+      return { pan: { x: after.x - before.x, y: after.y - before.y }, selected }
+    })
+
+    await check('R3: Alt + left-drag that starts on a block pans; the block does not move; with Alt released it drags again', async () => {
+      const block = await box(page, BLOCK('st-sys-tip'))
+      const start = { x: block.x + 40, y: block.y + block.height / 2 }
+      const before = await viewport(page)
+      const position = await flowPosition(page, 'st-sys-tip')
+
+      await page.mouse.move(start.x, start.y)
+      await page.keyboard.down('Alt')
+      await page.waitForTimeout(100)
+      await drag(page, start, { x: -90, y: 50 })
+      await page.keyboard.up('Alt')
+      await page.waitForTimeout(300)
+      const after = await viewport(page)
+      const moved = await flowPosition(page, 'st-sys-tip')
+
+      assert(near(after.x - before.x, -90, 3) && near(after.y - before.y, 50, 3), `pan ${after.x - before.x},${after.y - before.y}`)
+      assert(moved.x === position.x && moved.y === position.y, `block moved ${moved.x - position.x},${moved.y - position.y}`)
+      const again = await box(page, BLOCK('st-sys-tip'))
+
+      await drag(page, { x: again.x + 40, y: again.y + again.height / 2 }, { x: 0, y: 64 })
+      await page.waitForTimeout(300)
+      const dragged = await flowPosition(page, 'st-sys-tip')
+
+      assert(dragged.y > position.y + 30, `no block drag after Alt: ${dragged.y - position.y}`)
+      await rearrange(page)
       await page.waitForTimeout(300)
 
       return { pan: { x: after.x - before.x, y: after.y - before.y }, blockMoved: { x: moved.x - position.x, y: moved.y - position.y } }
@@ -632,9 +713,44 @@ async function main(): Promise<void> {
       return { detoured, samples: intrusions.samples, links: all.length }
     })
 
-    await check('Re-arrange recomputes the auto-layout', async () => {
+    await check('Re-arrange asks first (Cancel, Space and Enter keep the layout); confirmed, it recomputes the auto-layout', async () => {
+      const kept = await flowPosition(page, 'st-hp-routing')
+      const dialog = page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+
       await clickToolbar(page, 'session-tree-rearrange')
+      await dialog.waitFor({ timeout: 5000 })
+      await page.screenshot({ path: join(shots, 'core-dense-rearrange-confirm.png') })
+      // The focus opens on a harmless button: a misclick followed by Space (pan) or Enter.
+      const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null)
+
+      await page.keyboard.press('Space')
+      await page.waitForTimeout(300)
+      await page.keyboard.press('Enter')
+      await page.waitForTimeout(300)
+
+      if (await dialog.count()) {
+        await dialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+      }
+
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
+      // Whatever Space / Enter opened (Layout history), close it.
+      const history = page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+
+      if (await history.count()) {
+        await history.locator('[data-testid="session-tree-history-close"]').click()
+        await history.waitFor({ state: 'detached', timeout: 5000 })
+      }
+
+      await clickToolbar(page, 'session-tree-rearrange')
+      await dialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+      await dialog.waitFor({ state: 'detached', timeout: 5000 })
       await page.waitForTimeout(400)
+      const afterCancel = await flowPosition(page, 'st-hp-routing')
+
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}, not Cancel`)
+      assert(near(afterCancel.x, kept.x, 0.5) && near(afterCancel.y, kept.y, 0.5), `Space / Enter / Cancel moved the block: ${JSON.stringify(kept)} → ${JSON.stringify(afterCancel)}`)
+      await rearrange(page)
+      await page.waitForTimeout(150)
       const routing = await flowPosition(page, 'st-hp-routing')
       const root = await flowPosition(page, 'st-hp-root')
 
@@ -964,10 +1080,16 @@ async function main(): Promise<void> {
       await clickToolbar(page, 'session-tree-fit')
       await page.screenshot({ path: join(shots, 'live-placement-all-light.png') })
 
-      // The syscanvas scope has its own layout: the new blocks land in its bands too.
+      // Card 10 (L1): the syscanvas scope shows the same layout as All: every block, the new
+      // ones included, sits exactly where All shows it (and the new blocks are in their bands).
       await setScope(page, 'syscanvas')
       const scoped = { hp: await bandPlacement(page, liveId), sys: await bandPlacement(page, sysLiveId) }
+      const inScope = await allFlowPositions(page)
+      const movedByScope = Object.entries(afterSys).filter(([id, point]) => point && inScope[id] && (Math.abs(inScope[id].x - point.x) > 0.5 || Math.abs(inScope[id].y - point.y) > 0.5))
+      const compared = Object.keys(afterSys).filter(id => afterSys[id] && inScope[id]).length
 
+      assert(compared >= 10, `only ${compared} blocks to compare`)
+      assert(movedByScope.length === 0, `the scope moved blocks: ${JSON.stringify(movedByScope.slice(0, 5))}`)
       assertInBand(scoped.hp, `${liveId} (syscanvas scope)`)
       assertInBand(scoped.sys, `${sysLiveId} (syscanvas scope)`)
       await page.screenshot({ path: join(shots, 'live-placement-scope-light.png') })

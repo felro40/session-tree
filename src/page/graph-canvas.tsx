@@ -1,23 +1,30 @@
 /**
  * The canvas shell shared by every style: React Flow with the R3 navigation (plain wheel zooms
- * toward the cursor, middle-drag pans, Space + left-drag pans, left-drag on empty canvas only
- * clears the selection), R4 snap grid, live link redraw while dragging, on-drop routing (R13),
- * double-click to open in a tab (R2), read-only blocks outside the scope (R5), the hover
- * tooltip and the block menu. What a block looks like comes from the style.
+ * toward the cursor, middle-drag pans, Space or Alt + left-drag pans: Alt for a laptop touchpad,
+ * which has no middle button), card 9's selection (a left-drag on empty canvas draws a selection
+ * box in the draggable styles, Shift+click, Esc, Ctrl/⌘+A, and dragging a selected block moves
+ * every selected block), R4 snap grid, live link redraw while dragging, on-drop routing (R13),
+ * double-click to open in a tab (R2), read-only blocks outside the scope (R5), the hover tooltip
+ * and the block menu. What a block looks like comes from the style.
  */
 import {
   Background,
   BackgroundVariant,
-  ReactFlow
+  ReactFlow,
+  SelectionMode,
+  useReactFlow,
+  useStoreApi
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, NodeMouseHandler, OnNodeDrag, Viewport } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import { lineageOf } from '../model/graph.ts'
 import { GROUP_PREFIX, LABEL_WIDTH } from '../model/layout.ts'
 import type { GroupLabel, LayoutSpec, Point, Rect } from '../model/layout.ts'
+import { boxOf, canvasSelectable, fullyInside, groupPositions, singleSelected } from '../model/selection.ts'
+import type { Selection, SelectionAction } from '../model/selection.ts'
 import type { LiveStatus } from '../model/status.ts'
 import { registeredStyles } from '../styles/registry.ts'
 import { blockHandles } from '../styles/shared.tsx'
@@ -36,6 +43,8 @@ const VISIBLE_ONLY_ABOVE = 150
 export const OUT_OF_SCOPE_TIP = 'Outside this project — switch to All projects to edit'
 const STANDIN_TIP = 'Parent not loaded — deleted, hidden or outside the loaded sessions'
 const TOOLTIP_DELAY_MS = 350
+/** Held, they turn a left-drag into a pan (React Flow's pan activation keys; `event.key` "Alt"). */
+const PAN_KEYS = ['Space', 'Alt']
 
 type FlowNode = Node<BlockData | GroupLabelData>
 type FlowEdge = Edge<LinkData>
@@ -46,7 +55,11 @@ export interface GraphCanvasProps {
   model: GraphModel
   positions: ReadonlyMap<string, Point>
   labels: GroupLabel[]
-  selectedId: null | string
+  /** Card 9: the selected blocks (a set with one primary block). */
+  selection: Selection
+  /** Card 9: a selection change from the canvas (click, Shift+click, box, Esc, Ctrl/⌘+A, menu, drag). */
+  onSelection(action: SelectionAction): void
+  /** One block (a style layer's drawer or depot row; `null` clears). */
   onSelect(id: null | string): void
   onMove(moves: ReadonlyMap<string, Point>): void
   /** The blocks being dragged (card 4: nothing is saved meanwhile), `null` when the drag ends. */
@@ -57,6 +70,11 @@ export interface GraphCanvasProps {
   nowMs: number
   /** This view's zoom + pan from an earlier visit on this device; framed (fit) when absent. */
   initialViewport?: Viewport
+  /**
+   * Card 10 (A9): the blocks a mount without `initialViewport` frames: a project scope's own
+   * blocks (the others are dimmed around them); absent or empty: everything.
+   */
+  fitIds?: readonly string[]
   /** After every pan or zoom: remembered per style + profile + scope on this device. */
   onViewport(viewport: Viewport): void
   /** A framed style's layout (Swimlanes): which blocks are shown, and what its layers draw. */
@@ -82,6 +100,18 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return Boolean(element?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
 }
 
+const NOT_TEXT_INPUTS = new Set(['button', 'checkbox', 'color', 'file', 'image', 'radio', 'range', 'reset', 'submit'])
+
+/**
+ * Card 9: a field that takes text (Rename, search): Ctrl/⌘+A selects its text there, and Esc is
+ * its own. A toolbar `<select>` or a button that kept the focus is not one.
+ */
+export function isTextField(target: EventTarget | null): boolean {
+  const element = (target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable=""], [contenteditable="true"]')
+
+  return Boolean(element && !(element instanceof HTMLInputElement && NOT_TEXT_INPUTS.has(element.type)))
+}
+
 /**
  * Every registered style's Provider, always, in registry order: the tree above the flow keeps its
  * shape across a style switch, so switching never remounts React Flow (its viewport, measured
@@ -102,19 +132,37 @@ function StyleProviders({ model, children }: { model: GraphModel; children: Reac
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { style, spec, model, positions, labels, selectedId, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel } = props
+  const { style, spec, model, positions, labels, selection, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel } = props
   // Read once: the canvas frames itself (or restores this view) on mount only.
   const [mountViewport] = useState(initialViewport)
+  const [mountFit] = useState(() => ({
+    padding: style.fitPadding ?? 0.08,
+    maxZoom: 1.25,
+    ...(fitIds && fitIds.length > 0 ? { nodes: fitIds.map(id => ({ id })) } : {})
+  }))
   const ctx = usePluginCtx()
+  const flow = useReactFlow()
+  const flowStore = useStoreApi()
   const wrapper = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<ReadonlyMap<string, Point>>()
+  // Card 9: the drag in progress (the grabbed block and every dragged block's start) and the
+  // latest group spots, which the drop records.
+  const dragGroup = useRef<null | { grabbed: string; starts: ReadonlyMap<string, Point>; latest?: ReadonlyMap<string, Point> }>(null)
   const actions = useSessionActions()
   const [tooltip, setTooltip] = useState<Tooltip>()
   const spaceDown = useRef(false)
-  // R3: while Space is held a left-drag pans from anywhere, also from a block (not a block drag).
-  const [spaceHeld, setSpaceHeld] = useState(false)
+  const altDown = useRef(false)
+  // R3: while Space (or Alt) is held a left-drag pans from anywhere, also from a block (not a
+  // block drag).
+  const [panKeyHeld, setPanKeyHeld] = useState(false)
   const tooltipTimer = useRef<() => void>(undefined)
   const frame = style.frame && frameLayout ? style.frame : undefined
+  // Card 9 (S1/S2): the selection box in the styles with dragging (Dense, Subway, Rich cards);
+  // Swimlanes has none, a left-drag on its empty canvas only clears the selection as before.
+  const boxSelect = style.draggable
+  const boxSelectRef = useRef(boxSelect)
+  // Where the box started (flow coordinates) and whether Shift was held then (Shift + a box adds).
+  const boxStart = useRef<null | { at: Point; additive: boolean }>(null)
   // A framed style's activated extra node (a Swimlanes lane chip: its singles popover).
   const [activeExtra, setActiveExtra] = useState<null | { id: string; box: Rect }>(null)
   const active = frame ? activeExtra : null
@@ -126,8 +174,29 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // ends and draw live instead.
   const [routing] = useState(createCanvasRouting)
   const frameShown = frameLayout && style.frame ? frameLayout.shown : undefined
-  const { shown, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router, slots: style.linkSlots })
+  const { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style.ports, router: style.router, slots: style.linkSlots })
+  const selectedIds = useMemo(() => new Set(selection.ids), [selection])
+  // The lineage highlight shows only while exactly one block is selected (card 9).
+  const selectedId = singleSelected(selection)
   const lineage = useMemo(() => lineageOf(model, selectedId), [model, selectedId])
+  // What a box or Ctrl/⌘+A may select: editable session blocks on the canvas (card 9).
+  const selectableRects = useMemo(() => {
+    const out = new Map<string, Rect>()
+
+    for (const [id, rect] of rects) {
+      if (canvasSelectable(model, shown, id)) {
+        out.set(id, rect)
+      }
+    }
+
+    return out
+  }, [model, shown, rects])
+  const selectableRef = useRef(selectableRects)
+
+  useEffect(() => {
+    boxSelectRef.current = boxSelect
+    selectableRef.current = selectableRects
+  }, [boxSelect, selectableRects])
 
   const baseNodes = useMemo(() => {
     const { width, height } = style.nodeSize
@@ -186,7 +255,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
         draggable: style.draggable && !node.readOnly,
         selectable: !node.readOnly,
         connectable: false,
-        selected: node.id === selectedId && !node.readOnly,
+        selected: selectedIds.has(node.id) && !node.readOnly,
         width,
         height,
         measured: { width, height },
@@ -200,14 +269,14 @@ export function GraphCanvas(props: GraphCanvasProps) {
     }
 
     return nodes
-  }, [model, positions, labels, shown, style, spec, statusOf, lineage, selectedId, nowMs, frame, frameLayout])
+  }, [model, positions, labels, shown, style, spec, statusOf, lineage, selectedId, selectedIds, nowMs, frame, frameLayout])
 
   const nodes = useMemo(() => {
     const moved = drag ? baseNodes.map(node => (drag.has(node.id) ? { ...node, position: drag.get(node.id)!, dragging: true } : node)) : baseNodes
 
-    // A non-draggable block has no `nopan` class, so React Flow's Space pan starts on it too.
-    return spaceHeld ? moved.map(node => (node.draggable ? { ...node, draggable: false } : node)) : moved
-  }, [baseNodes, drag, spaceHeld])
+    // A non-draggable block has no `nopan` class, so React Flow's Space / Alt pan starts on it too.
+    return panKeyHeld ? moved.map(node => (node.draggable ? { ...node, draggable: false } : node)) : moved
+  }, [baseNodes, drag, panKeyHeld])
 
   const edges = useMemo<FlowEdge[]>(
     () =>
@@ -246,45 +315,85 @@ export function GraphCanvas(props: GraphCanvasProps) {
     setTooltip(undefined)
   }, [])
 
-  const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
-    const moves = changes.filter(
-      (change): change is Extract<NodeChange<FlowNode>, { type: 'position' }> =>
-        change.type === 'position' && Boolean(change.position) && change.dragging === true
-    )
+  const onNodesChange = useCallback(
+    (changes: NodeChange<FlowNode>[]) => {
+      const moves = changes.filter(
+        (change): change is Extract<NodeChange<FlowNode>, { type: 'position' }> =>
+          change.type === 'position' && Boolean(change.position) && change.dragging === true
+      )
 
-    if (moves.length > 0) {
-      setDrag(previous => {
-        const next = new Map(previous)
+      if (moves.length === 0) {
+        return
+      }
 
-        for (const move of moves) {
-          next.set(move.id, move.position!)
-        }
+      const group = dragGroup.current
+      const grabbed = group ? moves.find(move => move.id === group.grabbed) : undefined
 
-        return next
-      })
-    }
-  }, [])
+      if (!group || !grabbed) {
+        setDrag(previous => {
+          const next = new Map(previous)
+
+          for (const move of moves) {
+            next.set(move.id, move.position!)
+          }
+
+          return next
+        })
+
+        return
+      }
+
+      // Card 9: every dragged block moves by the grabbed block's offset (spacing kept); with Snap
+      // the grabbed block snaps and the others follow it (React Flow's own snap is off: it snaps
+      // a group by its first block, not by the one under the pointer).
+      const next = groupPositions(group.starts, group.grabbed, grabbed.position!, snap, style.grid)
+      const latest = group.latest
+
+      if (latest && latest.size === next.size && [...next].every(([id, point]) => latest.get(id)?.x === point.x && latest.get(id)?.y === point.y)) {
+        return
+      }
+
+      group.latest = next
+      setDrag(next)
+    },
+    [snap, style.grid]
+  )
 
   const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(
-    (_event, _node, dragged) => {
+    (_event, node, dragged) => {
       hideTooltip()
-      onDragging(dragged.map(item => item.id).filter(id => !id.startsWith(GROUP_PREFIX)))
+
+      const blocks = dragged.filter(item => !item.id.startsWith(GROUP_PREFIX))
+
+      dragGroup.current = { grabbed: node.id, starts: new Map(blocks.map(item => [item.id, { x: item.position.x, y: item.position.y }])) }
+
+      // A left-drag on an unselected block selects just that block (React Flow drags it alone).
+      if (!selectedIds.has(node.id)) {
+        onSelection({ type: 'only', id: node.id })
+      }
+
+      onDragging(blocks.map(item => item.id))
     },
-    [hideTooltip, onDragging]
+    [hideTooltip, onDragging, onSelection, selectedIds]
   )
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
     (_event, _node, dragged) => {
+      const latest = dragGroup.current?.latest
       const moves = new Map<string, Point>()
 
       for (const item of dragged) {
         if (!item.id.startsWith(GROUP_PREFIX)) {
-          moves.set(item.id, { x: item.position.x, y: item.position.y })
+          const point = latest?.get(item.id) ?? item.position
+
+          moves.set(item.id, { x: point.x, y: point.y })
         }
       }
 
+      dragGroup.current = null
       setDrag(undefined)
 
+      // One drop for the whole group: one routing pass and one batched save (card 9).
       if (moves.size > 0) {
         onMove(moves)
       }
@@ -298,14 +407,15 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const graphNode = useCallback((flowNode: FlowNode): GraphNode | undefined => model.nodeById.get(flowNode.id), [model])
 
   const onNodeClick = useCallback<NodeMouseHandler<FlowNode>>(
-    (_event, flowNode) => {
+    (event, flowNode) => {
       const node = graphNode(flowNode)
 
       if (node && !node.readOnly) {
-        onSelect(node.id)
+        // Card 9: Shift+click adds or removes one block; a plain click selects only this one.
+        onSelection(event.shiftKey ? { type: 'toggle', id: node.id } : { type: 'only', id: node.id })
       }
     },
-    [graphNode, onSelect]
+    [graphNode, onSelection]
   )
 
   const onNodeDoubleClick = useCallback<NodeMouseHandler<FlowNode>>(
@@ -366,9 +476,46 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const onMenuOpen = useCallback(
     (node: GraphNode) => {
       hideTooltip()
-      onSelect(node.id)
+
+      // Card 9 (S3): the menu acts on the right-clicked block only. A right-click inside the
+      // selection keeps it; on another block it selects just that block, as before.
+      if (!selectedIds.has(node.id)) {
+        onSelection({ type: 'only', id: node.id })
+      }
     },
-    [hideTooltip, onSelect]
+    [hideTooltip, onSelection, selectedIds]
+  )
+
+  // Card 9: the selection box. React Flow draws it (`selectionOnDrag`); which blocks it selects
+  // is decided here, from the box's two corners in flow coordinates: only the editable blocks
+  // fully inside it (`SelectionMode.Full`, `canvasSelectable`). React Flow's own select changes
+  // are not used (the canvas's selection is controlled).
+  const onSelectionStart = useCallback(
+    (event: ReactMouseEvent) => {
+      const rect = flowStore.getState().userSelectionRect
+
+      boxStart.current = rect ? { at: { x: rect.startX, y: rect.startY }, additive: event.shiftKey } : null
+      hideTooltip()
+    },
+    [flowStore, hideTooltip]
+  )
+
+  const onSelectionEnd = useCallback(
+    (event: ReactMouseEvent) => {
+      const start = boxStart.current
+
+      boxStart.current = null
+
+      if (!start) {
+        return
+      }
+
+      const end = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false })
+      const ids = fullyInside(selectableRef.current, boxOf(start.at, end))
+
+      onSelection({ type: 'box', ids, additive: start.additive })
+    },
+    [flow, onSelection]
   )
 
   // Focus back on the canvas, not on a button: Space must pan, not click (R3). The menu's modal
@@ -422,8 +569,9 @@ export function GraphCanvas(props: GraphCanvasProps) {
   )
 
   // R3 details React Flow does not cover: the middle button must not start the browser's
-  // autoscroll or an X11 primary-selection paste, and a plain left-press on empty canvas
-  // clears the selection instead of panning. Capture phase, so it runs before d3-zoom.
+  // autoscroll or an X11 primary-selection paste, and a plain left-press on empty canvas clears
+  // the selection (card 9: in the box styles a left-drag then draws a selection box, and a press
+  // with Shift keeps the selection for Shift + a box). Capture phase, so it runs before d3-zoom.
   useEffect(() => {
     const element = wrapper.current
 
@@ -464,20 +612,49 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
           releaseSelect()
 
-          if (pointer.button !== 0 || spaceDown.current || !target) {
+          // A pan (Space or Alt held) keeps the selection.
+          if (pointer.button !== 0 || spaceDown.current || altDown.current || pointer.altKey || !target) {
             return
           }
 
-          if (target.closest('.react-flow__pane') && !target.closest('.react-flow__node')) {
-            onSelect(null)
+          if (target.closest('.react-flow__pane') && !target.closest('.react-flow__node') && !(boxSelectRef.current && pointer.shiftKey)) {
+            onSelection({ type: 'clear' })
           }
         },
         true
       ),
+      // Card 9: Esc clears the selection; Ctrl/⌘+A selects every editable block shown. Neither
+      // acts while the focus is in a text field (Rename, search: Ctrl/⌘+A selects its text there)
+      // or in an open menu or dialog. Delete and Backspace never delete sessions (React Flow's
+      // delete key is off and nothing here listens for them).
+      ctx.addEventListener(window, 'keydown', event => {
+        const key = event as KeyboardEvent
+        const target = key.target as Element | null
+        // Only keys aimed at this page (or at nothing in particular): not the app around it.
+        const onPage = !target || target === document.body || target === document.documentElement || Boolean(wrapper.current?.closest('.session-tree')?.contains(target))
+
+        if (!onPage || key.defaultPrevented || isTextField(target) || target?.closest?.('[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]')) {
+          return
+        }
+
+        if (key.key === 'Escape') {
+          onSelection({ type: 'clear' })
+        } else if ((key.ctrlKey || key.metaKey) && !key.altKey && !key.shiftKey && key.key.toLowerCase() === 'a') {
+          key.preventDefault()
+          onSelection({ type: 'all', ids: [...selectableRef.current.keys()] })
+        }
+      }),
       ctx.addEventListener(
         window,
         'keydown',
         event => {
+          if ((event as KeyboardEvent).key === 'Alt') {
+            altDown.current = true
+            setPanKeyHeld(true)
+
+            return
+          }
+
           if ((event as KeyboardEvent).code !== 'Space') {
             return
           }
@@ -496,24 +673,32 @@ export function GraphCanvas(props: GraphCanvasProps) {
           }
 
           spaceDown.current = true
-          setSpaceHeld(true)
+          setPanKeyHeld(true)
         },
         true
       ),
       ctx.addEventListener(window, 'keyup', event => {
-        if ((event as KeyboardEvent).code === 'Space') {
+        const key = event as KeyboardEvent
+
+        if (key.code === 'Space') {
           spaceDown.current = false
-          setSpaceHeld(false)
+        } else if (key.key === 'Alt') {
+          altDown.current = false
+        } else {
+          return
         }
+
+        setPanKeyHeld(spaceDown.current || altDown.current)
       }),
       ctx.addEventListener(window, 'blur', () => {
         spaceDown.current = false
-        setSpaceHeld(false)
+        altDown.current = false
+        setPanKeyHeld(false)
       })
     ]
 
     return () => offs.forEach(off => off())
-  }, [ctx, onSelect])
+  }, [ctx, onSelection])
 
   useEffect(() => () => tooltipTimer.current?.(), [])
 
@@ -532,6 +717,10 @@ export function GraphCanvas(props: GraphCanvasProps) {
         data-snap={snap ? 'on' : 'off'}
         data-grid={style.grid}
         data-draggable={style.draggable ? 'true' : 'false'}
+        data-box-select={boxSelect ? 'true' : 'false'}
+        data-selected-count={selection.ids.length}
+        data-selected={selection.ids.join(' ')}
+        data-route-passes={routing.routed}
       >
         <FrameUiCtx.Provider value={frameUi}>
           {Under && frameLayout && <Under layout={frameLayout} nowMs={nowMs} />}
@@ -551,14 +740,17 @@ export function GraphCanvas(props: GraphCanvasProps) {
             onNodeMouseLeave={hideTooltip}
             onMoveStart={onMoveStart}
             onInit={onInit}
+            onSelectionStart={onSelectionStart}
+            onSelectionEnd={onSelectionEnd}
             nodesDraggable={style.draggable}
             panOnDrag={[1]}
-            panActivationKeyCode="Space"
+            panActivationKeyCode={PAN_KEYS}
             zoomOnScroll
             panOnScroll={false}
             zoomOnDoubleClick={false}
             zoomOnPinch
-            selectionOnDrag={false}
+            selectionOnDrag={boxSelect}
+            selectionMode={SelectionMode.Full}
             selectionKeyCode={null}
             multiSelectionKeyCode={null}
             deleteKeyCode={null}
@@ -566,13 +758,15 @@ export function GraphCanvas(props: GraphCanvasProps) {
             nodesFocusable={false}
             edgesFocusable={false}
             elevateNodesOnSelect={false}
-            snapToGrid={snap}
+            // Card 9: the canvas snaps dragged blocks itself (`groupPositions`): a group by the
+            // grabbed block's snapped spot, one block exactly as React Flow's snapToGrid did.
+            snapToGrid={false}
             snapGrid={[style.grid, style.grid]}
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
             onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
             fitView={!mountViewport && !style.frame}
-            fitViewOptions={{ padding: style.fitPadding ?? 0.08, maxZoom: 1.25 }}
+            fitViewOptions={mountFit}
             defaultViewport={mountViewport}
             onMoveEnd={onMoveEnd}
             proOptions={{ hideAttribution: true }}
@@ -583,6 +777,8 @@ export function GraphCanvas(props: GraphCanvasProps) {
                 model={model}
                 positions={positions}
                 shown={shown}
+                links={links}
+                routes={routes}
                 nodeSize={style.nodeSize}
                 showAll={spec.includeSingles}
                 selectedId={selectedId}

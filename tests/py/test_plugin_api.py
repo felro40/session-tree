@@ -263,7 +263,7 @@ def test_router_mutations_are_only_the_fenced_session_actions(plugin_api):
     assert writes == [("/sessions/details", "POST"), ("/sessions/{session_id}/archive", "POST"), ("/sessions/{session_id}/delete", "POST"),
                       ("/sessions/{session_id}/read", "POST"), ("/sessions/{session_id}/rename", "POST"),
                       ("/settings", "PATCH"), ("/state/forget", "POST"), ("/state/layout", "DELETE"),
-                      ("/state/layout", "PUT"), ("/state/positions", "PATCH")]
+                      ("/state/layout", "PUT"), ("/state/layout/project", "PUT"), ("/state/positions", "PATCH")]
 
 
 # --- session actions: rename, read state, export (card 3) -------------------------------------

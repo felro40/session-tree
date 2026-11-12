@@ -197,7 +197,14 @@ declare module '@hermes/plugin-sdk' {
   export const ContextMenuSubContent: ComponentType<{ children?: ReactNode; className?: string } & DataProps>
 
   export const Dialog: ComponentType<{ open?: boolean; onOpenChange?: (open: boolean) => void; children?: ReactNode }>
-  export const DialogContent: ComponentType<{ children?: ReactNode; className?: string } & DataProps>
+  export const DialogContent: ComponentType<
+    {
+      children?: ReactNode
+      className?: string
+      /** Radix: the focus on open; `preventDefault()` and focus a control yourself. */
+      onOpenAutoFocus?: (event: Event) => void
+    } & DataProps
+  >
   export const DialogHeader: ComponentType<{ children?: ReactNode; className?: string }>
   export const DialogTitle: ComponentType<{ children?: ReactNode; className?: string }>
   export const DialogDescription: ComponentType<{ children?: ReactNode; className?: string }>

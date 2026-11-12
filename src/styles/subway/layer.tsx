@@ -2,8 +2,9 @@
  * The Subway layer, inside the flow (StyleDefinition.Layer):
  *
  * - the label driver: places every shown station's label from the committed positions
- *   (`placeLabels`; the stations and the project labels are what a label must not cover) and hands
- *   the spots to the label store, which re-renders only the stations whose spot changed;
+ *   (`placeLabels`; the stations, the project labels and (card 8) the routed tracks are what a label
+ *   must not cover) and hands the spots to the label store, which re-renders only the stations whose
+ *   spot changed;
  * - the map key, in the bottom-right corner;
  * - the depot (R8): a bottom strip of the sessions without branches, stations on a dotted track.
  *   Double-click opens one, right-click gives the session menu (`data-st-node`, the canvas's
@@ -21,10 +22,10 @@ import type { Point, Rect } from '../../model/layout.ts'
 import { projectColor } from '../shared.tsx'
 import type { StyleLayerProps } from '../types.ts'
 import { useSubwayEnv } from './context.tsx'
-import { placeLabels } from './labels.ts'
+import { labelTracks, placeLabels } from './labels.ts'
 import { GROUP_LABEL_H } from './spec.ts'
 
-function useLabelDriver({ positions, shown }: Pick<StyleLayerProps, 'positions' | 'shown'>) {
+function useLabelDriver({ positions, shown, links, routes }: Pick<StyleLayerProps, 'links' | 'positions' | 'routes' | 'shown'>) {
   const env = useSubwayEnv()
   const placements = useMemo(() => {
     const stations = new Map<string, Point>()
@@ -38,8 +39,10 @@ function useLabelDriver({ positions, shown }: Pick<StyleLayerProps, 'positions' 
       }
     }
 
-    return placeLabels(stations, blocked)
-  }, [positions, shown])
+    // Card 8 (F2): the routed tracks too, a station's own first (the routing chain keeps the same
+    // objects while nothing structural changes, so this reruns only when the routes do).
+    return placeLabels(stations, blocked, labelTracks(links, routes))
+  }, [positions, shown, links, routes])
 
   useLayoutEffect(() => {
     env?.labels.set(placements)

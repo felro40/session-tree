@@ -53,11 +53,17 @@ export interface RoutedLink {
 
 export interface StylePanelProps {
   model: GraphModel
+  /** The one selected block; `null` with none or several (card 9). */
   selectedId: null | string
+  /** Card 9: every selected block (the Dense inspector lists them when there are 2 or more). */
+  selectedIds: readonly string[]
   onSelect(id: null | string, reveal?: boolean): void
   onOpen(node: GraphNode): void
   statusOf(node: GraphNode): LiveStatus | undefined
   nowMs: number
+  /** The panel's own sections (Dense: Singles), open or closed on this device; default open. */
+  sectionOpen(section: string): boolean
+  onSection(section: string, open: boolean): void
 }
 
 /** What a framed style's layout is computed from (card 5): the data and this device only. */
@@ -112,6 +118,9 @@ export interface StyleLayerProps {
   /** Block top-lefts (flow coordinates) and the blocks on the canvas. */
   positions: ReadonlyMap<string, Point>
   shown: ReadonlySet<string>
+  /** Card 8: the routed links of the committed positions (their ends and routes; Subway labels keep off them). */
+  links: readonly { id: string; source: string; target: string }[]
+  routes: ReadonlyMap<string, RoutedLink>
   nodeSize: { width: number; height: number }
   /** "Show all": singles are on the canvas, not in the style's container. */
   showAll: boolean

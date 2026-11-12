@@ -15,7 +15,7 @@
  * state file on disk. Input is real (page.mouse / page.keyboard → CDP Input.*).
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Page, Request } from 'playwright-core'
@@ -23,7 +23,8 @@ import type { Page, Request } from 'playwright-core'
 import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
-import { buildTestPackage, E2E_ROOT, seedFixtures, setup, signInLink, stopGateway, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { moveAside } from './e2e/trash.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 
 const t = testHermes(undefined, { variant: 'sync' })
@@ -86,8 +87,9 @@ async function stored(s: Session, profile = 'default'): Promise<StateSnapshot> {
   return api<StateSnapshot>(s, `/api/plugins/session-tree/state?session_profile=${profile}`)
 }
 
-function layoutOf(state: StateSnapshot, style = 'dense', scope = 'all'): Record<string, { x: number; y: number }> {
-  return Object.fromEntries(Object.entries(state.layouts[style]?.[scope] ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
+/** A style's stored layout: one per style, under scope `all`, whatever the page's scope (card 10). */
+function layoutOf(state: StateSnapshot, style = 'dense'): Record<string, { x: number; y: number }> {
+  return Object.fromEntries(Object.entries(state.layouts[style]?.all ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 }
 
 /**
@@ -295,13 +297,8 @@ async function pageStyle(page: Page): Promise<null | string> {
 /** A fresh test home for this mutating suite: the previous one goes to the e2e trash. */
 function freshHome(): void {
   stopGateway(t)
-
-  if (existsSync(t.root)) {
-    const trash = join(E2E_ROOT, 'trash')
-
-    mkdirSync(trash, { recursive: true })
-    renameSync(t.root, join(trash, `${t.root.split('/').pop()}-${Date.now()}`))
-  }
+  // Card 8 (F5): into the trash, then the trash pruned to the newest copy of each home.
+  moveAside(t.root, { log: line => console.log(`  trash: ${line}`) })
 }
 
 // --- the suite ---------------------------------------------------------------------------------
@@ -310,8 +307,7 @@ async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
   // The role's other homes use the same ports: make sure they are not running.
-  stopGateway(testHermes())
-  stopGateway(testHermes(undefined, { variant: 'actions' }))
+  stopRoleHomes(t)
   freshHome()
   mkdirSync(shots, { recursive: true })
   console.log(`e2e sync — role ${t.role}, home ${t.home}`)
@@ -554,12 +550,48 @@ async function main(): Promise<void> {
       return { overrideKeptSynced: true, denseTip: dense, altTip: alt }
     })
 
-    await check('Re-arrange resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
+    await check('Re-arrange in All projects asks first (Cancel, Escape, Space and Enter keep the layout); confirmed, it resets every block of this style\'s one layout (store and B), the toast\'s Undo restores it', async () => {
       await fit(a.page)
       const before = layoutOf(await stored(a))
       const moved = before[key('st-sys-tip')]
+      const confirmDialog = a.page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+      const historyDialog = a.page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
 
+      // A misclick: nothing is forgotten until the confirm.
       await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.waitFor({ timeout: 5000 })
+      const asked = (await a.page.locator('[data-testid="session-tree-rearrange-text"]').innerText()).trim()
+      const focused = await a.page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null)
+
+      await a.page.screenshot({ path: join(shots, 'sync-rearrange-confirm.png') })
+      await confirmDialog.locator('[data-testid="session-tree-rearrange-cancel"]').click()
+      await confirmDialog.waitFor({ state: 'detached', timeout: 5000 })
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.waitFor({ timeout: 5000 })
+      await a.page.keyboard.press('Escape')
+      await confirmDialog.waitFor({ state: 'detached', timeout: 5000 })
+      // Space (the pan key) and Enter right after a misclick: the focused button is not Re-arrange.
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.waitFor({ timeout: 5000 })
+      await a.page.keyboard.press('Space')
+      await sleep(300)
+      await a.page.keyboard.press('Enter')
+      await sleep(300)
+
+      for (const dialog of [confirmDialog, historyDialog]) {
+        if (await dialog.count()) {
+          await a.page.keyboard.press('Escape')
+          await dialog.waitFor({ state: 'detached', timeout: 5000 })
+        }
+      }
+
+      await sleep(1000)
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}, not Cancel`)
+      assert(!saves(logA).some(entry => entry.method === 'DELETE'), 'a cancelled Re-arrange sent a DELETE')
+      assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'a cancelled Re-arrange changed the layout')
+      assert(/Dense \+ inspector · All projects/.test(asked) && /Layout history/.test(asked), `confirm text: ${asked}`)
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmDialog.locator('[data-testid="session-tree-rearrange-confirm"]').click()
       await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ timeout: 5000 })
       await a.page.screenshot({ path: join(shots, 'sync-rearrange-toast.png') })
       const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
@@ -582,7 +614,252 @@ async function main(): Promise<void> {
       assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
       assert(saves(logA).some(entry => entry.method === 'DELETE') && saves(logA).some(entry => entry.method === 'PUT'), 'no DELETE / PUT')
 
-      return { dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+      return { asked, focused, dragged: moved, rearranged: freshTip, restored: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+    })
+
+    await check('Layout history: the Re-arrange toast opens it; after the toast is gone, the other device (B) opens it from the Re-arrange confirm and restores the layout; the restore is itself in the history', async () => {
+      const before = layoutOf(await stored(a))
+      const moved = before[key('st-sys-tip')]
+      const historyOn = (page: Page) => page.locator('[role="dialog"][data-testid="session-tree-history-dialog"]')
+      const listOf = (page: Page) =>
+        historyOn(page)
+          .locator('[data-testid="session-tree-history-row"]')
+          .evaluateAll(list => list.map(row => ({ id: row.getAttribute('data-backup-id'), reason: row.getAttribute('data-reason'), count: Number(row.getAttribute('data-count')) })))
+      // Layout history from the Re-arrange confirm (its own button: the toolbar has no room for one).
+      const openFromConfirm = async (page: Page) => {
+        await page.locator('[data-testid="session-tree-rearrange"]').click()
+        await page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"] [data-testid="session-tree-rearrange-history"]').click()
+        await historyOn(page).locator('[data-testid="session-tree-history-row"]').first().waitFor({ timeout: 10_000 })
+      }
+
+      // Re-arrange on A; its toast opens Layout history, which lists what it forgot.
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await a.page.locator('[data-testid="session-tree-rearrange-confirm"]').click()
+      const fresh = await waitFor('the fresh layout stored', () => stored(a), value => {
+        const tip = layoutOf(value)[key('st-sys-tip')]
+
+        return Boolean(tip) && !near(tip, moved)
+      })
+      const freshLayout = layoutOf(fresh)
+
+      await a.page.locator('[data-testid="session-tree-toast-history"]').click()
+      await historyOn(a.page).locator('[data-testid="session-tree-history-row"]').first().waitFor({ timeout: 10_000 })
+      const fromToast = await listOf(a.page)
+
+      await historyOn(a.page).locator('[data-testid="session-tree-history-close"]').click()
+      await historyOn(a.page).waitFor({ state: 'detached', timeout: 5000 })
+      assert(fromToast[0]?.reason === 'rearrange' && fromToast[0].count === Object.keys(before).length, `history from the toast: ${JSON.stringify(fromToast)}`)
+      // Let the toast (with its Undo) go.
+      await a.page.locator('[data-testid="session-tree-toast"]').waitFor({ state: 'detached', timeout: 15_000 })
+      await waitFor('B re-arranged', () => flowPos(b.page, 'st-sys-tip'), pos => near(pos, freshLayout[key('st-sys-tip')]), 8000)
+      // B opens Layout history: the arrangement A's Re-arrange forgot is listed first.
+      await openFromConfirm(b.page)
+      const history = historyOn(b.page)
+      const rows = history.locator('[data-testid="session-tree-history-row"]')
+      const listed = await listOf(b.page)
+
+      await b.page.screenshot({ path: join(shots, 'sync-history-dialog.png') })
+      assert(listed[0].reason === 'rearrange' && listed[0].count === Object.keys(before).length, `history: ${JSON.stringify(listed)}`)
+      // The same arrangement re-arranged twice (the previous check's Undo) is listed once.
+      assert(listed.filter(row => row.reason === 'rearrange').length === 1, `duplicate backups: ${JSON.stringify(listed)}`)
+      await rows.first().locator('[data-testid="session-tree-history-restore"]').click()
+      await history.waitFor({ state: 'detached', timeout: 10_000 })
+      await b.page.locator('[data-testid="session-tree-toast"]').waitFor({ timeout: 5000 })
+      const restored = await waitFor('restored in the store', () => stored(b), value => near(layoutOf(value)[key('st-sys-tip')], moved))
+      const restoredLayout = layoutOf(restored)
+      const lost = Object.entries(before).filter(([id, point]) => !near(restoredLayout[id], point))
+
+      await waitFor('B restored', () => flowPos(b.page, 'st-sys-tip'), pos => near(pos, moved))
+      await waitFor('A restored', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, moved), 8000)
+      assert(lost.length === 0, `not restored: ${JSON.stringify(lost.slice(0, 5))}`)
+      // The restore kept the layout it replaced: the history now starts with it.
+      await openFromConfirm(a.page)
+      const historyA = historyOn(a.page)
+      const listedA = await listOf(a.page)
+
+      assert(listedA[0].reason === 'restore' && listedA[1]?.reason === 'rearrange', `A's history: ${JSON.stringify(listedA)}`)
+      await historyA.locator('[data-testid="session-tree-history-close"]').click()
+      await historyA.waitFor({ state: 'detached', timeout: 5000 })
+      assert(saves(logB).some(entry => entry.method === 'PUT' && /"backup":true/.test(entry.body ?? '')), 'no PUT with backup: true from B')
+      // Opening the history from the confirm re-arranged nothing.
+      assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'opening Layout history from the confirm changed the layout')
+      // Review t_c044054d B1: with the list cached (opened above), a misclick on Re-arrange and
+      // then Space + Enter, or Space + Space, or Layout history… and then Enter / Space, must not
+      // restore or re-arrange: both dialogs open on their harmless button.
+      const writesBefore = saves(logA).length
+      const confirmA = a.page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+      const activeId = () => a.page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null)
+      const closeAll = async () => {
+        for (let i = 0; i < 4 && (await a.page.locator('[role="dialog"]').count()) > 0; i += 1) {
+          await a.page.keyboard.press('Escape')
+          await sleep(300)
+        }
+      }
+      const keyFocus: Record<string, null | string> = {}
+
+      for (const keys of [['Space', 'Enter'], ['Space', 'Space'], ['Enter', 'Enter']]) {
+        await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+        await confirmA.waitFor({ timeout: 5000 })
+        keyFocus.confirm = await activeId()
+
+        for (const keyName of keys) {
+          await a.page.keyboard.press(keyName)
+          await sleep(400)
+        }
+
+        await closeAll()
+      }
+
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmA.locator('[data-testid="session-tree-rearrange-history"]').click()
+      await historyA.locator('[data-testid="session-tree-history-row"]').first().waitFor({ timeout: 10_000 })
+      keyFocus.history = await activeId()
+
+      for (const keyName of ['Enter', 'Space']) {
+        await a.page.keyboard.press(keyName)
+        await sleep(400)
+      }
+
+      await closeAll()
+      await sleep(1500)
+      const keyWrites = saves(logA).slice(writesBefore).map(entry => `${entry.method} ${entry.path}`)
+
+      assert(keyFocus.confirm === 'session-tree-rearrange-cancel' && keyFocus.history === 'session-tree-history-close', `focus on open: ${JSON.stringify(keyFocus)}`)
+      assert(keyWrites.length === 0, `keys after a misclick wrote: ${JSON.stringify(keyWrites)}`)
+      assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'keys after a misclick changed the layout')
+
+      return { fromToast, listedOnB: listed, listedOnA: listedA, keyFocus, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+    })
+
+    await check('review t_b632e3ac N2: a Re-arrange refused for a newer Layout history (backups.json schema 3; card 10 writes 2) removes its toast; the error notice shows, the layout comes back, the page stays writable and a later drag saves', async () => {
+      const historyFile = join(t.home, 'session-tree', 'backups.json')
+      const kept = existsSync(historyFile) ? readFileSync(historyFile, 'utf8') : null
+      const toast = a.page.locator('[data-testid="session-tree-toast"]')
+      const isError = (entry: { kind?: string; title?: string }) => entry.kind === 'error' && entry.title === 'Session Tree could not save the layout'
+
+      // No toast left from an earlier check.
+      await toast.waitFor({ state: 'detached', timeout: 15_000 })
+      const before = layoutOf(await stored(a))
+      const shown = await flowPos(a.page, 'st-sys-tip')
+      const noticesBefore = (await notices(a.page)).filter(isError).length
+
+      writeFileSync(historyFile, JSON.stringify({ schema: 3, backups: [] }))
+
+      try {
+        const from = Date.now()
+
+        await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+        await a.page.locator('[data-testid="session-tree-rearrange-confirm"]').click()
+        const notified = await waitFor('the error notice', () => notices(a.page), list => list.filter(isError).length > noticesBefore, 10_000)
+        const notice = notified.filter(isError).at(-1)
+
+        assert(/layout_history_newer|Layout history/.test(notice?.message ?? ''), `notice: ${JSON.stringify(notice)}`)
+        // The toast claimed a Re-arrange that did not happen: it goes with the refusal, well
+        // before its 10 s are up.
+        await toast.waitFor({ state: 'detached', timeout: 3000 }).catch(async () => {
+          throw new Error(`the toast is still shown ${Date.now() - from} ms after the click: "${(await toast.allInnerTexts().catch(() => [])).join(' | ')}"`)
+        })
+        const goneMs = Date.now() - from
+
+        await waitFor('the layout back on A', () => flowPos(a.page, 'st-sys-tip'), pos => near(pos, shown), 8000)
+        const after = layoutOf(await stored(a))
+        const changed = Object.entries(before).filter(([id, point]) => !near(after[id], point))
+
+        assert(changed.length === 0, `the refused Re-arrange changed the store: ${JSON.stringify(changed.slice(0, 5))}`)
+        assert((await a.page.locator('[data-testid="session-tree-read-only"]').count()) === 0, 'the page went read-only')
+        assert((await queuedOps(a.page)) <= 0, 'the refused Re-arrange is still queued')
+        assert(saves(logA, from).filter(entry => entry.method === 'DELETE').length === 1, `DELETEs: ${JSON.stringify(saves(logA, from).map(entry => `${entry.method} ${entry.path}`))}`)
+        // Saves still go out: a drag after the refusal is stored.
+        await fit(a.page)
+        // A block whose grab point (`dragBlock`: 40 px in, half-way down) no other block covers.
+        const target = await a.page.evaluate(ids => {
+          return ids.find(id => {
+            const el = document.querySelector(`[data-testid="session-tree-block"][data-session-id="${id}"]`)
+            const box = el?.getBoundingClientRect()
+            const hit = box ? document.elementFromPoint(box.x + 40, box.y + box.height / 2) : null
+
+            return Boolean(el && hit && el.contains(hit))
+          })
+        }, ['st-hp-root', 'st-md-tip', 'st-sys-mcp', 'st-sys-tip'])
+
+        assert(target, 'no block free to drag')
+        const dragFrom = await flowPos(a.page, target)
+
+        await dragBlock(a.page, target, { x: 60, y: 40 })
+        const dropped = await flowPos(a.page, target)
+
+        assert(!near(dropped, dragFrom), `the drag did not move ${target}`)
+        await waitFor('the drag stored', () => stored(a), value => near(layoutOf(value)[key(target)], dropped))
+
+        return { noticeMessage: notice?.message, toastGoneAfterMs: goneMs, dragged: target, dropped }
+      } finally {
+        if (kept === null) {
+          rmSync(historyFile, { force: true })
+        } else {
+          writeFileSync(historyFile, kept)
+        }
+      }
+    })
+
+    await check('closing and reopening the page keeps this device\'s project scope, view and Singles list (per profile filter); the other device keeps its own', async () => {
+      const page = a.page
+      const syscanvas = page.locator('[data-testid="session-tree-scope"] button[title="Project: syscanvas"]')
+
+      await syscanvas.click()
+      await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"][data-scope]')?.getAttribute('data-scope') !== 'all', undefined, { timeout: 5000 })
+      const scope = await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      await settled(page)
+      await page.locator('[data-testid="session-tree-zoom-in"]').click()
+      await sleep(600)
+      await page.locator('[data-testid="session-tree-singles"] .st-singles-toggle').click()
+      await sleep(400)
+      const view = await viewport(page)
+      const singlesClosed = (await page.getAttribute('[data-testid="session-tree-singles"] .st-singles-toggle', 'aria-expanded')) === 'false'
+
+      // "Close the tab": leave the route, then open Session Tree again; then a full reload too.
+      await goto(t, page, '/')
+      await sleep(1000)
+      await openTree(a)
+      const reopened = {
+        scope: await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope'),
+        chip: await syscanvas.getAttribute('aria-checked'),
+        view: await viewport(page),
+        singles: await page.getAttribute('[data-testid="session-tree-singles"] .st-singles-toggle', 'aria-expanded')
+      }
+
+      facts.reloadLanded = [...((facts.reloadLanded as string[]) ?? []), await reloadTree(a)]
+      const reloaded = {
+        scope: await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope'),
+        view: await viewport(page),
+        singles: await page.getAttribute('[data-testid="session-tree-singles"] .st-singles-toggle', 'aria-expanded')
+      }
+      const scopeB = await b.page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      assert(singlesClosed, 'Singles did not collapse')
+      assert(reopened.scope === scope && reopened.chip === 'true', `reopened on scope ${reopened.scope} (chip ${reopened.chip}), left on ${scope}`)
+      assert(near(reopened.view, view, 1) && Math.abs(reopened.view.zoom - view.zoom) < 0.001, `reopened view ${JSON.stringify(reopened.view)} vs ${JSON.stringify(view)}`)
+      assert(reopened.singles === 'false' && reloaded.singles === 'false', `Singles reopened ${reopened.singles}, reloaded ${reloaded.singles}`)
+      assert(reloaded.scope === scope && near(reloaded.view, view, 1), `reloaded ${JSON.stringify(reloaded)}`)
+      assert(scopeB === 'all', `B's scope changed: ${scopeB}`)
+      // Another profile filter has its own scope (All projects at first); back on default, syscanvas.
+      await page.locator('[data-testid="session-tree-profile"]').selectOption('*')
+      await sleep(800)
+      const otherProfile = await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      await page.locator('[data-testid="session-tree-profile"]').selectOption('default')
+      await settled(page)
+      const backOnDefault = await page.locator('[data-testid="session-tree-page"][data-scope]').getAttribute('data-scope')
+
+      assert(otherProfile === 'all' && backOnDefault === scope, `All profiles: ${otherProfile}, back on default: ${backOnDefault}`)
+      // Leave A as the next checks expect: All projects, Singles open, the whole map in view.
+      await page.locator('[data-testid="session-tree-singles"] .st-singles-toggle').click()
+      await page.locator('[data-testid="session-tree-scope"] button[data-scope="all"]').click()
+      await settled(page)
+      await fit(page)
+      assert(!saves(logA).some(entry => /scopes|sectionsOpen|singles/.test(entry.body ?? '')), 'a device preference went to the backend')
+
+      return { scope, view, reopened, reloaded, otherProfile, b: scopeB }
     })
 
     await check('a new seeded session is placed without moving any stored block (every stored coordinate unchanged, in the store and on screen)', async () => {

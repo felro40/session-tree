@@ -37,8 +37,8 @@ export const DEFAULT_CARD = Number(readFileSync(join(REPO, 'scripts', 'e2e', 'CA
 /** The card whose test home and port block this run uses (each card of the set has its own). */
 export const CARD = Number(process.env.SESSION_TREE_CARD ?? DEFAULT_CARD)
 
-if (!Number.isInteger(CARD) || CARD < 1 || CARD > 7) {
-  throw new Error(`SESSION_TREE_CARD must be 1..7, got ${process.env.SESSION_TREE_CARD}`)
+if (!Number.isInteger(CARD) || CARD < 1 || CARD > 9) {
+  throw new Error(`SESSION_TREE_CARD must be 1..9, got ${process.env.SESSION_TREE_CARD}`)
 }
 
 const PORT_BASE: Record<Role, number> = { coder: 19300 + CARD * 10, reviewer: 19305 + CARD * 10 }
@@ -345,6 +345,24 @@ export function stopGateway(t: TestHermes): void {
       process.kill(pid, 'SIGTERM')
     } catch {
       // Already gone.
+    }
+  }
+}
+
+/**
+ * Every variant home a suite uses (`testHermes(role, { variant })`): they share the role's ports,
+ * so a suite stops all the others first (`stopRoleHomes`). One list, so a new suite's home is
+ * stopped by every other suite too (tests/js/e2e-homes.test.ts checks it lists every variant).
+ */
+export const HOME_VARIANTS = ['actions', 'sync', 'swim', 'rich', 'subway', 'toolbar', 'final', 'select', 'shared'] as const
+
+/** Stops the gateway of every home of `t`'s role (the plain one and every variant) but `t`'s own. */
+export function stopRoleHomes(t: TestHermes): void {
+  for (const variant of [undefined, ...HOME_VARIANTS]) {
+    const other = testHermes(t.role, variant ? { variant } : {})
+
+    if (other.root !== t.root) {
+      stopGateway(other)
     }
   }
 }

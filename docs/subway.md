@@ -71,11 +71,16 @@ flow). Two small, optional additions to the style contract (`src/styles/types.ts
   and cost are in its tooltip. Pinned adds a pin glyph before the title, unread an accent dot after
   it (and a bolder title).
 - Placement: stations top to bottom, left to right (ties by id); each label takes the first of
-  above (the mockup's place), below, above-left, below-left, right, left that overlaps no station,
-  no project label and no label placed before it; when none is free, the spot with the least
-  overlap (`data-label-clear="false"`). Deterministic. In the auto-layout every label fits above its
-  station (unit test and e2e).
-- The layer places the labels from the committed positions; the label store re-renders only the
+  above (the mockup's place), below, above-left, below-left, right, left that is free: it overlaps
+  no station, no project label, no label placed before it and (card 8) no routed track. When none is
+  free, the spot with the least overlap of stations and labels (`data-label-clear="false"` when
+  that overlap is not zero); among spots of equal overlap the one crossed by fewer of the station's
+  own tracks, then by fewer other tracks. Deterministic. In the auto-layout every label fits above
+  its station and no track runs through that spot, so the tracks never move an auto-layout label:
+  the placement with the tracks is byte-identical to the one without them on the default and the
+  500-session fixtures, Show all off and on (unit test).
+- The layer places the labels from the committed positions and the routing chain's routes (the
+  same objects until something structural changes); the label store re-renders only the
   stations whose spot changed. While a station is dragged its label keeps its spot (it moves with
   the station) and is placed again after the drop.
 
@@ -139,11 +144,15 @@ are not guaranteed corridor-free (the auto-layout is); Re-arrange gives the auto
   share the last slot, so their drops overlap visually (no fixture or real data seen has more than
   three).
 - Up-splits (the mockup's one line climbing to a new station) are not drawn: every split drops below.
-- Labels are placed to avoid stations and labels, not tracks; after a drag a track may run under a
-  label. This includes a station's own label once the placement has moved it off its first spot
-  (above) — below a station with splits, or beside it: in the seeded fuzz (447 drops) 167 tracks
-  run through such a moved own label (111 on ff5475c, when more tracks climbed through the label
-  above instead). The router keeps only the first spot clear (0 tracks through it); making the
-  label placement avoid a station's own track stubs is the follow-up (`labels.ts`, not in fix r1's
-  surface).
+- Labels after a drag (card 8, F2): a label takes a spot free of stations, labels and tracks
+  whenever one exists. In the seeded fuzz (`tests/js/subway-fuzz.test.ts`, 447 drops), 033096c
+  had a station's own track through its moved own label in 94 drops (167 tracks), 30 of those
+  drops with a free spot; now 48 drops (65 tracks), none with a free spot — every spot there
+  overlapped a station, a label or a track, and the least-overlap spot was taken. Label/station and
+  label/label overlaps: 0 before and after. The router keeps the first spot (above) clear of a
+  station's own tracks (0 tracks through it).
+- Two re-routed tracks can share a corridor after a drop (card 7 review r2 finding 3): each track
+  detours on its own, and nothing keeps two detours apart. In the review's crossing probe,
+  `st-md-tip → st-md-redline` and `st-md-tip → st-md-katex` both run on y = 898 for about 209 px.
+  The auto-layout has no shared corridors (unit test and e2e); Re-arrange clears it.
 - No continuous obstacle routing while dragging (out of scope, R13).
