@@ -2007,3 +2007,122 @@ Card number: `scripts/e2e/CARD`, `scripts/e2e/harness.ts`, `tests/js/harness-car
   leak into the test builds): lint 0, build 706 600 B, `npm test` 323, `test:py` 259, `test:e2e`
   181/181 exit 0. (A first baseline run in the worktree was stopped: its later suites build the
   test package from `src/` at start, and `src/` was being edited.)
+
+## Card 10 — one shared layout per style (the scope chips only dim and frame)
+
+Start commit `84965816` (the tip of `feature/remember-fix-r2`, merged into `dev` as `5a19146`).
+Measured 2026-11-12 in the worktree `session-tree-wt/shared-layout`.
+
+### Why the layouts differed per scope (pre-check P1)
+
+Every place a scope fed a stored position, a layout key or the auto-layout order, before:
+
+- `src/page/session-tree-page.tsx` `ref = {profile, style, scope}` (the `LayoutRef` every
+  `place` / `drop` / `rearrange` / `restore` / `restoreBackup` used) and the Layout history
+  dialog's `key` / `layout`;
+- `src/model/layout-sync.ts` `refKey` / `sameRef` / `positions(ref)` (`layouts[style][scope]`),
+  `send` (`scope` in `PATCH /state/positions`, `DELETE` / `PUT /state/layout`), `ack`,
+  `replaceRefused`, the drop record key (`entryKey`);
+- `src/model/layout.ts` `groupOrder` (the scoped project's group first), shared by
+  `src/styles/subway/layout.ts` and `src/styles/rich/layout.ts`; `src/styles/swimlanes/layout.ts`
+  (its own lanes: kept);
+- `src/page/layout-history.tsx` (`fetchBackups(…, scope)`, the query key, the backup's scope check);
+- `src/model/device-prefs.ts` `viewportKey(style, profile, scope)` (kept, bumped to v2);
+- `dashboard/layout_store.py` `check_scope` in `upsert_positions` / `delete_layout` /
+  `replace_layout` / `list_backups`, `_layout`, `_keep_backup_locked` and `_trimmed_backups` (per
+  profile + style + scope), `forget_blocks` / `prune` (every scope);
+- `dashboard/plugin_api.py` `PositionsBody.scope`, `LayoutBody.scope`, `DELETE /state/layout` and
+  `GET /state/backups` `scope`.
+
+The user's real store (the card's attachment, read-only): 22 layouts for `default` (Dense 11
+scopes, Subway 8, Rich 3), each with 45–167 entries; `*` and `tasker` one `all` layout each.
+
+### What changed
+
+- Positions once per profile + style (scope key `all`, `state.json` still schema 1). The page's
+  ref is `layoutRef(profile, style)`; `groupOrder` ignores the scope, so every scope's
+  auto-layout is byte-identical to All's (unit test: Dense, Subway, Rich × default and 500-session
+  fixtures × Show all on/off, fresh and merged; a mutation putting the scope first again fails 13
+  of them).
+- Migration on the first load or write (one log line); 409 `scope_layout_retired` for another
+  scope; old queued ops of another scope dropped on adoption.
+- `PUT /state/layout/project`: the scoped Re-arrange (backup of the whole style layout first, under
+  the same lock) and its Undo, per block. `backups.json` schema 2 (`project`); schema 1 loads.
+- `viewport.v2`; a project scope frames its own blocks (first visit, Fit, an off-project view).
+
+### e2e-shared (`scripts/e2e-shared.ts`, 19 checks)
+
+- Migration fixture: the attachment's store with its 44 seeded-session-mapped keys (the rest
+  pruned as gone), plus a schema-1 `backups.json` with a backup of `/home/david/work_projects/mdesign`
+  and one of `all`. After the first `GET /state`: 5 profile/style layouts, each only `all`, every
+  remaining entry byte-identical; `backups.json` schema 2 with only the `all` backup. Every scope
+  chip (All, Home, syscanvas, hermes-plugins, mdesign) showed 16 / 15 / 16 stored blocks (Dense /
+  Subway / Rich) at their `all` spots (±0.5).
+- Per style (Dense, Subway, Rich): Re-arrange in All rewrote all 20 entries; two blocks dragged
+  in All stayed put on screen (20 compared) and in the store through the mdesign scope and back;
+  the first visit framed mdesign's 5 blocks inside the pane with 11 dimmed; Fit after a 600 × 400 px
+  middle-drag pan framed them again; a block dragged in the scope showed at its spot in All and in
+  the second context; the scoped Re-arrange ("The 5 blocks of mdesign go back to their automatic
+  spots; other projects stay where they are. …") sent one `PUT /state/layout/project` (no
+  `DELETE`), moved only mdesign's dragged blocks, every other entry byte-identical (the other
+  project's dragged block kept its spot); Undo restored exactly those; Layout history's top row
+  "20 blocks · Before Re-arrange · mdesign" (`data-project` the project id, the restore-replaces-
+  everything note, focus on Close); Restore brought back all 20 entries.
+
+### Changed earlier checks (old → new)
+
+- `scripts/e2e-core-dense.ts` live placement: "The syscanvas scope has its own layout: the new
+  blocks land in its bands too" → "the syscanvas scope shows the same layout as All: every block,
+  the new ones included, sits exactly where All shows it (and the new blocks are in their bands)"
+  (new assertion: ≥ 10 blocks compared, none moved by the scope).
+- `scripts/e2e-final.ts`: "each style that saves positions stores its own layout (Swimlanes none)"
+  → "… its own layout, one per style whatever the scope (Swimlanes none)" (new assertion: every
+  stored style has exactly the scope key `all`).
+- `scripts/e2e-sync.ts`: "Re-arrange asks first …; confirmed, it resets this style + scope layout
+  (store and B) …" → "Re-arrange in All projects asks first …; confirmed, it resets every block of
+  this style's one layout (store and B) …"; N2 check "a Re-arrange refused for a newer Layout
+  history (backups.json schema 2)" → "(backups.json schema 3; card 10 writes 2)" (the file it writes
+  is now `schema: 3`).
+- `layoutOf(state, style, scope = 'all')` → `layoutOf(state, style)` (always `all`) in
+  `scripts/e2e/common.ts`, `e2e-sync.ts`, `e2e-rich.ts`, `e2e-swimlanes.ts` (no caller passed a
+  scope); `e2e-rich.ts` / `e2e-subway.ts` clear `viewport.v2` instead of `viewport.v1` for their
+  open-at-Fit checks.
+- `tests/js/layout-sync.test.ts`: "layouts are per profile, style and scope" → "layouts are per
+  profile and style; a ref of another scope is never stored (card 10)" (the `p1` layout is now
+  `{}`); the N2 and B1 tests use a second style instead of scope `p1`.
+- `tests/py/test_layout_store.py`: tests that used another scope as "another layout" (round trip,
+  caps per layout / in all / by size, global caps, forget, prune, canonicalise, layout-count cap)
+  use another style; `test_upsert_then_snapshot_per_profile_style_scope` →
+  `…_per_profile_and_style`; the Re-arrange backup test now asserts a scope is ignored by
+  `list_backups`; the documented backup shape has `project`.
+- `tests/py/test_state_api.py`: the DELETE/PUT and backups endpoint tests use scope `all`;
+  "`GET /state/backups` without `scope` → 422" → "without `style` → 422" (scope is optional).
+- `tests/py/test_plugin_api.py`: the write-route list gains `PUT /state/layout/project`.
+
+### Known downgrade effect
+
+An older Session Tree reads the schema-2 `backups.json` as newer: its Layout history reads empty
+and its Re-arrange / restore answer 409 `layout_history_newer` (its drops still save). Its page
+still reads the shared `all` layout; its writes to another scope get 409 `scope_layout_retired`.
+
+### Bundle
+
+`desktop/plugin.js` **750 534 bytes** (was 742 905), sha256 `ccaa9f57…fb61a59e`, byte-identical
+over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only; no `eval(` /
+`new Function` (guard tests).
+
+### Gates
+
+- Baseline at the start `84965816`: lint 0; build 742 905 B (identical to the committed file);
+  `npm test` 375/375; `npm run test:py` 281 passed; `npm run test:e2e` (17:34–18:03 UTC, run from an
+  exported copy, `git archive`, so the worktree's edits could not leak into the test builds)
+  **240/240, exit 0** in one run: foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28,
+  rich 23, subway 19, toolbar 17, final 14, select 35. (A first baseline run in the worktree was
+  stopped after foundation 19, core-dense 30, actions 30: its sync suite already copied the
+  edited backend, and its N2 check's schema-2 `backups.json` is valid for card 10.)
+- Card 10 (code `3f1e968`; the commits after it change only docs): lint 0; build 0 (750 534 B);
+  `npm test` **404/404** (was 375: layout-sync +8, shared-layout +21); `npm run test:py` **341
+  passed** (was 281: test_shared_layout +44, test_state_api +16); `npm run test:e2e` **259/259,
+  exit 0** in one run (ended 17:27 UTC): foundation 19, core-dense 30, actions 30, sync 25,
+  swimlanes 28, rich 23, subway 19, toolbar 17, final 14, select 35, **shared 19**; every suite's
+  real-Hermes guard passed.
