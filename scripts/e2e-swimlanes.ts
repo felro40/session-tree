@@ -89,8 +89,9 @@ async function stored(s: Session): Promise<StateSnapshot> {
   return api<StateSnapshot>(s, '/api/plugins/session-tree/state?session_profile=default')
 }
 
-const layoutOf = (state: StateSnapshot, style = 'dense', scope = 'all') =>
-  Object.fromEntries(Object.entries(state.layouts[style]?.[scope] ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
+/** A style's stored layout: one per style, under scope `all`, whatever the page's scope (card 10). */
+const layoutOf = (state: StateSnapshot, style = 'dense') =>
+  Object.fromEntries(Object.entries(state.layouts[style]?.all ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 
 async function waitFor<T>(what: string, probe: () => Promise<T>, ok: (value: T) => boolean, timeoutMs = 20_000, everyMs = 250): Promise<T> {
   const deadline = Date.now() + timeoutMs

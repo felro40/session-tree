@@ -6,13 +6,12 @@
  *   ordered by creation time. A "continued as" successor's tree is stacked under its
  *   predecessor's tree, so the dashed link runs down (Dense mockup).
  * - Families are packed top to bottom without overlap, grouped by project (project order from
- *   `projects.tree`, the scoped project first, no project last) under a group label; inside a
- *   group the most recently used family comes first.
+ *   `projects.tree`, no project last; the same in every scope, card 10) under a group label;
+ *   inside a group the most recently used family comes first.
  * - Singles are laid out only when the style shows them on the canvas ("Show all"); then they
  *   fill a grid at the foot of their project group.
  * - `mergeLayout` places new nodes without moving any node that already has a position.
  */
-import { ALL_PROJECTS } from './graph.ts'
 import type { Family, GraphModel } from './graph.ts'
 import { NO_PROJECT_ID } from './projects.ts'
 
@@ -137,15 +136,14 @@ export function layoutFamily(model: GraphModel, family: Family, spec: LayoutSpec
   return { positions, height: Math.max(0, cursorY - spec.rowGap) }
 }
 
-/** Groups in display order: the scoped project first, then `projects.tree` order, no project last. */
+/**
+ * Groups in display order: `projects.tree` order, no project last. Card 10 (A4): the scope no
+ * longer comes first. A project scope shows the one shared layout of its style, so its
+ * auto-layout must place every block exactly where All projects does.
+ */
 export function groupOrder(model: GraphModel, families: readonly Family[]): (string | undefined)[] {
   const present = new Set(families.map(family => family.projectId ?? NO_PROJECT_ID))
   const order: string[] = []
-  const scope = model.options.scope
-
-  if (scope !== ALL_PROJECTS && present.has(scope)) {
-    order.push(scope)
-  }
 
   for (const project of model.projects) {
     if (!project.isNoProject && present.has(project.id) && !order.includes(project.id)) {

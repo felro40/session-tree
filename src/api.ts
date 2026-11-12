@@ -135,6 +135,7 @@ export function stateTransport(ctx: PluginContext): SyncTransport {
     patchSettings: (profile, patch) => ctx.rest(`/settings?${profileQuery(profile)}`, { method: 'PATCH', body: patch, timeoutMs: 15000 }),
     deleteLayout: (profile, style, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style, scope })}`, { method: 'DELETE', timeoutMs: 15000 }),
     putLayout: (profile, body) => ctx.rest(`/state/layout?${profileQuery(profile)}`, { method: 'PUT', body, timeoutMs: 20000 }),
+    putProjectBlocks: (profile, body) => ctx.rest(`/state/layout/project?${profileQuery(profile)}`, { method: 'PUT', body, timeoutMs: 20000 }),
     forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: 'POST', body: { ids }, timeoutMs: 15000 })
   }
 }
@@ -150,6 +151,11 @@ export interface LayoutBackupInfo {
   /** Server time, epoch seconds. */
   created_at: number
   reason: 'rearrange' | 'restore'
+  /**
+   * Card 10 (A8): the project a Re-arrange in a project scope reset; `null` for one in All
+   * projects, a restore, or a backup kept before card 10.
+   */
+  project?: null | string
   /** Stored positions (blocks) in it. */
   count: number
 }
@@ -158,15 +164,16 @@ export interface LayoutBackup {
   id: string
   style: string
   scope: string
+  project?: null | string
   created_at: number
   reason: 'rearrange' | 'restore'
   /** By layout key (`PUT /state/layout`'s input). */
   positions: { id: string; x: number; y: number }[]
 }
 
-/** The backups of one style + scope layout of `profile`, newest first. */
-export function fetchBackups(ctx: PluginContext, profile: string, style: string, scope: string): Promise<{ backups: LayoutBackupInfo[]; read_only?: boolean }> {
-  return ctx.rest(`/state/backups?${profileQuery(profile, { style, scope })}`, { timeoutMs: 10000 })
+/** The backups of one style's layout of `profile` (one history per style, card 10), newest first. */
+export function fetchBackups(ctx: PluginContext, profile: string, style: string): Promise<{ backups: LayoutBackupInfo[]; read_only?: boolean }> {
+  return ctx.rest(`/state/backups?${profileQuery(profile, { style })}`, { timeoutMs: 10000 })
 }
 
 export function fetchBackup(ctx: PluginContext, profile: string, id: string): Promise<LayoutBackup> {

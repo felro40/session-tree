@@ -4,10 +4,12 @@
  * draws it in the shared canvas shell, with the toolbar and the style's side panel.
  *
  * Card 4: block positions, the view style and snap come from the synced layout store
- * (`LayoutSync`, per style + profile + scope, saved on drop); Show all, Show archived, the
+ * (`LayoutSync`, one layout per style + profile, saved on drop; card 10: a project scope only
+ * dims the other projects and frames its own, it never moves a block); Show all, Show archived, the
  * profile filter, the project scope (per profile filter), the style override, the panel and the
- * zoom + pan stay on this device (`DevicePrefs`), so a closed and reopened page shows the view
- * it was left on. Re-arrange asks first and can be undone; the layout it forgets is kept in
+ * zoom + pan (per scope) stay on this device (`DevicePrefs`), so a closed and reopened page shows the view
+ * it was left on. Re-arrange asks first and can be undone (in a project scope it resets only that
+ * project's blocks); the layout it replaces is kept in
  * Layout history (`layout-history.tsx`). An unreachable backend shows the cached layout.
  */
 import { Button, EmptyState, ErrorState, host, useQuery, useValue } from '@hermes/plugin-sdk'
@@ -18,13 +20,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { fetchHealth, fetchProfiles, fetchProjects, fetchSessions } from '../api.ts'
 import { applyOverrides } from '../model/actions.ts'
+import { scopeFrameIds, viewOnArrival } from '../model/camera.ts'
 import { viewportKey } from '../model/device-prefs.ts'
 import { ALL_PROFILES, ALL_PROJECTS, buildGraph, layoutKeysOf } from '../model/graph.ts'
 import type { GraphNode } from '../model/graph.ts'
-import { anyInView, laidOutFamilies } from '../model/layout.ts'
+import { laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
-import { layoutRefKey } from '../model/layout-sync.ts'
-import type { LayoutRef, ReplaceRefusal } from '../model/layout-sync.ts'
+import { layoutRef, layoutRefKey } from '../model/layout-sync.ts'
+import type { LayoutRef, ProjectUndo, ReplaceRefusal } from '../model/layout-sync.ts'
+import { projectReset } from '../model/project-rearrange.ts'
 import { EMPTY_SELECTION, canvasSelectable, keepShown, reduceSelection, singleSelected } from '../model/selection.ts'
 import type { Selection, SelectionAction } from '../model/selection.ts'
 import { visibleRows } from '../model/sessions.ts'
@@ -77,6 +81,8 @@ interface UndoToast {
    */
   action: ReplaceRefusal['action']
   layout: string
+  /** A Re-arrange in a project scope (card 10): that project. */
+  project?: string
 }
 
 function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; services: Services }) {
@@ -172,7 +178,9 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   )
 
   const spec = useMemo(() => style.layoutSpec({ showAll }), [style, showAll])
-  const ref = useMemo<LayoutRef>(() => ({ profile, style: style.id, scope }), [profile, style, scope])
+  // Card 10 (L1): one layout per profile + style. The scope chips only dim and frame: every
+  // scope reads and writes the same (`all`) layout, and the auto-layout ignores the scope (A4).
+  const ref = useMemo<LayoutRef>(() => layoutRef(profile, style.id), [profile, style])
   // B2 (card-4 review): positions are stored by layout key (a compacted block's lineage root),
   // so a compaction (a new tip id) does not move a placed block.
   const keys = useMemo(() => layoutKeysOf(model), [model])
@@ -261,6 +269,11 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     [selectable, plainSelectable, setSelection]
   )
 
+  // Card 10 (A9): in a project scope, the blocks the camera frames (Fit, a first visit) and that
+  // a remembered view must show some of: the project's own blocks on the canvas. `undefined`:
+  // All projects (everything), or a scope with none on the canvas.
+  const scopeIds = useMemo(() => (style.frame ? undefined : scopeFrameIds(model, spec, scope)), [scope, style, model, spec])
+
   const fit = useCallback(() => {
     if (frameLayout) {
       // A framed style frames its lanes itself (right of the header column, under the axis).
@@ -273,16 +286,8 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       return
     }
 
-    const inScope =
-      scope === ALL_PROJECTS
-        ? undefined
-        : laidOutFamilies(model, spec)
-            .flatMap(family => family.nodeIds)
-            .filter(id => model.nodeById.get(id)?.outOfScope === false)
-            .map(id => ({ id }))
-
-    void flow.fitView({ ...FIT_OPTIONS, ...(style.fitPadding ? { padding: style.fitPadding } : {}), nodes: inScope && inScope.length > 0 ? inScope : undefined })
-  }, [flow, flowStore, frameLayout, model, spec, scope, style])
+    void flow.fitView({ ...FIT_OPTIONS, ...(style.fitPadding ? { padding: style.fitPadding } : {}), nodes: scopeIds?.map(id => ({ id })) })
+  }, [flow, flowStore, frameLayout, scopeIds, style])
 
   // A new layout (Show all, Re-arrange) is framed once; refreshes are not.
   useEffect(() => {
@@ -296,30 +301,24 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   // A remembered view that shows none of the map's blocks is framed instead of restored: the map
   // was laid out again since (Show all, Re-arrange, another device's drops), or the view was
-  // panned or zoomed off it. A framed style (Swimlanes) frames itself.
+  // panned or zoomed off it. In a project scope, none of that project's blocks (card 10, A9). A
+  // framed style (Swimlanes) frames itself.
   const showsMap = useCallback(
     (viewport: Viewport) => {
-      const { width, height } = flowStore.getState()
-
-      if (style.frame || width <= 0 || height <= 0) {
+      if (style.frame) {
         return true
       }
 
-      const blocks = laidOutFamilies(model, spec).flatMap(family =>
-        family.nodeIds.flatMap(id => {
-          const point = layout.positions.get(id)
+      const { width, height } = flowStore.getState()
+      const ids = scopeIds ?? laidOutFamilies(model, spec).flatMap(family => family.nodeIds)
 
-          return point ? [{ x: point.x, y: point.y, ...style.nodeSize }] : []
-        })
-      )
-
-      return anyInView(blocks, viewport, width, height)
+      return viewOnArrival(viewport, ids, layout.positions, style.nodeSize, { width, height }) !== 'fit'
     },
-    [flowStore, layout, model, spec, style]
+    [flowStore, layout, model, spec, style, scopeIds]
   )
 
-  // R16: zoom and pan per style + profile + scope, on this device. A view seen before comes back
-  // where it was left; a new one is framed.
+  // R16 + card 10 (L3): zoom and pan per style + profile + scope, on this device. A view seen
+  // before comes back where it was left; a new one is framed (a project scope: on its blocks).
   const vpKey = viewportKey(style.id, profile, scope)
   const vpKeyRef = useRef(vpKey)
   const canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data)
@@ -367,6 +366,17 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   const onViewport = useCallback((viewport: Viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs])
 
+  // Card 10 (A9): the `viewport.v1` views were saved for the old per-scope positions: remove the
+  // ones this page can name (every style × the known profiles × All + the projects).
+  useEffect(() => {
+    const scopes = [ALL_PROJECTS, ...projectList.map(project => project.id)]
+    const names = [...profileNames, ALL_PROFILES]
+
+    prefs.forgetLegacyViewports(
+      registeredStyles().flatMap(each => names.flatMap(name => scopes.map(projectScope => viewportKey(each.id, name, projectScope))))
+    )
+  }, [prefs, profileNames, projectList])
+
   const onSelect = useCallback(
     (id: null | string, reveal = false) => {
       const node = id ? model.nodeById.get(id) : undefined
@@ -402,6 +412,30 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
       return
     }
 
+    if (scope !== ALL_PROJECTS) {
+      // Card 10 (L2, A5): only this project's blocks go back to their automatic spots (those of
+      // a fresh full layout, All order); every other block stays where it is.
+      const reset = projectReset(model, scope, style.layout(model, undefined, spec), sync.positions(ref), keys)
+      const undo: ProjectUndo = sync.rearrangeProject(ref, scope, reset.keys, reset.spots)
+
+      requestFit()
+      setToast({
+        id: Date.now(),
+        message: 'Project re-arranged',
+        history: true,
+        action: 'rearrange',
+        layout: layoutRefKey(ref),
+        project: scope,
+        undo: () => {
+          sync.restoreProject(ref, undo)
+          setToast(undefined)
+          requestFit()
+        }
+      })
+
+      return
+    }
+
     const previous = sync.rearrange(ref)
     const id = Date.now()
 
@@ -418,7 +452,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         requestFit()
       }
     })
-  }, [sync, ref, style, requestFit, setToast])
+  }, [sync, ref, style, scope, model, spec, keys, requestFit, setToast])
 
   // A restore from Layout history: the backup becomes the layout (the server keeps the one it
   // replaces), with Undo like a Re-arrange.
@@ -449,7 +483,9 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   useEffect(
     () =>
       sync.onReplaceRefused(refusal =>
-        setToast(current => (current?.action === refusal.action && current.layout === layoutRefKey(refusal.ref) ? undefined : current))
+        setToast(current =>
+          current?.action === refusal.action && current.layout === layoutRefKey(refusal.ref) && current.project === refusal.project ? undefined : current
+        )
       ),
     [sync, setToast]
   )
@@ -521,9 +557,12 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   const sectionOpen = useCallback((section: string) => prefs.sectionOpen(style.id, section), [prefs, style])
   const onSection = useCallback((section: string, open: boolean) => prefs.setSectionOpen(style.id, section, open), [prefs, style])
   // The Re-arrange confirm and Layout history name the view they act on.
-  const viewLabel = `${style.label} · ${scope === ALL_PROJECTS ? 'All projects' : (projectList.find(project => project.id === scope)?.label ?? scope)}${
-    profile === ALL_PROFILES ? ' · All profiles' : profile !== activeProfile ? ` · ${profile}` : ''
-  }`
+  const profileSuffix = profile === ALL_PROFILES ? ' · All profiles' : profile !== activeProfile ? ` · ${profile}` : ''
+  const scopeProjectLabel = scope === ALL_PROJECTS ? undefined : (projectList.find(project => project.id === scope)?.label ?? scope)
+  const viewLabel = `${style.label} · ${scopeProjectLabel ?? 'All projects'}${profileSuffix}`
+  // Card 10 (A8): Layout history is one list per profile + style.
+  const historyLabel = `${style.label}${profileSuffix}`
+  const projectLabel = useCallback((id: string) => projectList.find(project => project.id === id)?.label, [projectList])
   const offline = sync.offline(profile)
   // A background refresh (poll, push or Retry) failed while earlier data is on screen: the canvas
   // keeps that data (c5 r4 N2) and a small note says so; the next successful refresh clears it.
@@ -605,6 +644,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           snap={snap}
           nowMs={nowMs}
           initialViewport={saved}
+          fitIds={scopeIds}
           onViewport={onViewport}
           frameLayout={frameLayout}
           onToggleLane={onToggleLane}
@@ -729,6 +769,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         <RearrangeConfirm
           open={confirmRearrange && style.savesLayout}
           viewLabel={viewLabel}
+          project={scopeProjectLabel === undefined ? undefined : { label: scopeProjectLabel, count: scopeIds?.length ?? 0 }}
           onClose={() => setConfirmRearrange(false)}
           onConfirm={onRearrange}
           onHistory={() => setHistoryOpen(true)}
@@ -736,11 +777,13 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
         {historyOpen && style.savesLayout && (
           <LayoutHistoryDialog
             // Another view (a scope, profile or style change while open) is a fresh dialog.
-            key={`${ref.profile}\u0000${ref.style}\u0000${ref.scope}`}
+            key={`${ref.profile}\u0000${ref.style}\u0000${scope}`}
             ctx={ctx}
             layout={ref}
             revision={sync.revision(profile)}
-            viewLabel={viewLabel}
+            viewLabel={historyLabel}
+            scopeLabel={scopeProjectLabel}
+            projectLabel={projectLabel}
             nowMs={nowMs}
             flush={flushSync}
             onClose={() => setHistoryOpen(false)}

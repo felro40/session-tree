@@ -8,8 +8,8 @@
  *   and a split hold only stations of earlier splits' subtrees, all in later columns. The drop
  *   from the parent's own bottom slot therefore runs through empty space, the splits of one
  *   station drop side by side (later splits further left), and no two tracks share a corridor.
- * - Families are stacked top to bottom, grouped by project (the shared `groupOrder`: the scoped
- *   project first, `projects.tree` order, no project last), each group under its label with room
+ * - Families are stacked top to bottom, grouped by project (the shared `groupOrder`:
+ *   `projects.tree` order, no project last, the same in every scope), each group under its label with room
  *   for the first row's station labels. With Show all, singles fill a grid under the group's trees.
  * - `previous` (stored positions) is kept exactly (the same objects). A new station goes where its
  *   track would put it (right of its parent on the parent's row for the first row child, else on

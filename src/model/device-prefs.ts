@@ -38,10 +38,18 @@ export interface DeviceToggles {
 export interface PrefsStorage {
   get<T>(key: string, fallback: T): T
   set(key: string, value: unknown): void
+  /** `ctx.storage.remove` (the SDK has it; a test storage may not). */
+  remove?(key: string): void
 }
 
 export const DEVICE_KEY = 'device.v1'
-export const VIEWPORT_KEY = 'viewport.v1'
+/**
+ * Zoom + pan per style + profile + scope. Card 10 (A9): bumped once from `viewport.v1`, whose
+ * views were saved for the old per-scope block positions; v1 entries are never read again, and
+ * each one is removed when its key is next looked at (`viewport`, `forgetLegacyViewports`).
+ */
+export const VIEWPORT_KEY = 'viewport.v2'
+export const LEGACY_VIEWPORT_KEY = 'viewport.v1'
 
 const DEFAULTS: DeviceToggles = {
   styleOverride: null,
@@ -66,6 +74,8 @@ export const viewportKey = (style: string, profile: string, scope: string) => `$
 export class DevicePrefs {
   private readonly storage: PrefsStorage
   private readonly listeners = new Set<() => void>()
+  /** Keys whose `viewport.v1` entry was already looked at (and removed) on this page. */
+  private readonly legacyForgotten = new Set<string>()
   private toggles: DeviceToggles
   private version = 0
 
@@ -136,9 +146,33 @@ export class DevicePrefs {
   }
 
   viewport(key: string): undefined | Viewport {
+    this.forgetLegacyViewports([key])
+
     const value = this.storage.get<unknown>(`${VIEWPORT_KEY}:${key}`, null) as Viewport | null
 
     return value && [value.x, value.y, value.zoom].every(Number.isFinite) && value.zoom > 0 ? { x: value.x, y: value.y, zoom: value.zoom } : undefined
+  }
+
+  /**
+   * Removes the `viewport.v1` entries of these keys (`viewportKey(style, profile, scope)`), once
+   * per key per page: the storage cannot list its keys, so the page names the ones it knows.
+   */
+  forgetLegacyViewports(keys: Iterable<string>): void {
+    for (const key of keys) {
+      if (this.legacyForgotten.has(key)) {
+        continue
+      }
+
+      this.legacyForgotten.add(key)
+
+      if (this.storage.get<unknown>(`${LEGACY_VIEWPORT_KEY}:${key}`, null) !== null) {
+        if (this.storage.remove) {
+          this.storage.remove(`${LEGACY_VIEWPORT_KEY}:${key}`)
+        } else {
+          this.storage.set(`${LEGACY_VIEWPORT_KEY}:${key}`, null)
+        }
+      }
+    }
   }
 
   /** Not a listener event: the viewport is the canvas's own state, only remembered here. */

@@ -1080,10 +1080,16 @@ async function main(): Promise<void> {
       await clickToolbar(page, 'session-tree-fit')
       await page.screenshot({ path: join(shots, 'live-placement-all-light.png') })
 
-      // The syscanvas scope has its own layout: the new blocks land in its bands too.
+      // Card 10 (L1): the syscanvas scope shows the same layout as All: every block, the new
+      // ones included, sits exactly where All shows it (and the new blocks are in their bands).
       await setScope(page, 'syscanvas')
       const scoped = { hp: await bandPlacement(page, liveId), sys: await bandPlacement(page, sysLiveId) }
+      const inScope = await allFlowPositions(page)
+      const movedByScope = Object.entries(afterSys).filter(([id, point]) => point && inScope[id] && (Math.abs(inScope[id].x - point.x) > 0.5 || Math.abs(inScope[id].y - point.y) > 0.5))
+      const compared = Object.keys(afterSys).filter(id => afterSys[id] && inScope[id]).length
 
+      assert(compared >= 10, `only ${compared} blocks to compare`)
+      assert(movedByScope.length === 0, `the scope moved blocks: ${JSON.stringify(movedByScope.slice(0, 5))}`)
       assertInBand(scoped.hp, `${liveId} (syscanvas scope)`)
       assertInBand(scoped.sys, `${sysLiveId} (syscanvas scope)`)
       await page.screenshot({ path: join(shots, 'live-placement-scope-light.png') })

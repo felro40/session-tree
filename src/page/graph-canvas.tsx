@@ -70,6 +70,11 @@ export interface GraphCanvasProps {
   nowMs: number
   /** This view's zoom + pan from an earlier visit on this device; framed (fit) when absent. */
   initialViewport?: Viewport
+  /**
+   * Card 10 (A9): the blocks a mount without `initialViewport` frames: a project scope's own
+   * blocks (the others are dimmed around them); absent or empty: everything.
+   */
+  fitIds?: readonly string[]
   /** After every pan or zoom: remembered per style + profile + scope on this device. */
   onViewport(viewport: Viewport): void
   /** A framed style's layout (Swimlanes): which blocks are shown, and what its layers draw. */
@@ -127,9 +132,14 @@ function StyleProviders({ model, children }: { model: GraphModel; children: Reac
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { style, spec, model, positions, labels, selection, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel } = props
+  const { style, spec, model, positions, labels, selection, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel } = props
   // Read once: the canvas frames itself (or restores this view) on mount only.
   const [mountViewport] = useState(initialViewport)
+  const [mountFit] = useState(() => ({
+    padding: style.fitPadding ?? 0.08,
+    maxZoom: 1.25,
+    ...(fitIds && fitIds.length > 0 ? { nodes: fitIds.map(id => ({ id })) } : {})
+  }))
   const ctx = usePluginCtx()
   const flow = useReactFlow()
   const flowStore = useStoreApi()
@@ -756,7 +766,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
             maxZoom={MAX_ZOOM}
             onlyRenderVisibleElements={nodes.length > VISIBLE_ONLY_ABOVE}
             fitView={!mountViewport && !style.frame}
-            fitViewOptions={{ padding: style.fitPadding ?? 0.08, maxZoom: 1.25 }}
+            fitViewOptions={mountFit}
             defaultViewport={mountViewport}
             onMoveEnd={onMoveEnd}
             proOptions={{ hideAttribution: true }}

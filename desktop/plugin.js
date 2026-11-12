@@ -7506,12 +7506,13 @@ function stateTransport(ctx) {
     patchSettings: (profile, patch) => ctx.rest(`/settings?${profileQuery(profile)}`, { method: "PATCH", body: patch, timeoutMs: 15e3 }),
     deleteLayout: (profile, style2, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style: style2, scope })}`, { method: "DELETE", timeoutMs: 15e3 }),
     putLayout: (profile, body) => ctx.rest(`/state/layout?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
+    putProjectBlocks: (profile, body) => ctx.rest(`/state/layout/project?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
     forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: "POST", body: { ids }, timeoutMs: 15e3 })
   };
 }
 var LAYOUT_CHANGED_EVENT = "plugin.session-tree.layout.changed";
-function fetchBackups(ctx, profile, style2, scope) {
-  return ctx.rest(`/state/backups?${profileQuery(profile, { style: style2, scope })}`, { timeoutMs: 1e4 });
+function fetchBackups(ctx, profile, style2) {
+  return ctx.rest(`/state/backups?${profileQuery(profile, { style: style2 })}`, { timeoutMs: 1e4 });
 }
 function fetchBackup(ctx, profile, id2) {
   return ctx.rest(`/state/backups/${encodeURIComponent(id2)}?${profileQuery(profile)}`, { timeoutMs: 15e3 });
@@ -7705,108 +7706,8 @@ function settleOverrides(rows, overrides) {
   return next;
 }
 
-// src/model/device-prefs.ts
+// src/model/camera.ts
 init_define_import_meta_env();
-var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v1", DEFAULTS = {
-  styleOverride: null,
-  showAll: !1,
-  showArchived: !1,
-  profile: null,
-  scopes: {},
-  panelOpen: {},
-  sectionsOpen: {},
-  collapsedLanes: []
-}, MAX_COLLAPSED_LANES = 200, MAX_SCOPES = 100, ALL_SCOPE = "all", MAX_KEY = 4096, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
-  storage;
-  listeners = /* @__PURE__ */ new Set();
-  toggles;
-  version = 0;
-  constructor(storage) {
-    this.storage = storage, this.toggles = sanitize(storage.get(DEVICE_KEY, null));
-  }
-  get() {
-    return this.toggles;
-  }
-  get changeVersion() {
-    return this.version;
-  }
-  set(patch) {
-    this.toggles = sanitize({ ...this.toggles, ...patch }), this.storage.set(DEVICE_KEY, this.toggles), this.version += 1;
-    for (let listener of [...this.listeners])
-      listener();
-  }
-  /** The project scope last chosen for one profile filter value; `all` when none. */
-  scope(profile) {
-    return this.toggles.scopes[profile] ?? ALL_SCOPE;
-  }
-  setScope(profile, scope) {
-    if (this.scope(profile) === scope)
-      return;
-    let others = Object.fromEntries(Object.entries(this.toggles.scopes).filter(([key]) => key !== profile));
-    this.set({ scopes: scope === ALL_SCOPE ? others : { ...others, [profile]: scope } });
-  }
-  panelOpen(style2, fallback = !0) {
-    return this.toggles.panelOpen[style2] ?? fallback;
-  }
-  setPanelOpen(style2, open) {
-    this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
-  }
-  sectionOpen(style2, section, fallback = !0) {
-    return this.toggles.sectionsOpen[`${style2}:${section}`] ?? fallback;
-  }
-  setSectionOpen(style2, section, open) {
-    this.set({ sectionsOpen: { ...this.toggles.sectionsOpen, [`${style2}:${section}`]: open } });
-  }
-  laneCollapsed(key) {
-    return this.toggles.collapsedLanes.includes(key);
-  }
-  /** Collapses or expands one Swimlanes lane on this device. */
-  toggleLane(key) {
-    let lanes = this.toggles.collapsedLanes;
-    this.set({ collapsedLanes: lanes.includes(key) ? lanes.filter((each) => each !== key) : [...lanes, key] });
-  }
-  viewport(key) {
-    let value2 = this.storage.get(`${VIEWPORT_KEY}:${key}`, null);
-    return value2 && [value2.x, value2.y, value2.zoom].every(Number.isFinite) && value2.zoom > 0 ? { x: value2.x, y: value2.y, zoom: value2.zoom } : void 0;
-  }
-  /** Not a listener event: the viewport is the canvas's own state, only remembered here. */
-  setViewport(key, viewport) {
-    [viewport.x, viewport.y, viewport.zoom].every(Number.isFinite) && this.storage.set(`${VIEWPORT_KEY}:${key}`, { x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-  }
-  subscribe(listener) {
-    return this.listeners.add(listener), () => this.listeners.delete(listener);
-  }
-};
-function booleans(value2) {
-  let out = {};
-  if (value2 && typeof value2 == "object" && !Array.isArray(value2))
-    for (let [key, open] of Object.entries(value2))
-      typeof open == "boolean" && key.length <= MAX_KEY && (out[key] = open);
-  return out;
-}
-function scopes(value2) {
-  if (!value2 || typeof value2 != "object" || Array.isArray(value2))
-    return {};
-  let entries = Object.entries(value2).filter(
-    (entry) => entry[0].length > 0 && entry[0].length <= MAX_KEY && typeof entry[1] == "string" && entry[1].length > 0 && entry[1].length <= MAX_KEY && entry[1] !== ALL_SCOPE
-  );
-  return Object.fromEntries(entries.slice(-MAX_SCOPES));
-}
-function sanitize(value2) {
-  let raw = value2 && typeof value2 == "object" ? value2 : {}, collapsedLanes = Array.isArray(raw.collapsedLanes) ? [...new Set(raw.collapsedLanes.filter((key) => typeof key == "string" && key.length > 0 && key.length <= MAX_KEY))].slice(
-    -MAX_COLLAPSED_LANES
-  ) : DEFAULTS.collapsedLanes;
-  return {
-    styleOverride: typeof raw.styleOverride == "string" ? raw.styleOverride : DEFAULTS.styleOverride,
-    showAll: typeof raw.showAll == "boolean" ? raw.showAll : DEFAULTS.showAll,
-    showArchived: typeof raw.showArchived == "boolean" ? raw.showArchived : DEFAULTS.showArchived,
-    profile: typeof raw.profile == "string" ? raw.profile : DEFAULTS.profile,
-    scopes: scopes(raw.scopes),
-    panelOpen: booleans(raw.panelOpen),
-    sectionsOpen: booleans(raw.sectionsOpen),
-    collapsedLanes
-  };
-}
 
 // src/model/graph.ts
 init_define_import_meta_env();
@@ -8103,8 +8004,7 @@ function layoutFamily(model, family, spec) {
   return { positions, height: Math.max(0, cursorY - spec.rowGap) };
 }
 function groupOrder(model, families) {
-  let present = new Set(families.map((family) => family.projectId ?? NO_PROJECT_ID)), order = [], scope = model.options.scope;
-  scope !== ALL_PROJECTS && present.has(scope) && order.push(scope);
+  let present = new Set(families.map((family) => family.projectId ?? NO_PROJECT_ID)), order = [];
   for (let project of model.projects)
     !project.isNoProject && present.has(project.id) && !order.includes(project.id) && order.push(project.id);
   for (let id2 of [...present].sort())
@@ -8286,8 +8186,142 @@ function mergeLayout(previous, model, spec) {
   return { positions, labels: drawnLabels(positions, blockGroups(families)) };
 }
 
+// src/model/camera.ts
+function scopeFrameIds(model, spec, scope) {
+  if (scope === ALL_PROJECTS)
+    return;
+  let ids = laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1);
+  return ids.length > 0 ? ids : void 0;
+}
+function viewOnArrival(saved, ids, positions, size, pane) {
+  if (!saved)
+    return "fit";
+  if (pane.width <= 0 || pane.height <= 0)
+    return saved;
+  let rects = ids.flatMap((id2) => {
+    let point = positions.get(id2);
+    return point ? [{ x: point.x, y: point.y, ...size }] : [];
+  });
+  return anyInView(rects, saved, pane.width, pane.height) ? saved : "fit";
+}
+
+// src/model/device-prefs.ts
+init_define_import_meta_env();
+var DEVICE_KEY = "device.v1", VIEWPORT_KEY = "viewport.v2", LEGACY_VIEWPORT_KEY = "viewport.v1", DEFAULTS = {
+  styleOverride: null,
+  showAll: !1,
+  showArchived: !1,
+  profile: null,
+  scopes: {},
+  panelOpen: {},
+  sectionsOpen: {},
+  collapsedLanes: []
+}, MAX_COLLAPSED_LANES = 200, MAX_SCOPES = 100, ALL_SCOPE = "all", MAX_KEY = 4096, viewportKey = (style2, profile, scope) => `${style2}|${profile}|${scope}`, DevicePrefs = class {
+  storage;
+  listeners = /* @__PURE__ */ new Set();
+  /** Keys whose `viewport.v1` entry was already looked at (and removed) on this page. */
+  legacyForgotten = /* @__PURE__ */ new Set();
+  toggles;
+  version = 0;
+  constructor(storage) {
+    this.storage = storage, this.toggles = sanitize(storage.get(DEVICE_KEY, null));
+  }
+  get() {
+    return this.toggles;
+  }
+  get changeVersion() {
+    return this.version;
+  }
+  set(patch) {
+    this.toggles = sanitize({ ...this.toggles, ...patch }), this.storage.set(DEVICE_KEY, this.toggles), this.version += 1;
+    for (let listener of [...this.listeners])
+      listener();
+  }
+  /** The project scope last chosen for one profile filter value; `all` when none. */
+  scope(profile) {
+    return this.toggles.scopes[profile] ?? ALL_SCOPE;
+  }
+  setScope(profile, scope) {
+    if (this.scope(profile) === scope)
+      return;
+    let others = Object.fromEntries(Object.entries(this.toggles.scopes).filter(([key]) => key !== profile));
+    this.set({ scopes: scope === ALL_SCOPE ? others : { ...others, [profile]: scope } });
+  }
+  panelOpen(style2, fallback = !0) {
+    return this.toggles.panelOpen[style2] ?? fallback;
+  }
+  setPanelOpen(style2, open) {
+    this.set({ panelOpen: { ...this.toggles.panelOpen, [style2]: open } });
+  }
+  sectionOpen(style2, section, fallback = !0) {
+    return this.toggles.sectionsOpen[`${style2}:${section}`] ?? fallback;
+  }
+  setSectionOpen(style2, section, open) {
+    this.set({ sectionsOpen: { ...this.toggles.sectionsOpen, [`${style2}:${section}`]: open } });
+  }
+  laneCollapsed(key) {
+    return this.toggles.collapsedLanes.includes(key);
+  }
+  /** Collapses or expands one Swimlanes lane on this device. */
+  toggleLane(key) {
+    let lanes = this.toggles.collapsedLanes;
+    this.set({ collapsedLanes: lanes.includes(key) ? lanes.filter((each) => each !== key) : [...lanes, key] });
+  }
+  viewport(key) {
+    this.forgetLegacyViewports([key]);
+    let value2 = this.storage.get(`${VIEWPORT_KEY}:${key}`, null);
+    return value2 && [value2.x, value2.y, value2.zoom].every(Number.isFinite) && value2.zoom > 0 ? { x: value2.x, y: value2.y, zoom: value2.zoom } : void 0;
+  }
+  /**
+   * Removes the `viewport.v1` entries of these keys (`viewportKey(style, profile, scope)`), once
+   * per key per page: the storage cannot list its keys, so the page names the ones it knows.
+   */
+  forgetLegacyViewports(keys) {
+    for (let key of keys)
+      this.legacyForgotten.has(key) || (this.legacyForgotten.add(key), this.storage.get(`${LEGACY_VIEWPORT_KEY}:${key}`, null) !== null && (this.storage.remove ? this.storage.remove(`${LEGACY_VIEWPORT_KEY}:${key}`) : this.storage.set(`${LEGACY_VIEWPORT_KEY}:${key}`, null)));
+  }
+  /** Not a listener event: the viewport is the canvas's own state, only remembered here. */
+  setViewport(key, viewport) {
+    [viewport.x, viewport.y, viewport.zoom].every(Number.isFinite) && this.storage.set(`${VIEWPORT_KEY}:${key}`, { x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+  }
+  subscribe(listener) {
+    return this.listeners.add(listener), () => this.listeners.delete(listener);
+  }
+};
+function booleans(value2) {
+  let out = {};
+  if (value2 && typeof value2 == "object" && !Array.isArray(value2))
+    for (let [key, open] of Object.entries(value2))
+      typeof open == "boolean" && key.length <= MAX_KEY && (out[key] = open);
+  return out;
+}
+function scopes(value2) {
+  if (!value2 || typeof value2 != "object" || Array.isArray(value2))
+    return {};
+  let entries = Object.entries(value2).filter(
+    (entry) => entry[0].length > 0 && entry[0].length <= MAX_KEY && typeof entry[1] == "string" && entry[1].length > 0 && entry[1].length <= MAX_KEY && entry[1] !== ALL_SCOPE
+  );
+  return Object.fromEntries(entries.slice(-MAX_SCOPES));
+}
+function sanitize(value2) {
+  let raw = value2 && typeof value2 == "object" ? value2 : {}, collapsedLanes = Array.isArray(raw.collapsedLanes) ? [...new Set(raw.collapsedLanes.filter((key) => typeof key == "string" && key.length > 0 && key.length <= MAX_KEY))].slice(
+    -MAX_COLLAPSED_LANES
+  ) : DEFAULTS.collapsedLanes;
+  return {
+    styleOverride: typeof raw.styleOverride == "string" ? raw.styleOverride : DEFAULTS.styleOverride,
+    showAll: typeof raw.showAll == "boolean" ? raw.showAll : DEFAULTS.showAll,
+    showArchived: typeof raw.showArchived == "boolean" ? raw.showArchived : DEFAULTS.showArchived,
+    profile: typeof raw.profile == "string" ? raw.profile : DEFAULTS.profile,
+    scopes: scopes(raw.scopes),
+    panelOpen: booleans(raw.panelOpen),
+    sectionsOpen: booleans(raw.sectionsOpen),
+    collapsedLanes
+  };
+}
+
 // src/model/layout-sync.ts
 init_define_import_meta_env();
+var layoutRef = (profile, style2) => ({ profile, style: style2, scope: "all" });
 var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
 function refusalKind(error) {
   let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
@@ -8456,6 +8490,22 @@ var LayoutSync = class {
     return this.clearRefused(ref), this.queue({ kind: "replace", ref, entries: [...positions].map(([id2, point]) => [id2, { x: point.x, y: point.y }]), backup: !0 }, !0), previous;
   }
   /**
+   * Card 10 (A5): a Re-arrange in a project scope. `keys` are every layout key of that project
+   * (its blocks, its group labels); `spots` are where a fresh full auto-layout (All order) puts
+   * them. Those that have a spot go there; those it does not place are forgotten; every other
+   * block stays. One op, applied per block on the server, which keeps the whole style layout in
+   * Layout history first. Answers what Undo needs.
+   */
+  rearrangeProject(ref, project, keys, spots) {
+    let shown = this.positions(ref), touched = [...new Set(keys)], previous = new Map(touched.filter((key) => shown.has(key)).map((key) => [key, shown.get(key)])), entries = touched.filter((key) => spots.has(key)).map((key) => [key, { x: spots.get(key).x, y: spots.get(key).y }]), remove2 = touched.filter((key) => !spots.has(key) && shown.has(key));
+    return this.clearRefused(ref), this.queue({ kind: "project", ref, project, entries, remove: remove2, backup: !0 }, !0), { project, previous: new Map([...previous].map(([key, point]) => [key, { x: point.x, y: point.y }])), touched };
+  }
+  /** Card 10 (A6): Undo of a scoped Re-arrange: exactly that project's previous entries, no backup. */
+  restoreProject(ref, undo) {
+    let entries = [...undo.previous].map(([key, point]) => [key, { x: point.x, y: point.y }]), remove2 = undo.touched.filter((key) => !undo.previous.has(key));
+    this.queue({ kind: "project", ref, project: undo.project, entries, remove: remove2, backup: !1 }, !0);
+  }
+  /**
    * A block moved to another project: forget its stored spot (by layout key) in every layout of
    * the profile (here and on the server), so each layout places it anew in its new band.
    */
@@ -8474,7 +8524,7 @@ var LayoutSync = class {
     return this.dragging.size > 0;
   }
   queue(op, notify) {
-    this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit();
+    isRetiredOp(op) || (this.readOnly ? this.localOnly.push(op) : (this.pending.push(op), this.persistPending(), this.schedule(this.options.debounceMs ?? 300)), notify && this.emit());
   }
   // --- the device's pending queue (NB1) ------------------------------------------------------
   readSlots() {
@@ -8507,7 +8557,11 @@ var LayoutSync = class {
     Array.isArray(legacy) && (adopted.push(...legacy.filter(isOp)), this.storage.set(LEGACY_PENDING_KEY, null));
     for (let [owner, slot] of Object.entries(slots))
       owner !== this.windowId && now2 - slot.beat > ORPHAN_MS && (adopted.push(...slot.ops), delete slots[owner]);
-    return adopted.length === 0 ? !1 : (this.writeSlots(slots), this.pending = [...adopted, ...this.pending], this.persistPending(), !0);
+    if (adopted.length === 0)
+      return !1;
+    this.writeSlots(slots);
+    let kept = adopted.filter((op) => !isRetiredOp(op));
+    return kept.length === 0 ? !1 : (this.pending = [...kept, ...this.pending], this.persistPending(), !0);
   }
   recordDrops(ref, keys, at) {
     let record = { ...this.storage.get(DROPS_KEY, {}) };
@@ -8578,6 +8632,12 @@ var LayoutSync = class {
   }
   /** A dropped Re-arrange or restore from Layout history: tells the page (review t_b632e3ac N2). */
   replaceRefused(op) {
+    if (op.kind === "project") {
+      if (op.backup)
+        for (let listener of [...this.replaceRefusedListeners])
+          listener({ ref: { profile: op.ref.profile, style: op.ref.style, scope: op.ref.scope }, action: "rearrange", project: op.project });
+      return;
+    }
     if (op.kind !== "replace")
       return;
     let action = op.entries === null ? "rearrange" : op.backup === !0 ? "restore" : null;
@@ -8624,7 +8684,14 @@ var LayoutSync = class {
           mode: op.mode,
           positions: op.entries.slice(start2, start2 + BATCH_LIMIT).map(([id2, point]) => ({ id: id2, x: point.x, y: point.y }))
         });
-    else op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
+    else op.kind === "project" ? await this.transport.putProjectBlocks(op.ref.profile, {
+      style: op.ref.style,
+      scope: op.ref.scope,
+      project: op.project,
+      positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
+      remove: op.remove,
+      backup: op.backup
+    }) : op.entries === null ? await this.transport.deleteLayout(op.ref.profile, op.ref.style, op.ref.scope) : await this.transport.putLayout(op.ref.profile, {
       style: op.ref.style,
       scope: op.ref.scope,
       positions: op.entries.map(([id2, point]) => ({ id: id2, x: point.x, y: point.y })),
@@ -8747,6 +8814,13 @@ function applyOp(target, op) {
       target.set(id2, point);
     return;
   }
+  if (op.kind === "project") {
+    for (let id2 of op.remove)
+      target.delete(id2);
+    for (let [id2, point] of op.entries)
+      target.set(id2, point);
+    return;
+  }
   for (let [id2, point] of op.entries)
     (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
 }
@@ -8759,7 +8833,26 @@ function isSnapshot(value2) {
 }
 function isOp(value2) {
   let op = value2;
-  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
+  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : op.kind === "project" ? !!op.ref && typeof op.project == "string" && Array.isArray(op.entries) && Array.isArray(op.remove) && op.remove.every((id2) => typeof id2 == "string") && typeof op.backup == "boolean" : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
+}
+function isRetiredOp(op) {
+  return op.kind !== "settings" && op.kind !== "forget" && op.ref.scope !== "all";
+}
+
+// src/model/project-rearrange.ts
+init_define_import_meta_env();
+var scopeGroupKey = (scope) => groupKey(scope === NO_PROJECT_ID ? void 0 : scope);
+function projectReset(model, scope, fresh, stored, keys) {
+  let group = scopeGroupKey(scope), ids = model.nodes.filter((node) => !node.outOfScope && (node.kind === "session" || node.kind === "standin")).map((node) => node.id), inGroup = (key) => key.startsWith(GROUP_PREFIX) && labelGroup(key) === group, out = new Set(ids.map((id2) => keys.toStore(id2)));
+  for (let key of [...stored.keys(), ...fresh.positions.keys()])
+    inGroup(key) && out.add(key);
+  let spots = /* @__PURE__ */ new Map();
+  for (let [id2, point] of fresh.positions) {
+    let key = id2.startsWith(GROUP_PREFIX) ? id2 : keys.toStore(id2);
+    out.has(key) && spots.set(key, { x: point.x, y: point.y });
+  }
+  let blocks = ids.filter((id2) => fresh.positions.has(id2)).length;
+  return { keys: [...out], spots, blocks };
 }
 
 // src/model/selection.ts
@@ -12166,7 +12259,11 @@ function StyleProviders({ model, children: children2 }) {
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState5(initialViewport), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState5(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState5(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState5(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState5(null), active = frame2 ? activeExtra : null, [routing] = useState5(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
+  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState5(initialViewport), [mountFit] = useState5(() => ({
+    padding: style2.fitPadding ?? 0.08,
+    maxZoom: 1.25,
+    ...fitIds && fitIds.length > 0 ? { nodes: fitIds.map((id2) => ({ id: id2 })) } : {}
+  })), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState5(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState5(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState5(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState5(null), active = frame2 ? activeExtra : null, [routing] = useState5(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
     let out = /* @__PURE__ */ new Map();
     for (let [id2, rect] of rects)
       canvasSelectable(model, shown, id2) && out.set(id2, rect);
@@ -12487,7 +12584,7 @@ function GraphCanvas(props) {
               maxZoom: MAX_ZOOM,
               onlyRenderVisibleElements: nodes.length > VISIBLE_ONLY_ABOVE,
               fitView: !mountViewport && !style2.frame,
-              fitViewOptions: { padding: style2.fitPadding ?? 0.08, maxZoom: 1.25 },
+              fitViewOptions: mountFit,
               defaultViewport: mountViewport,
               onMoveEnd,
               proOptions: { hideAttribution: !0 },
@@ -12547,11 +12644,17 @@ function GraphCanvas(props) {
 init_define_import_meta_env();
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from "@hermes/plugin-sdk";
 import { useState as useState6 } from "react";
+
+// src/page/history-labels.ts
+init_define_import_meta_env();
+var REMOVED_PROJECT = "a removed project";
+function backupLabel(backup, projectLabel) {
+  return backup.reason === "restore" ? "Before a restore" : `Before Re-arrange · ${backup.project ? projectLabel(backup.project) ?? REMOVED_PROJECT : "All projects"}`;
+}
+
+// src/page/layout-history.tsx
 import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
-var BACKUPS_KEPT = 10, REASON_LABEL = {
-  rearrange: "Before Re-arrange",
-  restore: "Before a restore"
-};
+var BACKUPS_KEPT = 10;
 function focusOn(testId) {
   return (event) => {
     let target = event.target?.querySelector(`[data-testid="${testId}"]`);
@@ -12561,17 +12664,18 @@ function focusOn(testId) {
 function RearrangeConfirm({
   open,
   viewLabel,
+  project,
   onClose,
   onConfirm,
   onHistory
 }) {
   return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
     /* @__PURE__ */ jsxs13(DialogHeader, { children: [
-      /* @__PURE__ */ jsx15(DialogTitle, { children: "Re-arrange this layout?" }),
+      /* @__PURE__ */ jsx15(DialogTitle, { children: project ? "Re-arrange this project?" : "Re-arrange this layout?" }),
       /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-rearrange-text", children: [
-        "Every block in ",
-        viewLabel,
-        " goes back to the automatic layout. The current arrangement is kept in Layout history, so you can bring it back."
+        project ? `The ${project.count} block${project.count === 1 ? "" : "s"} of ${project.label} go back to their automatic spots; other projects stay where they are.` : `Every block in ${viewLabel} goes back to the automatic layout.`,
+        " ",
+        "The current arrangement is kept in Layout history, so you can bring it back."
       ] }) })
     ] }),
     /* @__PURE__ */ jsxs13(DialogFooter, { children: [
@@ -12608,18 +12712,20 @@ function LayoutHistoryDialog({
   layout,
   revision,
   viewLabel,
+  scopeLabel,
+  projectLabel,
   nowMs,
   flush,
   onClose,
   onRestore
 }) {
   let [restoring, setRestoring] = useState6(null), [error, setError] = useState6(null), list = useQuery({
-    queryKey: ["session-tree", "backups", layout.profile, layout.style, layout.scope, revision],
-    queryFn: async () => (await flush(), fetchBackups(ctx, layout.profile, layout.style, layout.scope)),
+    queryKey: ["session-tree", "backups", layout.profile, layout.style, revision],
+    queryFn: async () => (await flush(), fetchBackups(ctx, layout.profile, layout.style)),
     retry: !1,
     refetchOnWindowFocus: !1,
     // A new revision keeps the list on screen until the new one arrives.
-    placeholderData: (previous, previousQuery) => previousQuery?.queryKey.slice(0, 5).join("\0") === ["session-tree", "backups", layout.profile, layout.style, layout.scope].join("\0") ? previous : void 0
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey.slice(0, 4).join("\0") === ["session-tree", "backups", layout.profile, layout.style].join("\0") ? previous : void 0
   }), restore = async (backup) => {
     if (!restoring) {
       setRestoring(backup.id), setError(null);
@@ -12641,9 +12747,15 @@ function LayoutHistoryDialog({
       /* @__PURE__ */ jsxs13(DialogDescription, { children: [
         "Earlier arrangements of ",
         viewLabel,
-        ". Each Re-arrange or restore keeps the arrangement it replaces (up to the last ",
+        ", one list for every project scope. Each Re-arrange or restore keeps the arrangement it replaces (up to the last ",
         BACKUPS_KEPT,
-        " per view, shared by your devices). Restoring replaces the current arrangement, which is kept here too."
+        ", shared by your devices). Restoring replaces the current arrangement, which is kept here too.",
+        scopeLabel && /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-history-scope-note", children: [
+          " ",
+          "Restoring replaces the whole layout, every project’s blocks, not only ",
+          scopeLabel,
+          "’s."
+        ] })
       ] })
     ] }),
     list.isPending && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-loading", children: "Loading…" }),
@@ -12652,33 +12764,45 @@ function LayoutHistoryDialog({
       restErrorText(list.error)
     ] }),
     list.data && backups.length === 0 && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-empty", children: "No earlier arrangements of this view yet. Re-arrange keeps the one it replaces here." }),
-    backups.length > 0 && /* @__PURE__ */ jsx15("ul", { className: "st-hist-list", "data-testid": "session-tree-history-list", children: backups.map((backup) => /* @__PURE__ */ jsxs13("li", { className: "st-hist-row", "data-testid": "session-tree-history-row", "data-backup-id": backup.id, "data-count": backup.count, "data-reason": backup.reason, children: [
-      /* @__PURE__ */ jsxs13("span", { className: "st-hist-when", children: [
-        /* @__PURE__ */ jsx15("b", { children: dateTimeLabel(backup.created_at) }),
-        /* @__PURE__ */ jsx15("span", { className: "st-hist-ago", children: agoLabel(backup.created_at, nowMs) })
-      ] }),
-      /* @__PURE__ */ jsxs13("span", { className: "st-hist-what", children: [
-        backup.count,
-        " block",
-        backup.count === 1 ? "" : "s",
-        " · ",
-        REASON_LABEL[backup.reason]
-      ] }),
-      /* @__PURE__ */ jsx15(
-        Button,
-        {
-          type: "button",
-          variant: "outline",
-          size: "sm",
-          disabled: !!restoring,
-          "data-testid": "session-tree-history-restore",
-          onClick: () => {
-            restore(backup);
-          },
-          children: restoring === backup.id ? "Restoring…" : "Restore"
-        }
-      )
-    ] }, backup.id)) }),
+    backups.length > 0 && /* @__PURE__ */ jsx15("ul", { className: "st-hist-list", "data-testid": "session-tree-history-list", children: backups.map((backup) => /* @__PURE__ */ jsxs13(
+      "li",
+      {
+        className: "st-hist-row",
+        "data-testid": "session-tree-history-row",
+        "data-backup-id": backup.id,
+        "data-count": backup.count,
+        "data-reason": backup.reason,
+        "data-project": backup.project ?? void 0,
+        children: [
+          /* @__PURE__ */ jsxs13("span", { className: "st-hist-when", children: [
+            /* @__PURE__ */ jsx15("b", { children: dateTimeLabel(backup.created_at) }),
+            /* @__PURE__ */ jsx15("span", { className: "st-hist-ago", children: agoLabel(backup.created_at, nowMs) })
+          ] }),
+          /* @__PURE__ */ jsxs13("span", { className: "st-hist-what", "data-testid": "session-tree-history-what", children: [
+            backup.count,
+            " block",
+            backup.count === 1 ? "" : "s",
+            " · ",
+            backupLabel(backup, projectLabel)
+          ] }),
+          /* @__PURE__ */ jsx15(
+            Button,
+            {
+              type: "button",
+              variant: "outline",
+              size: "sm",
+              disabled: !!restoring,
+              "data-testid": "session-tree-history-restore",
+              onClick: () => {
+                restore(backup);
+              },
+              children: restoring === backup.id ? "Restoring…" : "Restore"
+            }
+          )
+        ]
+      },
+      backup.id
+    )) }),
     list.data?.read_only && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-read-only", children: "The history was written by a newer Session Tree: it reads as empty here." }),
     error && /* @__PURE__ */ jsx15("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-restore-error", children: error }),
     /* @__PURE__ */ jsx15(DialogFooter, { children: /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", disabled: !!restoring, "data-testid": "session-tree-history-close", onClick: onClose, children: "Close" }) })
@@ -13417,7 +13541,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   let projectList = useMemo9(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo9(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo9(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo9(
     () => buildGraph(rows, projectList, { profile, showArchived, scope }),
     [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo9(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo9(() => ({ profile, style: style2.id, scope }), [profile, style2, scope]), keys = useMemo9(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo9(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState8(createFrameCache), frameLayout = useMemo9(
+  ), spec = useMemo9(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo9(() => layoutRef(profile, style2.id), [profile, style2]), keys = useMemo9(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo9(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState8(createFrameCache), frameLayout = useMemo9(
     () => ready && style2.frame ? frameCache.get({ frame: style2.frame, model, showAll, collapsed, nowMs }) : void 0,
     [ready, style2, model, showAll, collapsed, nowMs, frameCache]
   ), layout = useMemo9(
@@ -13446,32 +13570,25 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   let selection2 = useMemo9(() => keepShown(selectionChoice, selectable, plainSelectable), [selectionChoice, selectable, plainSelectable]), selectedId = singleSelected(selection2), onSelection = useCallback6(
     (action) => setSelection((previous) => reduceSelection(keepShown(previous, selectable, plainSelectable), action, selectable, plainSelectable)),
     [selectable, plainSelectable, setSelection]
-  ), fit = useCallback6(() => {
+  ), scopeIds = useMemo9(() => style2.frame ? void 0 : scopeFrameIds(model, spec, scope), [scope, style2, model, spec]), fit = useCallback6(() => {
     if (frameLayout) {
       let { width, height } = flowStore.getState();
       width > 0 && height > 0 && flow.setViewport(frameLayout.fit(width, height, MIN_ZOOM), { duration: 0 });
       return;
     }
-    let inScope = scope === ALL_PROJECTS ? void 0 : laidOutFamilies(model, spec).flatMap((family) => family.nodeIds).filter((id2) => model.nodeById.get(id2)?.outOfScope === !1).map((id2) => ({ id: id2 }));
-    flow.fitView({ ...FIT_OPTIONS, ...style2.fitPadding ? { padding: style2.fitPadding } : {}, nodes: inScope && inScope.length > 0 ? inScope : void 0 });
-  }, [flow, flowStore, frameLayout, model, spec, scope, style2]);
+    flow.fitView({ ...FIT_OPTIONS, ...style2.fitPadding ? { padding: style2.fitPadding } : {}, nodes: scopeIds?.map((id2) => ({ id: id2 })) });
+  }, [flow, flowStore, frameLayout, scopeIds, style2]);
   useEffect8(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
   let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), showsMap = useCallback6(
     (viewport) => {
-      let { width, height } = flowStore.getState();
-      if (style2.frame || width <= 0 || height <= 0)
+      if (style2.frame)
         return !0;
-      let blocks = laidOutFamilies(model, spec).flatMap(
-        (family) => family.nodeIds.flatMap((id2) => {
-          let point = layout.positions.get(id2);
-          return point ? [{ x: point.x, y: point.y, ...style2.nodeSize }] : [];
-        })
-      );
-      return anyInView(blocks, viewport, width, height);
+      let { width, height } = flowStore.getState(), ids = scopeIds ?? laidOutFamilies(model, spec).flatMap((family) => family.nodeIds);
+      return viewOnArrival(viewport, ids, layout.positions, style2.nodeSize, { width, height }) !== "fit";
     },
-    [flowStore, layout, model, spec, style2]
+    [flowStore, layout, model, spec, style2, scopeIds]
   ), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
   useEffect8(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
@@ -13491,7 +13608,14 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       saved && !refit && showsMap(saved) ? flow.setViewport(saved, { duration: 0 }) : fit();
     }
   }, [vpKey, canvasShown, prefs, flow, fit, scope, style2, showsMap]);
-  let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]), onSelect = useCallback6(
+  let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]);
+  useEffect8(() => {
+    let scopes2 = [ALL_PROJECTS, ...projectList.map((project) => project.id)], names = [...profileNames, ALL_PROFILES];
+    prefs.forgetLegacyViewports(
+      registeredStyles().flatMap((each) => names.flatMap((name) => scopes2.map((projectScope) => viewportKey(each.id, name, projectScope))))
+    );
+  }, [prefs, profileNames, projectList]);
+  let onSelect = useCallback6(
     (id2, reveal2 = !1) => {
       let node = id2 ? model.nodeById.get(id2) : void 0;
       if (id2 && (!node || node.readOnly))
@@ -13510,6 +13634,21 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), onRearrange = useCallback6(() => {
     if (!style2.savesLayout)
       return;
+    if (scope !== ALL_PROJECTS) {
+      let reset = projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys), undo = sync.rearrangeProject(ref, scope, reset.keys, reset.spots);
+      requestFit(), setToast({
+        id: Date.now(),
+        message: "Project re-arranged",
+        history: !0,
+        action: "rearrange",
+        layout: refKey(ref),
+        project: scope,
+        undo: () => {
+          sync.restoreProject(ref, undo), setToast(void 0), requestFit();
+        }
+      });
+      return;
+    }
     let previous = sync.rearrange(ref), id2 = Date.now();
     requestFit(), setToast({
       id: id2,
@@ -13521,7 +13660,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
         sync.restore(ref, previous), setToast(void 0), requestFit();
       }
     });
-  }, [sync, ref, style2, requestFit, setToast]), onRestoreBackup = useCallback6(
+  }, [sync, ref, style2, scope, model, spec, keys, requestFit, setToast]), onRestoreBackup = useCallback6(
     (positions) => {
       let previous = sync.restoreBackup(ref, positions);
       requestFit(), setToast({
@@ -13538,7 +13677,9 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   ), flushSync = useCallback6(() => sync.flush(), [sync]);
   useEffect8(
     () => sync.onReplaceRefused(
-      (refusal) => setToast((current) => current?.action === refusal.action && current.layout === refKey(refusal.ref) ? void 0 : current)
+      (refusal) => setToast(
+        (current) => current?.action === refusal.action && current.layout === refKey(refusal.ref) && current.project === refusal.project ? void 0 : current
+      )
     ),
     [sync, setToast]
   ), useEffect8(() => {
@@ -13576,7 +13717,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   }), visibleCount = useMemo9(() => visibleRows(rows).length, [rows]), onCanvas = useMemo9(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
-  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), sectionOpen = useCallback6((section) => prefs.sectionOpen(style2.id, section), [prefs, style2]), onSection = useCallback6((section, open) => prefs.setSectionOpen(style2.id, section, open), [prefs, style2]), viewLabel = `${style2.label} · ${scope === ALL_PROJECTS ? "All projects" : projectList.find((project) => project.id === scope)?.label ?? scope}${profile === ALL_PROFILES ? " · All profiles" : profile !== activeProfile ? ` · ${profile}` : ""}`, offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
+  ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), sectionOpen = useCallback6((section) => prefs.sectionOpen(style2.id, section), [prefs, style2]), onSection = useCallback6((section, open) => prefs.setSectionOpen(style2.id, section, open), [prefs, style2]), profileSuffix = profile === ALL_PROFILES ? " · All profiles" : profile !== activeProfile ? ` · ${profile}` : "", scopeProjectLabel = scope === ALL_PROJECTS ? void 0 : projectList.find((project) => project.id === scope)?.label ?? scope, viewLabel = `${style2.label} · ${scopeProjectLabel ?? "All projects"}${profileSuffix}`, historyLabel = `${style2.label}${profileSuffix}`, projectLabel = useCallback6((id2) => projectList.find((project) => project.id === id2)?.label, [projectList]), offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
     (id2) => {
       prefs.get().styleOverride ? prefs.set({ styleOverride: id2 }) : sync.setSettings(profile, { style: id2 });
     },
@@ -13615,6 +13756,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           snap,
           nowMs,
           initialViewport: saved,
+          fitIds: scopeIds,
           onViewport,
           frameLayout,
           onToggleLane,
@@ -13711,6 +13853,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           {
             open: confirmRearrange && style2.savesLayout,
             viewLabel,
+            project: scopeProjectLabel === void 0 ? void 0 : { label: scopeProjectLabel, count: scopeIds?.length ?? 0 },
             onClose: () => setConfirmRearrange(!1),
             onConfirm: onRearrange,
             onHistory: () => setHistoryOpen(!0)
@@ -13722,13 +13865,15 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             ctx,
             layout: ref,
             revision: sync.revision(profile),
-            viewLabel,
+            viewLabel: historyLabel,
+            scopeLabel: scopeProjectLabel,
+            projectLabel,
             nowMs,
             flush: flushSync,
             onClose: () => setHistoryOpen(!1),
             onRestore: onRestoreBackup
           },
-          `${ref.profile}\0${ref.style}\0${ref.scope}`
+          `${ref.profile}\0${ref.style}\0${scope}`
         )
       ]
     }
