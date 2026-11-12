@@ -2122,7 +2122,7 @@ over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only;
   edited backend, and its N2 check's schema-2 `backups.json` is valid for card 10.)
 - Card 10 (code `3f1e968`; the commits after it change only docs): lint 0; build 0 (750 534 B);
   `npm test` **404/404** (was 375: layout-sync +8, shared-layout +21); `npm run test:py` **341
-  passed** (was 281: test_shared_layout +44, test_state_api +16); `npm run test:e2e` **259/259,
+  passed** (was 281: test_shared_layout +48, test_state_api +12); `npm run test:e2e` **259/259,
   exit 0** in one run (ended 17:27 UTC): foundation 19, core-dense 30, actions 30, sync 25,
   swimlanes 28, rich 23, subway 19, toolbar 17, final 14, select 35, **shared 19**; every suite's
   real-Hermes guard passed.
