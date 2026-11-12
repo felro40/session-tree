@@ -2126,3 +2126,29 @@ over a rebuild; imports `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only;
   exit 0** in one run (ended 17:27 UTC): foundation 19, core-dense 30, actions 30, sync 25,
   swimlanes 28, rich 23, subway 19, toolbar 17, final 14, select 35, **shared 19**; every suite's
   real-Hermes guard passed.
+
+## Reproducible build (`preserveSymlinks`)
+
+esbuild resolved symlinks, so a worktree whose `node_modules` is a symlink to another checkout's
+named each module by the link's target: `// ../../session-tree/node_modules/d3-color/…` comments
+and `"../../session-tree/node_modules/use-sync-external-store/shim/index.js"(exports, module)`
+keys. A checkout with a real `node_modules` wrote `node_modules/…`: the same code, other bytes.
+`scripts/build.mjs` now sets `preserveSymlinks: true`; nothing else in the build changed.
+
+### Bundle
+
+- **`desktop/plugin.js`: 751 644 bytes** (was 752 233 at `f9d36b2`; 31 lines lose the 19-byte
+  `../../session-tree/` prefix: 27 `// ../` comments, 4 `"../` keys), sha256 `bb20125c…8536532c`,
+  88 esbuild inputs, the same 14 bundled packages in `--licenses`.
+- The same bytes from the worktree (symlinked `node_modules`) and from a detached scratch worktree
+  at `f730dfd` after `npm ci` (real `node_modules`): `cmp` equal, both equal to the committed file.
+- `f9d36b2`'s bundle with `../../session-tree/` removed is byte-identical to the new one (0 lines
+  differ).
+- New guard (`tests/js/guards.test.ts`): the bundle names no module path outside the repo. On
+  `f9d36b2`'s bundle it fails: 31 lines.
+
+### Gates (code `f730dfd`)
+
+lint 0; `npm test` **413/413** (was 412: +1 guard); `npm run test:py` **341 passed**; build 0
+(751 644 B, `git status` clean but the `node_modules` symlink); e2e smoke: reset + foundation
+**19/19**, final (the committed bundle) **14/14**; both real-Hermes guards passed.
