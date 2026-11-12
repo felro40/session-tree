@@ -354,7 +354,7 @@ export function stopGateway(t: TestHermes): void {
  * so a suite stops all the others first (`stopRoleHomes`). One list, so a new suite's home is
  * stopped by every other suite too (tests/js/e2e-homes.test.ts checks it lists every variant).
  */
-export const HOME_VARIANTS = ['actions', 'sync', 'swim', 'rich', 'subway', 'toolbar', 'final', 'select'] as const
+export const HOME_VARIANTS = ['actions', 'sync', 'swim', 'rich', 'subway', 'toolbar', 'final', 'select', 'shared'] as const
 
 /** Stops the gateway of every home of `t`'s role (the plain one and every variant) but `t`'s own. */
 export function stopRoleHomes(t: TestHermes): void {

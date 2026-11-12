@@ -158,7 +158,7 @@ async function main(): Promise<void> {
       return { options }
     })
 
-    await check('every style is switchable and lays itself out on first view; each style that saves positions stores its own layout (Swimlanes none)', async () => {
+    await check('every style is switchable and lays itself out on first view; each style that saves positions stores its own layout, one per style whatever the scope (Swimlanes none)', async () => {
       for (const style of STYLES) {
         await switchStyle(page, style)
         await page.locator('[data-testid="session-tree-block"]').first().waitFor({ timeout: 20_000 })
@@ -177,6 +177,10 @@ async function main(): Promise<void> {
       const spots = STYLES.filter(style => SAVES[style]).map(style => JSON.stringify(baseline[style]['st-hp-root']))
 
       assert(new Set(spots).size === spots.length, `the styles share positions: ${spots.join(' ')}`)
+      // Card 10 (L1): the only layout key of a style is 'all' (no per-scope layouts).
+      const scopes = Object.fromEntries(Object.entries(state.layouts).map(([style, byScope]) => [style, Object.keys(byScope)]))
+
+      assert(Object.values(scopes).every(keys => keys.length === 1 && keys[0] === 'all'), `stored scope keys: ${JSON.stringify(scopes)}`)
       facts.baseline = counts
 
       return counts

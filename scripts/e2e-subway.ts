@@ -323,7 +323,7 @@ async function main(): Promise<void> {
       await sleep(800)
       await page.evaluate(() => {
         for (const key of Object.keys(localStorage)) {
-          if (key.includes('viewport.v1') && key.includes('subway|')) {
+          if (key.includes('viewport.v2') && key.includes('subway|')) {
             localStorage.removeItem(key)
           }
         }

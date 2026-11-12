@@ -86,8 +86,9 @@ export async function stored(s: Session): Promise<StateSnapshot> {
   return api<StateSnapshot>(s, '/api/plugins/session-tree/state?session_profile=default')
 }
 
-export const layoutOf = (state: StateSnapshot, style: string, scope = 'all') =>
-  Object.fromEntries(Object.entries(state.layouts[style]?.[scope] ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }])) as Record<string, { x: number; y: number }>
+/** A style's stored layout: one per style, under scope `all`, whatever the page's scope (card 10). */
+export const layoutOf = (state: StateSnapshot, style: string) =>
+  Object.fromEntries(Object.entries(state.layouts[style]?.all ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }])) as Record<string, { x: number; y: number }>
 
 export async function waitFor<T>(what: string, probe: () => Promise<T>, ok: (value: T) => boolean, timeoutMs = 20_000, everyMs = 250): Promise<T> {
   const deadline = Date.now() + timeoutMs

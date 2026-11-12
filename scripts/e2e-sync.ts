@@ -87,8 +87,9 @@ async function stored(s: Session, profile = 'default'): Promise<StateSnapshot> {
   return api<StateSnapshot>(s, `/api/plugins/session-tree/state?session_profile=${profile}`)
 }
 
-function layoutOf(state: StateSnapshot, style = 'dense', scope = 'all'): Record<string, { x: number; y: number }> {
-  return Object.fromEntries(Object.entries(state.layouts[style]?.[scope] ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
+/** A style's stored layout: one per style, under scope `all`, whatever the page's scope (card 10). */
+function layoutOf(state: StateSnapshot, style = 'dense'): Record<string, { x: number; y: number }> {
+  return Object.fromEntries(Object.entries(state.layouts[style]?.all ?? {}).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 }
 
 /**
@@ -549,7 +550,7 @@ async function main(): Promise<void> {
       return { overrideKeptSynced: true, denseTip: dense, altTip: alt }
     })
 
-    await check('Re-arrange asks first (Cancel, Escape, Space and Enter keep the layout); confirmed, it resets this style + scope layout (store and B), the toast\'s Undo restores it', async () => {
+    await check('Re-arrange in All projects asks first (Cancel, Escape, Space and Enter keep the layout); confirmed, it resets every block of this style\'s one layout (store and B), the toast\'s Undo restores it', async () => {
       await fit(a.page)
       const before = layoutOf(await stored(a))
       const moved = before[key('st-sys-tip')]
@@ -730,7 +731,7 @@ async function main(): Promise<void> {
       return { fromToast, listedOnB: listed, listedOnA: listedA, keyFocus, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
     })
 
-    await check('review t_b632e3ac N2: a Re-arrange refused for a newer Layout history (backups.json schema 2) removes its toast; the error notice shows, the layout comes back, the page stays writable and a later drag saves', async () => {
+    await check('review t_b632e3ac N2: a Re-arrange refused for a newer Layout history (backups.json schema 3; card 10 writes 2) removes its toast; the error notice shows, the layout comes back, the page stays writable and a later drag saves', async () => {
       const historyFile = join(t.home, 'session-tree', 'backups.json')
       const kept = existsSync(historyFile) ? readFileSync(historyFile, 'utf8') : null
       const toast = a.page.locator('[data-testid="session-tree-toast"]')
@@ -742,7 +743,7 @@ async function main(): Promise<void> {
       const shown = await flowPos(a.page, 'st-sys-tip')
       const noticesBefore = (await notices(a.page)).filter(isError).length
 
-      writeFileSync(historyFile, JSON.stringify({ schema: 2, backups: [] }))
+      writeFileSync(historyFile, JSON.stringify({ schema: 3, backups: [] }))
 
       try {
         const from = Date.now()
