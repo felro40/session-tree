@@ -7,8 +7,11 @@
  * Also the Re-arrange confirm, which is where Layout history is opened from (and the Re-arrange
  * toast): the toolbar has no room for a button of its own at the narrowest widths. The confirm is
  * a plain dialog, not the SDK's ConfirmDialog, which confirms on Enter and Space whichever button
- * has focus: Space is the pan key, and a misclick followed by Space must not re-arrange. Focus
- * opens on Layout history…; only a click on Re-arrange re-arranges.
+ * has focus: Space is the pan key, and a misclick followed by Space must not re-arrange. Both
+ * dialogs open with focus on their harmless button (Cancel, Close): a key pressed after a
+ * misclick never re-arranges or restores (review t_c044054d B1: Layout history opened from a
+ * focused "Layout history…" with a cached list put focus on the first Restore). Only a click on
+ * Re-arrange or Restore changes the layout.
  */
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
@@ -29,6 +32,18 @@ const REASON_LABEL: Record<LayoutBackupInfo['reason'], string> = {
   restore: 'Before a restore'
 }
 
+/** A dialog's focus on open: the control with `testId` (its harmless button), never the first. */
+function focusOn(testId: string) {
+  return (event: Event) => {
+    const target = (event.target as HTMLElement | null)?.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+
+    if (target) {
+      event.preventDefault()
+      target.focus()
+    }
+  }
+}
+
 export function RearrangeConfirm({
   open,
   viewLabel,
@@ -44,7 +59,7 @@ export function RearrangeConfirm({
 }) {
   return (
     <Dialog open={open} onOpenChange={next => !next && onClose()}>
-      <DialogContent className="max-w-md" data-testid="session-tree-rearrange-dialog">
+      <DialogContent className="max-w-md" data-testid="session-tree-rearrange-dialog" onOpenAutoFocus={focusOn('session-tree-rearrange-cancel')}>
         <DialogHeader>
           <DialogTitle>Re-arrange this layout?</DialogTitle>
           <DialogDescription>
@@ -150,11 +165,11 @@ export function LayoutHistoryDialog({
 
   return (
     <Dialog open onOpenChange={open => !open && !restoring && onClose()}>
-      <DialogContent className="max-w-lg" data-testid="session-tree-history-dialog">
+      <DialogContent className="max-w-lg" data-testid="session-tree-history-dialog" onOpenAutoFocus={focusOn('session-tree-history-close')}>
         <DialogHeader>
           <DialogTitle>Layout history</DialogTitle>
           <DialogDescription>
-            Earlier arrangements of {viewLabel}. Each Re-arrange or restore keeps the arrangement it replaces (the last {BACKUPS_KEPT}, shared by your devices). Restoring
+            Earlier arrangements of {viewLabel}. Each Re-arrange or restore keeps the arrangement it replaces (up to the last {BACKUPS_KEPT} per view, shared by your devices). Restoring
             replaces the current arrangement, which is kept here too.
           </DialogDescription>
         </DialogHeader>

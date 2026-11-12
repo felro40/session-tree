@@ -585,7 +585,7 @@ async function main(): Promise<void> {
       }
 
       await sleep(1000)
-      assert(focused !== 'session-tree-rearrange-confirm', 'the confirm opens with Re-arrange focused')
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}, not Cancel`)
       assert(!saves(logA).some(entry => entry.method === 'DELETE'), 'a cancelled Re-arrange sent a DELETE')
       assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'a cancelled Re-arrange changed the layout')
       assert(/Dense \+ inspector · All projects/.test(asked) && /Layout history/.test(asked), `confirm text: ${asked}`)
@@ -682,8 +682,52 @@ async function main(): Promise<void> {
       assert(saves(logB).some(entry => entry.method === 'PUT' && /"backup":true/.test(entry.body ?? '')), 'no PUT with backup: true from B')
       // Opening the history from the confirm re-arranged nothing.
       assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'opening Layout history from the confirm changed the layout')
+      // Review t_c044054d B1: with the list cached (opened above), a misclick on Re-arrange and
+      // then Space + Enter, or Space + Space, or Layout history… and then Enter / Space, must not
+      // restore or re-arrange: both dialogs open on their harmless button.
+      const writesBefore = saves(logA).length
+      const confirmA = a.page.locator('[role="dialog"][data-testid="session-tree-rearrange-dialog"]')
+      const activeId = () => a.page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName ?? null)
+      const closeAll = async () => {
+        for (let i = 0; i < 4 && (await a.page.locator('[role="dialog"]').count()) > 0; i += 1) {
+          await a.page.keyboard.press('Escape')
+          await sleep(300)
+        }
+      }
+      const keyFocus: Record<string, null | string> = {}
 
-      return { fromToast, listedOnB: listed, listedOnA: listedA, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
+      for (const keys of [['Space', 'Enter'], ['Space', 'Space'], ['Enter', 'Enter']]) {
+        await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+        await confirmA.waitFor({ timeout: 5000 })
+        keyFocus.confirm = await activeId()
+
+        for (const keyName of keys) {
+          await a.page.keyboard.press(keyName)
+          await sleep(400)
+        }
+
+        await closeAll()
+      }
+
+      await a.page.locator('[data-testid="session-tree-rearrange"]').click()
+      await confirmA.locator('[data-testid="session-tree-rearrange-history"]').click()
+      await historyA.locator('[data-testid="session-tree-history-row"]').first().waitFor({ timeout: 10_000 })
+      keyFocus.history = await activeId()
+
+      for (const keyName of ['Enter', 'Space']) {
+        await a.page.keyboard.press(keyName)
+        await sleep(400)
+      }
+
+      await closeAll()
+      await sleep(1500)
+      const keyWrites = saves(logA).slice(writesBefore).map(entry => `${entry.method} ${entry.path}`)
+
+      assert(keyFocus.confirm === 'session-tree-rearrange-cancel' && keyFocus.history === 'session-tree-history-close', `focus on open: ${JSON.stringify(keyFocus)}`)
+      assert(keyWrites.length === 0, `keys after a misclick wrote: ${JSON.stringify(keyWrites)}`)
+      assert(near(layoutOf(await stored(a))[key('st-sys-tip')], moved), 'keys after a misclick changed the layout')
+
+      return { fromToast, listedOnB: listed, listedOnA: listedA, keyFocus, restoredTip: restoredLayout[key('st-sys-tip')], entries: Object.keys(before).length }
     })
 
     await check('closing and reopening the page keeps this device\'s project scope, view and Singles list (per profile filter); the other device keeps its own', async () => {

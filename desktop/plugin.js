@@ -12076,6 +12076,12 @@ var BACKUPS_KEPT = 10, REASON_LABEL = {
   rearrange: "Before Re-arrange",
   restore: "Before a restore"
 };
+function focusOn(testId) {
+  return (event) => {
+    let target = event.target?.querySelector(`[data-testid="${testId}"]`);
+    target && (event.preventDefault(), target.focus());
+  };
+}
 function RearrangeConfirm({
   open,
   viewLabel,
@@ -12083,7 +12089,7 @@ function RearrangeConfirm({
   onConfirm,
   onHistory
 }) {
-  return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", children: [
+  return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
     /* @__PURE__ */ jsxs13(DialogHeader, { children: [
       /* @__PURE__ */ jsx15(DialogTitle, { children: "Re-arrange this layout?" }),
       /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-rearrange-text", children: [
@@ -12153,15 +12159,15 @@ function LayoutHistoryDialog({
       }
     }
   }, backups = list.data?.backups ?? [];
-  return /* @__PURE__ */ jsx15(Dialog, { open: !0, onOpenChange: (open) => !open && !restoring && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-lg", "data-testid": "session-tree-history-dialog", children: [
+  return /* @__PURE__ */ jsx15(Dialog, { open: !0, onOpenChange: (open) => !open && !restoring && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-lg", "data-testid": "session-tree-history-dialog", onOpenAutoFocus: focusOn("session-tree-history-close"), children: [
     /* @__PURE__ */ jsxs13(DialogHeader, { children: [
       /* @__PURE__ */ jsx15(DialogTitle, { children: "Layout history" }),
       /* @__PURE__ */ jsxs13(DialogDescription, { children: [
         "Earlier arrangements of ",
         viewLabel,
-        ". Each Re-arrange or restore keeps the arrangement it replaces (the last ",
+        ". Each Re-arrange or restore keeps the arrangement it replaces (up to the last ",
         BACKUPS_KEPT,
-        ", shared by your devices). Restoring replaces the current arrangement, which is kept here too."
+        " per view, shared by your devices). Restoring replaces the current arrangement, which is kept here too."
       ] })
     ] }),
     list.isPending && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-loading", children: "Loading…" }),

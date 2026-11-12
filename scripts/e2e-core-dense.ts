@@ -747,7 +747,7 @@ async function main(): Promise<void> {
       await page.waitForTimeout(400)
       const afterCancel = await flowPosition(page, 'st-hp-routing')
 
-      assert(focused !== 'session-tree-rearrange-confirm', 'the confirm opens with Re-arrange focused')
+      assert(focused === 'session-tree-rearrange-cancel', `the confirm opens with focus on ${focused}, not Cancel`)
       assert(near(afterCancel.x, kept.x, 0.5) && near(afterCancel.y, kept.y, 0.5), `Space / Enter / Cancel moved the block: ${JSON.stringify(kept)} → ${JSON.stringify(afterCancel)}`)
       await rearrange(page)
       await page.waitForTimeout(150)

@@ -69,6 +69,9 @@ NO_EPOCH = "none"
 NEWER_EPOCH = "newer"
 #: The 409 detail prefix of a write refused because ``state.json`` has a newer schema.
 NEWER_SCHEMA_CODE = "newer_schema"
+#: A Re-arrange or restore refused because ``backups.json`` has a newer schema (not
+#: ``newer_schema``: the page stays writable, only that one change is refused).
+HISTORY_NEWER_CODE = "layout_history_newer"
 _EPOCH_RE = re.compile(r"^[0-9a-f]{16,64}$")
 
 #: Caps (module attributes so a test can lower them).
@@ -316,19 +319,29 @@ def _encode(data: dict[str, Any]) -> bytes:
 
 def _trimmed_backups(backups: list[dict[str, Any]], newest: str) -> list[dict[str, Any]]:
     """Oldest first in, oldest first out: at most :data:`MAX_BACKUPS_PER_LAYOUT` per layout,
-    :data:`MAX_BACKUPS` in all, the file within :data:`MAX_BACKUP_FILE_BYTES` (``newest`` stays)."""
+    :data:`MAX_BACKUPS` in all, the file within :data:`MAX_BACKUP_FILE_BYTES` (``newest`` stays).
+    The global caps drop the oldest backup of a layout that has more than one first, so every
+    layout keeps its newest backup while it can."""
     per_layout: dict[tuple[str, str, str], int] = {}
     kept: list[dict[str, Any]] = []
     for each in reversed(backups):
         layout = (each["profile"], each["style"], each["scope"])
         per_layout[layout] = per_layout.get(layout, 0) + 1
-        if per_layout[layout] <= MAX_BACKUPS_PER_LAYOUT and len(kept) < MAX_BACKUPS:
+        if per_layout[layout] <= MAX_BACKUPS_PER_LAYOUT:
             kept.append(each)
     kept.reverse()
     sizes = [len(_encode(each)) + 1 for each in kept]
     total = len(_encode(_empty_backups())) + sum(sizes)
-    while len(kept) > 1 and total > MAX_BACKUP_FILE_BYTES:
-        oldest = next(index for index, each in enumerate(kept) if each["id"] != newest)
+    counts: dict[tuple[str, str, str], int] = {}
+    for each in kept:
+        layout = (each["profile"], each["style"], each["scope"])
+        counts[layout] = counts.get(layout, 0) + 1
+    while len(kept) > 1 and (len(kept) > MAX_BACKUPS or total > MAX_BACKUP_FILE_BYTES):
+        layouts = [(each["profile"], each["style"], each["scope"]) for each in kept]
+        oldest = next((index for index, each in enumerate(kept) if each["id"] != newest and counts[layouts[index]] > 1), None)
+        if oldest is None:
+            oldest = next(index for index, each in enumerate(kept) if each["id"] != newest)
+        counts[layouts[oldest]] -= 1
         total -= sizes.pop(oldest)
         del kept[oldest]
     return kept
@@ -512,7 +525,10 @@ class LayoutStore:
             return _empty_backups()
         except NewerSchema as exc:
             if for_write:
-                raise StoreError(409, f"{NEWER_SCHEMA_CODE}: backups.json has schema {exc}; this Session Tree writes schema {BACKUP_SCHEMA_VERSION}") from exc
+                # Not ``newer_schema``: that one turns the page read-only (state.json is fine).
+                raise StoreError(409, f"{HISTORY_NEWER_CODE}: Layout history (backups.json, schema {exc}) was written by a newer "
+                                      f"Session Tree; this one writes schema {BACKUP_SCHEMA_VERSION}, so it does not re-arrange "
+                                      f"or restore a layout it could not keep a backup of") from exc
             return {**_empty_backups(), "read_only": True}
 
     def _read_backups(self) -> dict[str, Any]:
@@ -527,17 +543,18 @@ class LayoutStore:
     def _keep_backup_locked(self, profile: str, style: str, scope: str, blocks: dict[str, Any], reason: str,
                             stamp: float) -> Optional[str]:
         """Under the locks: keep ``blocks`` (one layout's stored entries) as a backup; its id.
-        The same positions as that layout's newest backup add none (that one's id)."""
+        An arrangement that layout already has a backup of keeps one copy, now the newest."""
         if not blocks:
             return None
         data = self._load_backups_locked(for_write=True)
         positions = {block: {"x": entry["x"], "y": entry["y"]} for block, entry in blocks.items()}
-        same = [each for each in data["backups"] if (each["profile"], each["style"], each["scope"]) == (profile, style, scope)]
+        same = [each for each in data["backups"]
+                if (each["profile"], each["style"], each["scope"]) == (profile, style, scope) and each["positions"] == positions]
         taken = {each["id"] for each in data["backups"]}
-        if same and same[-1]["positions"] == positions:
+        if same:
             # The same arrangement again (a Re-arrange after an Undo): one backup, now the newest.
             backup_id = same[-1]["id"]
-            data["backups"] = [each for each in data["backups"] if each["id"] != backup_id]
+            data["backups"] = [each for each in data["backups"] if each not in same]
         else:
             backup_id = new_backup_id()
             while backup_id in taken:
@@ -730,7 +747,14 @@ class LayoutStore:
         return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "removed": removed[0]}
 
     def _forget_in_backups_locked(self, profile: str, wanted: set[str]) -> None:
-        data = self._load_backups_locked(for_write=True)
+        try:
+            data = self._read_backups_file()
+        except CorruptState:
+            self._backup_corrupt(self.backups_path)
+            return
+        except NewerSchema:
+            # A newer Session Tree's history: not ours to rewrite, and no reason to refuse a move.
+            return
         changed = False
         kept: list[dict[str, Any]] = []
         for each in data["backups"]:

@@ -39,9 +39,11 @@ user (below).
   dragged blocks and re-route around other blocks on drop, and the whole group is saved in one
   request. A group move has no Undo. **Snap** shows a dot grid and snaps dragged blocks to it.
   **Re-arrange** resets the current style + scope layout. It asks first (Space and Enter never
-  confirm it, only a click on Re-arrange does), the toast offers Undo for 10 s, and the arrangement
-  it replaced is kept in **Layout history**, opened from the Re-arrange confirm or its toast:
-  the last 10 arrangements of each style + scope layout, shared by every device of the gateway.
+  confirm it or restore anything, only a click on Re-arrange or Restore does), the toast offers
+  Undo for 10 s, and the arrangement it replaced is kept in **Layout history**, opened from the
+  Re-arrange confirm or its toast: up to the last 10 arrangements of each style + scope layout,
+  shared by every device of the gateway (with very many re-arranged views, the oldest extra
+  backups go first, 200 in all).
   Restore there brings one back (with Undo); the arrangement it replaces is kept too.
 - **Open** a session in a new tab with a double-click.
 - **Act** on a session with a right-click (or its ⋯): Appearance ▸, Pin / Unpin, Rename…, Move to

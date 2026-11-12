@@ -180,6 +180,32 @@ def test_backups_are_capped_in_all_and_by_size(store, monkeypatch):
     assert store.list_backups("default", "dense", "s2")["backups"] == []
 
 
+def test_the_global_caps_take_old_backups_of_busy_layouts_before_another_layouts_only_one(store, monkeypatch):
+    # Review t_c044054d N2: 21 scopes × 10 Re-arranges evicted the first scope's only backup.
+    monkeypatch.setattr(store_mod, "MAX_BACKUPS", 6)
+    store.upsert_positions("default", "dense", "quiet", pos([("a", 1, 1)]))
+    quiet = store.delete_layout("default", "dense", "quiet")["backup_id"]
+    for n in range(8):
+        store.upsert_positions("default", "dense", "busy", pos([("a", n, n)]))
+        store.delete_layout("default", "dense", "busy")
+    assert [each["id"] for each in store.list_backups("default", "dense", "quiet")["backups"]] == [quiet]
+    assert len(store.list_backups("default", "dense", "busy")["backups"]) == 5
+    assert len(json.loads(store.backups_path.read_text("utf-8"))["backups"]) == 6
+
+
+def test_a_restore_of_an_arrangement_already_kept_adds_no_copy(store):
+    # Review t_c044054d N5: the dedupe looked at the newest backup only.
+    store.upsert_positions("default", "dense", "all", pos([("a", 1, 1)]))
+    first = store.delete_layout("default", "dense", "all")["backup_id"]
+    store.upsert_positions("default", "dense", "all", pos([("a", 2, 2)]))
+    store.delete_layout("default", "dense", "all")
+    store.replace_layout("default", "dense", "all", pos([("a", 1, 1)]))
+    # Restoring the second arrangement keeps the current one (the first), already kept: one copy.
+    again = store.replace_layout("default", "dense", "all", pos([("a", 2, 2)]), backup=True)["backup_id"]
+    listing = store.list_backups("default", "dense", "all")["backups"]
+    assert again == first and [each["id"] for each in listing][0] == first and len(listing) == 2
+
+
 def test_a_backup_of_another_profile_is_not_served(store):
     store.upsert_positions("work", "dense", "all", pos([("a", 1, 1)]))
     backup_id = store.delete_layout("work", "dense", "all")["backup_id"]
@@ -221,16 +247,25 @@ def test_a_corrupt_backups_file_is_kept_as_bak_and_never_blocks_a_rearrange(stor
     assert len(store.list_backups("default", "dense", "all")["backups"]) == 1
 
 
-def test_a_newer_backups_schema_reads_as_read_only_and_refuses_a_rearrange(store):
+def test_a_newer_backups_schema_reads_as_read_only_and_refuses_only_a_rearrange_or_restore(store):
     store.upsert_positions("default", "dense", "all", pos([("a", 1, 1)]))
     future = json.dumps({"schema": store_mod.BACKUP_SCHEMA_VERSION + 1, "backups": "?"}).encode()
     store.backups_path.write_bytes(future)
     assert store.list_backups("default", "dense", "all") == {"ok": True, "backups": [], "read_only": True}
-    # A Re-arrange that cannot keep its backup forgets nothing.
-    with pytest.raises(StoreError) as error:
-        store.delete_layout("default", "dense", "all")
-    assert error.value.status == 409 and error.value.detail.startswith(store_mod.NEWER_SCHEMA_CODE)
+    # A Re-arrange or restore that cannot keep its backup changes nothing; its own code, not
+    # newer_schema (which would turn the page read-only though state.json is fine).
+    for change in (lambda: store.delete_layout("default", "dense", "all"),
+                   lambda: store.replace_layout("default", "dense", "all", pos([("a", 5, 5)]), backup=True)):
+        with pytest.raises(StoreError) as error:
+            change()
+        assert error.value.status == 409 and error.value.detail.startswith(store_mod.HISTORY_NEWER_CODE)
+        assert store_mod.NEWER_SCHEMA_CODE not in error.value.detail
     assert layout_of(store) == {"a": (1, 1)}
+    # Drops, an Undo (no backup) and a move to another project still work.
+    store.upsert_positions("default", "dense", "all", pos([("b", 2, 2)]))
+    store.replace_layout("default", "dense", "all", pos([("a", 3, 3), ("b", 2, 2)]))
+    assert store.forget_blocks("default", ["b"])["changed"] is True
+    assert layout_of(store) == {"a": (3, 3)}
     assert store.backups_path.read_bytes() == future
 
 

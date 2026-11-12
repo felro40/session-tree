@@ -517,6 +517,30 @@ describe('LayoutSync: Re-arrange, Undo, forget, settings', () => {
     assert.equal(server.calls.at(-1), 'put')
   })
 
+  it('a Re-arrange refused for a newer Layout history (409 layout_history_newer) is dropped: the layout comes back, the page stays writable, nothing is re-sent', async () => {
+    const { server, timers, sync, storage, kinds } = setup()
+
+    sync.watch('default')
+    await settle()
+    sync.place(REF, autoLayout(['a']))
+    sync.drop(REF, new Map([['a', { x: 7, y: 8 }]]))
+    await timers.advance(300)
+    server.refuse = '409: {"detail":"layout_history_newer: Layout history (backups.json, schema 2) was written by a newer Session Tree"}'
+    sync.rearrange(REF)
+    assert.equal(sync.positions(REF).size, 0)
+    await timers.advance(300)
+    assert.deepEqual(pointsOf(sync.positions(REF)), { a: [7, 8] })
+    assert.equal(sync.storeReadOnly, false)
+    assert.equal(queuedOps(storage), 0)
+    assert.deepEqual(kinds, ['409'])
+    // Drops still go out.
+    server.refuse = false
+    sync.drop(REF, new Map([['a', { x: 9, y: 9 }]]))
+    await timers.advance(300)
+    assert.deepEqual(server.stored('default', 'dense', 'all'), { a: [9, 9] })
+    assert.equal(server.calls.filter(call => call === 'delete').length, 1)
+  })
+
   it('forget drops a block from every layout of the profile, so the next layout re-places it', async () => {
     const server = new FakeServer()
 

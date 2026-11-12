@@ -98,17 +98,24 @@ its spot, and every compaction leaves exactly one entry.
   style, scope, created_at, reason, positions: {key: {x, y}}}]}`, oldest first. A Re-arrange
   (`DELETE /state/layout`) keeps the layout it forgets (`reason: "rearrange"`); a restore
   (`PUT /state/layout` with `backup: true`) keeps the one it replaces (`"restore"`); an Undo
-  (`PUT` without it) and a Re-arrange of nothing keep none. The same positions as that layout's
-  newest backup add no second copy (that one moves to the newest end). At most 10 per profile +
-  style + scope (the oldest go first), 200 in all, within 16 MiB. Written under the same locks,
+  (`PUT` without it) and a Re-arrange of nothing keep none. An arrangement the layout already has
+  a backup of adds no second copy (that one moves to the newest end). At most 10 per profile +
+  style + scope (the oldest go first), 200 in all, within 16 MiB; the global caps take the oldest
+  backup of a layout that has more than one first, so a layout keeps its newest backup unless
+  every layout is down to one. Written under the same locks,
   atomically, **before** `state.json`: a writer killed in between leaves one extra backup, never a
   lost layout. A corrupt `backups.json` is moved to `backups.json.corrupt-<time>-<random>.bak` and
-  never blocks a Re-arrange; a newer-schema one reads as empty (`read_only: true`) and refuses a
-  Re-arrange (409 `newer_schema`, the layout stays). `POST /state/forget` drops the blocks from
+  never blocks a Re-arrange; a newer-schema one (after a downgrade) reads as empty
+  (`read_only: true`) and refuses a Re-arrange and a restore (409 `layout_history_newer: …`, the
+  layout stays; not `newer_schema`, so the page stays writable and the page drops the refused op
+  with one notice). Drops, Undo and `POST /state/forget` still work then (forget leaves a newer
+  file alone). `POST /state/forget` drops the blocks from
   the profile's backups too (a backup that held only them goes). Backups are not pruned when a
   session is deleted: a restore with a gone session's key is harmless (no block uses it, and the
-  next `GET /state` prunes it). A separate file, so `state.json` keeps its schema and an older
-  Session Tree reads it as before.
+  next `GET /state` prunes it). A restore is a `PUT` of positions, not of a backup id, so the
+  server cannot tell that they came from a backup of the same style + scope; the page checks it
+  (`layout-history.tsx`), and a mismatched `PUT` is no worse than any other `PUT`. A separate
+  file, so `state.json` keeps its schema and an older Session Tree reads it as before.
 
 ## Endpoints (`dashboard/plugin_api.py`)
 
@@ -140,8 +147,10 @@ None of them touches `state.db`.
   batched into one request. Nothing is sent while a block is dragged (`setDragging`); the drop is
   recorded on mouse-up and goes out 300 ms later. Auto-layout placements go as `if_absent`.
 - **Re-arrange** asks first (a plain dialog naming the view, not the SDK's ConfirmDialog, which
-  confirms on Enter and Space whichever button holds focus: Space is the pan key. Focus opens on
-  Layout history…; Cancel, Escape, Space and Enter change nothing), then queues a delete of the
+  confirms on Enter and Space whichever button holds focus: Space is the pan key). The confirm
+  opens with focus on Cancel and Layout history with focus on Close, so Space, Enter or Escape
+  after a misclick change nothing; only a click on Re-arrange or Restore does. Then it
+  queues a delete of the
   current style + scope layout and shows a toast with Undo, which queues a `PUT` of exactly what
   the window showed before.
 - **Layout history** (from the Re-arrange confirm's *Layout history…* and the Re-arrange toast; not
