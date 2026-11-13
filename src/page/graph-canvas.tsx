@@ -849,7 +849,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
               <ViewportPortal>
                 <div
                   className="session-tree__ghost"
-                  data-testid="session-tree-ghost"
+                  data-testid="session-tree-create-ghost"
                   data-project-id={ghost.projectId}
                   data-x={ghost.x}
                   data-y={ghost.y}

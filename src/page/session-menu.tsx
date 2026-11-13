@@ -202,7 +202,9 @@ function CanvasMenuItems({ target, onChoose }: { target: CanvasMenuTarget; onCho
       <span className="st-new-session-label">
         New session in{' '}
         <span className="st-new-session-dot" data-testid="session-tree-new-session-dot" style={{ backgroundColor: projectColor(target.project) }} aria-hidden="true" />{' '}
-        <span data-testid="session-tree-new-session-project">{target.label}</span>…
+        <span>
+          <span data-testid="session-tree-new-session-project">{target.label}</span>…
+        </span>
       </span>
     </ContextMenuItem>
   )

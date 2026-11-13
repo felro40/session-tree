@@ -12603,8 +12603,10 @@ function CanvasMenuItems({ target, onChoose }) {
       " ",
       /* @__PURE__ */ jsx14("span", { className: "st-new-session-dot", "data-testid": "session-tree-new-session-dot", style: { backgroundColor: projectColor(target.project) }, "aria-hidden": "true" }),
       " ",
-      /* @__PURE__ */ jsx14("span", { "data-testid": "session-tree-new-session-project", children: target.label }),
-      "…"
+      /* @__PURE__ */ jsxs12("span", { children: [
+        /* @__PURE__ */ jsx14("span", { "data-testid": "session-tree-new-session-project", children: target.label }),
+        "…"
+      ] })
     ] })
   ] });
 }
@@ -13051,7 +13053,7 @@ function GraphCanvas(props) {
                       "div",
                       {
                         className: "session-tree__ghost",
-                        "data-testid": "session-tree-ghost",
+                        "data-testid": "session-tree-create-ghost",
                         "data-project-id": ghost.projectId,
                         "data-x": ghost.x,
                         "data-y": ghost.y,
