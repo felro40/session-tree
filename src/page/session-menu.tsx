@@ -33,6 +33,7 @@ import { deleteBlockedReason } from '../model/actions.ts'
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import type { ProjectInfo } from '../model/projects.ts'
 import { projectColor } from '../styles/shared.tsx'
+import { onPanelRect } from './canvas-areas.ts'
 import { useMenuLabels } from './labels.ts'
 import type { MenuLabels } from './labels.ts'
 import { useSessionActions } from './session-actions-context.ts'
@@ -187,10 +188,24 @@ export interface CanvasMenuTarget {
 /**
  * Card 11 (A5): where a right-click offers a new session: empty canvas (React Flow's pane and
  * what is drawn on it), a group label, a lane chip, and the Swimlanes lane bands and headers.
- * Not a style's own panels over the canvas (Rich drawer, Subway depot and map key).
+ * Not a style's own panels over the canvas (Rich drawer, Subway depot and map key; the map key
+ * lets the pointer through, so `onPassThroughPanel` tells it by its rect).
  */
 export function isCanvasArea(target: EventTarget | null): boolean {
   return Boolean((target as Element | null)?.closest?.('.react-flow__pane, [data-testid="session-tree-lane-header"], [data-testid="session-tree-lane-band"]'))
+}
+
+/**
+ * The style panels the pointer passes through (`pointer-events: none`, so pan, zoom and box
+ * selection work under them) that are still no canvas: the Subway map key.
+ */
+const PASS_THROUGH_PANELS = '.st-sw-key'
+
+/** Card 11: a right-click inside a drawn pass-through panel; it gets what the depot gets (no menu). */
+function onPassThroughPanel(event: ReactMouseEvent<HTMLElement>): boolean {
+  const rects = [...event.currentTarget.querySelectorAll(PASS_THROUGH_PANELS)].filter(panel => getComputedStyle(panel).visibility !== 'hidden').map(panel => panel.getBoundingClientRect())
+
+  return onPanelRect({ x: event.clientX, y: event.clientY }, rects)
 }
 
 type MenuTarget = { kind: 'canvas'; target: CanvasMenuTarget } | { kind: 'node'; id: string }
@@ -227,6 +242,14 @@ export function SessionMenu({ model, children, onOpenFor, onRestoreFocus, onCanv
   const onContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       const requested = actions?.takeRequestedMenuNode() ?? null
+
+      // Card 11: the Subway map key is a panel like the depot, though the click passes through it.
+      if (!requested && onPassThroughPanel(event)) {
+        event.preventDefault()
+
+        return
+      }
+
       const id = requested ?? nodeIdAt(event.target)
       const target = id ? model.nodeById.get(id) : undefined
 

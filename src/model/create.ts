@@ -15,8 +15,10 @@
  *   `session.title`, then the runtime is released (`releaseRuntime`: `session.detach` when the
  *   create answered a `subscription_id`, else `session.close`; a -32601 from one tries the other
  *   once). A refused title releases the runtime and deletes the untitled empty row it left
- *   (only that row, re-checked first). `title` is never sent with the create: measured, the
- *   canonical gateway then answers an existing session that holds that title instead of a new one.
+ *   (only that row, re-checked first). A title error on a row the re-check keeps (it is titled,
+ *   or has messages) is a create, with a warning (`titleWarning`): the session is real. `title`
+ *   is never sent with the create: measured, the canonical gateway then answers an existing
+ *   session that holds that title instead of a new one.
  */
 import { MAX_TITLE_LENGTH } from './actions.ts'
 import type { GatewayRequest } from './actions.ts'
@@ -257,11 +259,11 @@ export async function releaseRuntime(
 export class CreateFailure extends Error {
   readonly stage: 'create' | 'title'
   readonly error: unknown
-  /** A refused title: the untitled row the create left was deleted, kept (touched since), or the delete failed. */
-  readonly cleanup?: 'deleted' | 'failed' | 'kept'
+  /** A refused title: the untitled row the create left was deleted, or the delete failed. */
+  readonly cleanup?: 'deleted' | 'failed'
   readonly release?: ReleaseOutcome
 
-  constructor(stage: 'create' | 'title', cause: unknown, message: string, extra: { cleanup?: 'deleted' | 'failed' | 'kept'; release?: ReleaseOutcome } = {}) {
+  constructor(stage: 'create' | 'title', cause: unknown, message: string, extra: { cleanup?: 'deleted' | 'failed'; release?: ReleaseOutcome } = {}) {
     super(message)
     this.stage = stage
     this.error = cause
@@ -288,27 +290,44 @@ export function titleRefusalText(title: string, error: unknown): string {
   return `Hermes refused the name “${title}” (${text}). It may be the name of a session this page does not show; pick another name.`
 }
 
+/** The row the re-check kept: it is titled (the title may have landed after all) or has messages. */
+export interface KeptRow {
+  title?: null | string
+  message_count?: null | number
+}
+
 export interface CreateDeps {
   request: GatewayRequest
   /** One fresh id per attempt: the create's `request_id` (its retry key). */
   mintId(): string
   /**
-   * A refused title left an untitled empty row: delete it when it still is one (re-checked just
-   * before), through the fenced delete. `true`: deleted (or already gone); `false`: kept.
+   * A title error left a row: delete it when it is still untitled and empty (re-checked just
+   * before), through the fenced delete. `null`: deleted (or already gone); else the row it kept.
    */
-  removeIfUntouched(profile: string, sessionId: string): Promise<boolean>
+  removeIfUntouched(profile: string, sessionId: string): Promise<KeptRow | null>
+}
+
+/** The title call answered an error, but the row is real (kept by the re-check). */
+export interface TitleWarning {
+  /** The title call's error. */
+  reason: string
+  /** The title the row has (`null`: none). */
+  storedTitle: null | string
 }
 
 export interface CreateOutcome {
   /** The stored session id (the block's id). */
   sessionId: string
   release: ReleaseOutcome
+  /** Only when the title call answered an error and the re-check kept the row. */
+  titleWarning?: TitleWarning
 }
 
 /**
  * One create attempt (D1 as ruled): `session.create` → `session.title` → release. Throws a
- * `CreateFailure` for the create or the title; a release that fails after a good title is
- * reported in the outcome (the session is real; the caller says so).
+ * `CreateFailure` for the create or a refused title (the untitled empty row deleted, or its
+ * delete failed); a title error on a row the re-check keeps is a create with a `titleWarning`.
+ * A release that fails is reported in the outcome (the session is real; the caller says so).
  */
 export async function createSession(deps: CreateDeps, params: CreateParams): Promise<CreateOutcome> {
   let created: CreatedRuntime
@@ -337,15 +356,20 @@ export async function createSession(deps: CreateDeps, params: CreateParams): Pro
     await deps.request('session.title', { session_id: runtimeId, title: params.title, profile: params.profile })
   } catch (error) {
     const release = await releaseRuntime(deps.request, runtime)
-    let cleanup: 'deleted' | 'failed' | 'kept'
+    let kept: KeptRow | null
 
     try {
-      cleanup = (await deps.removeIfUntouched(params.profile, sessionId)) ? 'deleted' : 'kept'
+      kept = await deps.removeIfUntouched(params.profile, sessionId)
     } catch {
-      cleanup = 'failed'
+      throw new CreateFailure('title', error, titleRefusalText(params.title, error), { cleanup: 'failed', release })
     }
 
-    throw new CreateFailure('title', error, titleRefusalText(params.title, error), { cleanup, release })
+    if (!kept) {
+      throw new CreateFailure('title', error, titleRefusalText(params.title, error), { cleanup: 'deleted', release })
+    }
+
+    // Titled or used since: a real session, so it is created (on the canvas, kept), with a warning.
+    return { sessionId, release, titleWarning: { reason: reason(error), storedTitle: (kept.title ?? '').trim() || null } }
   }
 
   return { sessionId, release: await releaseRuntime(deps.request, runtime) }

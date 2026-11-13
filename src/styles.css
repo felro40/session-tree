@@ -662,6 +662,15 @@ g.is-dimmed {
   outline: 0;
 }
 
+/* The focus ring is the box's, as the Name input's: the SDK Input lights its border in the
+   theme's ring colour on focus (--dt-composer-ring, which every theme sets to its
+   midground, i.e. --ui-accent); the left edge keeps the project's colour. */
+.st-create-project:focus-within {
+  border-top-color: var(--ui-accent);
+  border-right-color: var(--ui-accent);
+  border-bottom-color: var(--ui-accent);
+}
+
 .st-create-project option {
   background: var(--ui-bg-elevated);
   color: var(--ui-text-primary);

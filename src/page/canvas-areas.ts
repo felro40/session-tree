@@ -46,6 +46,22 @@ export function projectLabelOf(model: GraphModel, projectId: string, framed: boo
   return model.projects.find(project => project.id === projectId)?.label ?? projectId
 }
 
+/** A panel's screen rect (a `DOMRect`'s edges). */
+export interface PanelRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/**
+ * Card 11: `point` (screen) is on one of a style's pass-through panels (edges included). An
+ * empty rect is a panel not drawn.
+ */
+export function onPanelRect(point: Point, rects: readonly PanelRect[]): boolean {
+  return rects.some(rect => rect.right > rect.left && rect.bottom > rect.top && point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom)
+}
+
 export function projectInfoOf(model: GraphModel, projectId: string): ProjectInfo | undefined {
   return projectId === NO_PROJECT_ID ? model.projects.find(project => project.isNoProject) : model.projects.find(project => project.id === projectId)
 }

@@ -30,7 +30,7 @@ import type { StateAnswer, SyncTransport } from '../../src/model/layout-sync.ts'
 import { NO_PROJECT_ID, projectIndex } from '../../src/model/projects.ts'
 import { isHiddenRow, keptKey } from '../../src/model/sessions.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
-import { canvasAreas, projectLabelOf } from '../../src/page/canvas-areas.ts'
+import { canvasAreas, onPanelRect, projectLabelOf } from '../../src/page/canvas-areas.ts'
 import { denseLayoutSpec } from '../../src/styles/dense/spec.ts'
 import { layoutRich, shelfSegments } from '../../src/styles/rich/layout.ts'
 import { richLayoutSpec } from '../../src/styles/rich/spec.ts'
@@ -201,6 +201,18 @@ describe('projectAt: the project under the cursor, from each style\u2019s own la
 
     assert.equal(projectLabelOf(bare, NO_PROJECT_ID, false), 'No project')
     assert.equal(projectLabelOf(bare, NO_PROJECT_ID, true), 'Home')
+  })
+
+  it('a pass-through panel (the Subway map key): a point inside a drawn panel\u2019s rect (edges included) is on it; outside, or a panel not drawn (empty rect), is not', () => {
+    const key = { left: 900, top: 600, right: 1000, bottom: 680 }
+
+    assert.equal(onPanelRect({ x: 950, y: 640 }, [key]), true)
+    assert.equal(onPanelRect({ x: 900, y: 600 }, [key]), true, 'the top-left edge')
+    assert.equal(onPanelRect({ x: 1000, y: 680 }, [key]), true, 'the bottom-right edge')
+    assert.equal(onPanelRect({ x: 899, y: 640 }, [key]), false, 'just left of it')
+    assert.equal(onPanelRect({ x: 950, y: 681 }, [key]), false, 'just below it')
+    assert.equal(onPanelRect({ x: 950, y: 640 }, [{ left: 950, top: 640, right: 950, bottom: 640 }]), false, 'a panel not drawn')
+    assert.equal(onPanelRect({ x: 950, y: 640 }, []), false)
   })
 })
 
@@ -403,7 +415,7 @@ describe('the create (D1 as ruled after P1: create → title → release)', () =
       removeIfUntouched: async (_profile, id) => {
         removed.push(id)
 
-        return true
+        return null
       }
     }
 
@@ -443,6 +455,60 @@ describe('the create (D1 as ruled after P1: create → title → release)', () =
     assert.equal(error.release, 'detach')
     assert.match(error.message, /Taken/)
     assert.deepEqual(calls.map(call => call.method), ['session.create', 'session.title', 'session.detach'])
+    assert.deepEqual(removed, ['local-1'])
+  })
+
+  it('a title that lands but answers an error (the re-check keeps the titled row): created, with a warning; the runtime is still released', async () => {
+    const { d, calls } = deps({
+      'session.title': () => {
+        throw Object.assign(new Error('internal error'), { code: -32603 })
+      }
+    })
+    const kept: string[] = []
+
+    d.removeIfUntouched = async (_profile, id) => {
+      kept.push(id)
+
+      return { title: 'Plan', message_count: 0 }
+    }
+    const outcome = await createSession(d, { profile: 'work', cwd: '/repos/p1', title: 'Plan' })
+
+    assert.deepEqual(outcome, { sessionId: 'local-1', release: 'detach', titleWarning: { reason: 'internal error', storedTitle: 'Plan' } })
+    assert.deepEqual(calls.map(call => call.method), ['session.create', 'session.title', 'session.detach'])
+    assert.deepEqual(kept, ['local-1'])
+  })
+
+  it('a title error on a row the re-check keeps because it has messages: created, and the warning names the title the row has (none here)', async () => {
+    const { d } = deps({
+      'session.title': () => {
+        throw Object.assign(new Error('storage busy'), { code: -32603 })
+      }
+    })
+
+    d.removeIfUntouched = async () => ({ title: null, message_count: 2 })
+    const outcome = await createSession(d, { profile: 'default', title: 'Wanted' })
+
+    assert.deepEqual(outcome.titleWarning, { reason: 'storage busy', storedTitle: null })
+    assert.equal(outcome.release, 'detach')
+  })
+
+  it('a title error on a row still untitled and empty: a refusal (CreateFailure, cleanup deleted), as before', async () => {
+    const { d, removed } = deps({
+      'session.title': () => {
+        throw Object.assign(new Error('internal error'), { code: -32603 })
+      }
+    })
+
+    d.removeIfUntouched = async (_profile, id) => {
+      removed.push(id)
+
+      return null
+    }
+    const error = await createSession(d, { profile: 'default', title: 'Refused' }).catch((caught: unknown) => caught)
+
+    assert.ok(error instanceof CreateFailure)
+    assert.equal(error.stage, 'title')
+    assert.equal(error.cleanup, 'deleted')
     assert.deepEqual(removed, ['local-1'])
   })
 

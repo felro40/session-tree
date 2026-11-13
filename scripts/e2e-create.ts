@@ -248,6 +248,110 @@ async function storedEntries(s: Session, style: string, skip: readonly string[])
   return Object.fromEntries(Object.entries(layout).filter(([id]) => !skip.includes(id)))
 }
 
+interface Probe {
+  /** `method` → the error the call answers after it ran (it lands, then answers an error). */
+  mode: Record<string, { code: number; message: string }>
+  calls: string[]
+  notices: { kind?: string; title?: string; message?: string }[]
+  /** The last right-click: was its default prevented once every handler ran. */
+  context: null | { prevented: boolean }
+}
+
+/**
+ * Wraps the SDK host's `request` and `notify` on this page load (idempotent): every call and
+ * notice is recorded, and `mode` makes a call answer an error after it ran. Also records whether
+ * the last right-click's default was prevented (a window listener, after React's).
+ */
+async function instrument(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    type Host = { request(method: string, params: unknown): Promise<unknown>; notify(input: Probe['notices'][number]): string }
+    const w = globalThis as unknown as { __stE2e?: Probe; __HERMES_PLUGIN_SDK__: { host: Host } }
+
+    if (w.__stE2e) {
+      return
+    }
+
+    const host = w.__HERMES_PLUGIN_SDK__.host
+    const state: Probe = { mode: {}, calls: [], notices: [], context: null }
+    const request = host.request
+    const notify = host.notify
+
+    host.request = async function (this: Host, method: string, params: unknown) {
+      state.calls.push(method)
+      const answer = await request.call(this, method, params)
+      const after = state.mode[method]
+
+      if (after) {
+        throw Object.assign(new Error(after.message), { code: after.code })
+      }
+
+      return answer
+    }
+    host.notify = function (this: Host, input: Probe['notices'][number]) {
+      state.notices.push({ kind: input.kind, title: input.title, message: input.message })
+
+      return notify.call(this, input)
+    }
+    window.addEventListener('contextmenu', event => {
+      state.context = { prevented: event.defaultPrevented }
+    })
+    w.__stE2e = state
+  })
+}
+
+async function probe(page: Page): Promise<Probe> {
+  return page.evaluate(() => (globalThis as unknown as { __stE2e: Probe }).__stE2e)
+}
+
+async function setMode(page: Page, mode: Probe['mode']): Promise<void> {
+  await page.evaluate(next => {
+    ;(globalThis as unknown as { __stE2e: Probe }).__stE2e.mode = next
+  }, mode)
+}
+
+/** The focused element (its test id) and the selected part of its value. */
+async function focusState(page: Page): Promise<{ testId: null | string; tag: string; value: string; selected: string }> {
+  return page.evaluate(() => {
+    const element = document.activeElement as HTMLInputElement | null
+
+    return {
+      testId: element?.getAttribute('data-testid') ?? null,
+      tag: element?.tagName ?? '',
+      value: element?.value ?? '',
+      selected: element && typeof element.selectionStart === 'number' ? element.value.slice(element.selectionStart, element.selectionEnd ?? 0) : ''
+    }
+  })
+}
+
+const RING_PROPS = ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'outlineStyle', 'outlineWidth', 'outlineColor', 'outlineOffset', 'boxShadow'] as const
+
+/** A control's focus-ring styles: the Name input itself; the Project select's box (`.st-create-project`). */
+async function ringStyle(page: Page, selector: string): Promise<Record<string, string>> {
+  return page.evaluate(
+    ([sel, props]) => {
+      const element = document.querySelector(sel)!
+      const box = element.closest('.st-create-project') ?? element
+      const style = getComputedStyle(box) as unknown as Record<string, string>
+
+      return Object.fromEntries(props.map(prop => [prop, style[prop]]))
+    },
+    [selector, RING_PROPS] as const
+  )
+}
+
+/** Dismisses the app's toasts (they stay until dismissed and can cover the toolbar). */
+async function dismissToasts(page: Page): Promise<number> {
+  const dismiss = page.getByRole('button', { name: 'Dismiss notification' })
+  let n = 0
+
+  for (; n < 10 && (await dismiss.count()) > 0; n += 1) {
+    await dismiss.first().click()
+    await page.waitForTimeout(300)
+  }
+
+  return n
+}
+
 async function main(): Promise<void> {
   const realBefore = snapshotRealHermes()
 
@@ -654,6 +758,194 @@ async function main(): Promise<void> {
       await dialogClosed(page)
 
       return { refused: archived.title, text, left }
+    })
+
+    await check('after a refusal the server answers, focus is back in Name with its text selected, and Enter retries without a click', async () => {
+      await instrument(page)
+      const all = await rowsOf(s, 'default', true)
+      const archived = all.find(row => row.archived && row.title)!
+      const ids = new Set(all.map(row => row.id))
+      const ERROR = '[data-testid="session-tree-create-error"][data-kind="server"]'
+      const creates = async () => (await probe(page)).calls.filter(method => method === 'session.create').length
+      const settled = () => waitFor('the attempt settled', () => page.locator(SUBMIT).innerText(), text => text.trim() === 'Create', 20_000)
+
+      await fit(page)
+      await rightClick(page, await pointInProject(page, projects.find(each => each.label === 'syscanvas')!.id, 'dense'))
+      await openDialog(page)
+      await page.locator(NAME).fill(archived.title!)
+      const before = await creates()
+
+      await page.keyboard.press('Enter')
+      await page.locator(ERROR).waitFor({ timeout: 20_000 })
+      await settled()
+      await page.waitForTimeout(300)
+      const first = await focusState(page)
+
+      assert(first.testId === 'session-tree-create-name', `focus after the refusal: ${first.tag} ${first.testId}`)
+      assert(first.value === archived.title && first.selected === first.value, `value "${first.value}", selected "${first.selected}"`)
+      // Enter, no click: the same name again is a second attempt (refused again).
+      await page.keyboard.press('Enter')
+      await waitFor('a second create', creates, count => count === before + 2, 20_000)
+      await page.locator(ERROR).waitFor({ timeout: 20_000 })
+      await settled()
+      await page.waitForTimeout(300)
+      const second = await focusState(page)
+
+      assert(second.testId === 'session-tree-create-name' && second.selected === second.value, `focus after the retry: ${second.tag} ${second.testId}, selected "${second.selected}"`)
+      const left = await waitFor('no row left', async () => (await rowsOf(s, 'default', true)).filter(row => !ids.has(row.id)).map(row => row.id), value => value.length === 0, 15_000)
+
+      await page.keyboard.press('Escape')
+      await dialogClosed(page)
+      await dismissToasts(page)
+
+      return { first, second, creates: (await creates()) - before, left }
+    })
+
+    await check('a title that lands but answers an error counts as created: the dialog closes, the block is at the spot, selected, kept with Show all off, and a warning toast says so', async () => {
+      await instrument(page)
+      await switchStyle(page, 'dense')
+      await fit(page)
+      const showAll = await page.getAttribute('[data-testid="session-tree-show-all"]', 'aria-pressed')
+      const at = await pointInProject(page, pick('dense'), 'dense')
+      const title = 'Landed with an error'
+
+      await rightClick(page, at)
+      await openDialog(page)
+      await page.locator(NAME).fill(title)
+      await setMode(page, { 'session.title': { code: -32603, message: 'internal error' } })
+
+      try {
+        await page.keyboard.press('Enter')
+        await waitFor('the dialog closed', () => page.locator(DIALOG).count(), count => count === 0, 20_000)
+      } finally {
+        await setMode(page, {})
+      }
+
+      const row = await waitFor('the created row', () => rowTitled(s, title), value => Boolean(value), 20_000)
+
+      created.push({ id: row!.id, title, style: 'dense' })
+      const id = row!.id
+
+      await page.locator(BLOCK(id)).waitFor({ timeout: 20_000 })
+      await waitFor('the new block selected', () => selected(page), value => value === id, 10_000)
+      const block = (await blockBox(page, id))!
+      const kept = await waitFor('the marker stored', () => stored(s), value => (value.kept?.default ?? []).includes(id), 15_000)
+      const notices = (await probe(page)).notices
+      const warning = notices.find(each => each.kind === 'warning')
+      const calls = (await probe(page)).calls
+
+      assert(showAll !== 'true', `Show all is ${showAll}`)
+      assert(Math.abs(centre(block).x - at.x) <= 1 && Math.abs(centre(block).y - at.y) <= 1, `block centre ${JSON.stringify(centre(block))} vs the click ${JSON.stringify(at)}`)
+      assert(row!.message_count === 0 && row!.ended_at, `row ${JSON.stringify([row!.message_count, row!.ended_at])}`)
+      assert(warning && /error while naming/i.test(warning.message ?? '') && /internal error/.test(warning.message ?? ''), `notices ${JSON.stringify(notices)}`)
+      assert(calls.includes('session.title') && (calls.includes('session.detach') || calls.includes('session.close')), `calls ${calls}`)
+      const toast = await page.getByText(/error while naming/i).first().waitFor({ timeout: 5000 }).then(() => true, () => false)
+
+      assert(toast, 'no warning toast on screen')
+      await dismissToasts(page)
+
+      return { id, warning, kept: kept.kept?.default?.length, showAll }
+    })
+
+    await check('the dialog: Tab from Name to Project shows a keyboard focus ring on Project that matches Name\u2019s (light and dark)', async () => {
+      const out: Record<string, unknown> = {}
+
+      for (const [theme, p] of [['light', page], ['dark', other!.page]] as const) {
+        await p.waitForFunction(([sel]) => document.querySelector(sel)?.getAttribute('data-style') === 'dense', [PAGE] as const, { timeout: 20_000 })
+        await fit(p)
+        await rightClick(p, await pointInProject(p, pick('dense'), 'dense'))
+        await openDialog(p)
+        await p.mouse.move(2, 2)
+        await p.keyboard.press('Tab')
+        await p.waitForTimeout(400)
+        const onProject = await focusState(p)
+        const projectFocused = await ringStyle(p, PROJECT)
+        const nameUnfocused = await ringStyle(p, NAME)
+
+        await p.keyboard.press('Shift+Tab')
+        await p.waitForTimeout(400)
+        const onName = await focusState(p)
+        const nameFocused = await ringStyle(p, NAME)
+        const projectUnfocused = await ringStyle(p, PROJECT)
+        const ring = RING_PROPS.filter(prop => nameFocused[prop] !== nameUnfocused[prop])
+
+        await p.keyboard.press('Tab')
+        await p.waitForTimeout(400)
+        await p.locator(DIALOG).screenshot({ path: join(shots, `create-project-focus-${theme}.png`) })
+        await p.keyboard.press('Escape')
+        await p.locator(DIALOG).waitFor({ state: 'detached', timeout: 30_000 })
+        assert(onProject.testId === 'session-tree-create-project' && onName.testId === 'session-tree-create-name', `${theme}: focus ${onProject.testId} / ${onName.testId}`)
+        assert(ring.length > 0, `${theme}: Name shows no focus change ${JSON.stringify({ nameFocused, nameUnfocused })}`)
+
+        // Every property of Name's ring is the same on the focused Project; and Project's focus
+        // is visible (at least one of them differs from Project unfocused).
+        for (const prop of ring) {
+          assert(projectFocused[prop] === nameFocused[prop], `${theme}: Project's focused ${prop} ${projectFocused[prop]} vs Name's ${nameFocused[prop]}`)
+        }
+
+        assert(
+          ring.some(prop => projectFocused[prop] !== projectUnfocused[prop]),
+          `${theme}: Project shows no focus change ${JSON.stringify({ projectFocused, projectUnfocused })}`
+        )
+
+        out[theme] = { ring: Object.fromEntries(ring.map(prop => [prop, nameFocused[prop]])), projectUnfocused: Object.fromEntries(ring.map(prop => [prop, projectUnfocused[prop]])) }
+      }
+
+      return out
+    })
+
+    await check('Subway: a right-click on the map key does what one on the depot does (no "New session", no ghost); just outside the key it is still offered', async () => {
+      try {
+        await switchStyle(page, 'subway')
+        await fit(page)
+        await instrument(page)
+        const KEY = '[data-testid="session-tree-map-key"]'
+        const key = (await page.locator(KEY).boundingBox())!
+        const depot = (await page.locator('[data-testid="session-tree-depot"]').boundingBox())!
+        const at = async (point: Point) => {
+          await page.evaluate(() => {
+            ;(globalThis as unknown as { __stE2e: Probe }).__stE2e.context = null
+          })
+          const under = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid]')?.getAttribute('data-testid') ?? null, [point.x, point.y] as const)
+
+          await page.mouse.click(point.x, point.y, { button: 'right' })
+          await page.waitForTimeout(700)
+          const result = {
+            canvasMenu: await page.locator(CANVAS_MENU).count(),
+            newSession: await page.locator(NEW_ITEM).count(),
+            blockMenu: await page.locator(MENU).count(),
+            ghost: await page.locator(GHOST).count(),
+            prevented: (await probe(page)).context?.prevented ?? null
+          }
+
+          await page.keyboard.press('Escape')
+          await page.keyboard.press('Escape')
+          await page.waitForTimeout(300)
+
+          return { under, result }
+        }
+        const onDepot = await at({ x: depot.x + depot.width / 2, y: depot.y + Math.min(10, depot.height / 2) })
+        const onKey = await at(centre(key))
+        const outside =
+          (await emptyIn(page, { x: key.x - 60, y: key.y + 4, width: 50, height: key.height - 8 }, 2)) ?? (await emptyIn(page, { x: key.x + 4, y: key.y - 60, width: key.width - 8, height: 50 }, 2))
+
+        assert(onKey.under !== 'session-tree-map-key', 'the key is hit-testable (pointer-events changed)')
+        assert(onKey.result.newSession === 0 && onKey.result.ghost === 0, `on the key: ${JSON.stringify(onKey)}`)
+        assert(JSON.stringify(onKey.result) === JSON.stringify(onDepot.result), `key ${JSON.stringify(onKey.result)} vs depot ${JSON.stringify(onDepot.result)}`)
+        assert(outside, 'no empty spot next to the key')
+        const offer = await rightClick(page, outside)
+
+        await page.keyboard.press('Escape')
+        await page.locator(CANVAS_MENU).waitFor({ state: 'detached', timeout: 5000 })
+        const ghostAfter = await page.locator(GHOST).count()
+
+        assert(offer.ghost && ghostAfter === 0, `outside: ghost ${JSON.stringify(offer.ghost)}, after Escape ${ghostAfter}`)
+
+        return { key, onDepot, onKey, outside, offered: offer.project }
+      } finally {
+        await page.keyboard.press('Escape')
+        await switchStyle(page, 'dense')
+      }
     })
 
     await check('Escape (menu and dialog) and Cancel create nothing and remove the ghost', async () => {

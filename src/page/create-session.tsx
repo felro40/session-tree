@@ -7,7 +7,8 @@
  * The order of a create: `session.create` → `session.title` → release the runtime (`session.detach`,
  * else `session.close`) → `LayoutSync.drop` of the spot (the style on screen only; the others
  * place it with their auto-layout) → the kept-on-canvas marker (`LayoutSync.keep`, synced) →
- * refresh the rows → select the block once it is placed. No tab opens (D2).
+ * refresh the rows → select the block once it is placed. No tab opens (D2). A title error on a
+ * row the re-check keeps takes the same path, with a warning toast (`titleWarning`).
  */
 import { Button, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, host, Input, isSubmitEnter, randomUuid } from '@hermes/plugin-sdk'
 import type { PluginContext } from '@hermes/plugin-sdk'
@@ -70,17 +71,18 @@ export function useCreateSession(options: CreateSessionOptions): ReactNode {
         {
           request: (method, params) => host.request(method, params),
           mintId: randomUuid,
-          // R3: only the untitled empty row this attempt left, re-checked just before.
+          // R3: only the untitled empty row this attempt left, re-checked just before; a titled
+          // or used row is kept (and is then a created session).
           async removeIfUntouched(owner, id) {
             const rows = (await fetchSessions(ctx, { profile: owner, includeArchived: true })).sessions
             const row = rows.find(each => each.id === id)
 
             if (!row) {
-              return true
+              return null
             }
 
             if ((row.title ?? '').trim() || (row.message_count ?? 0) > 0) {
-              return false
+              return row
             }
 
             await mutate(
@@ -93,7 +95,7 @@ export function useCreateSession(options: CreateSessionOptions): ReactNode {
               }
             })
 
-            return true
+            return null
           }
         },
         { profile, cwd: cwd || undefined, title }
@@ -153,7 +155,18 @@ function CreateSessionDialog({ open, model, rows, profile, framed, projectId, bu
   const [name, setName] = useState(() => defaultSessionName(rows, profile))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<null | string>(null)
+  // A failed submit that leaves the dialog open: its count, for the focus below.
+  const [failed, setFailed] = useState(0)
   const input = useRef<HTMLInputElement>(null)
+
+  // After a failed submit, focus goes back to Name with its text selected (Enter retries), once
+  // Name is enabled again: a disabled input cannot hold focus (it fell to the page).
+  useEffect(() => {
+    if (failed > 0 && !busy) {
+      input.current?.focus()
+      input.current?.select()
+    }
+  }, [failed, busy])
   // A6: the projects with a folder (Move to project's targets), then No project. The detected
   // project is offered even without a folder, but cannot be created in (the note says why).
   const options = useMemo(() => {
@@ -191,6 +204,7 @@ function CreateSessionDialog({ open, model, rows, profile, framed, projectId, bu
       const text = err instanceof CreateFailure ? err.message : restErrorText(err)
 
       setError(text)
+      setFailed(count => count + 1)
 
       if (err instanceof CreateFailure && err.cleanup === 'failed') {
         host.notify({ kind: 'error', title: 'Could not remove the untitled session', message: 'The refused name left an untitled empty session; “Delete empty sessions” in Settings removes it.' })

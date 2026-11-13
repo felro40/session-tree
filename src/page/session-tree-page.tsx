@@ -615,6 +615,13 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
       host.notify({ kind: 'success', message: `Created “${title}”`, durationMs: 2000 })
 
+      if (outcome.titleWarning) {
+        const { reason, storedTitle } = outcome.titleWarning
+        const named = storedTitle === title ? '' : storedTitle ? ` It is named “${storedTitle}”.` : ' It has no name.'
+
+        host.notify({ kind: 'warning', title: 'Session Tree', message: `“${title}” was created, but Hermes reported an error while naming it (${reason}).${named}` })
+      }
+
       if (outcome.release === 'failed') {
         host.notify({ kind: 'error', title: 'Session Tree', message: `“${title}” was created, but its runtime could not be released; it ends when the gateway closes it.` })
       }

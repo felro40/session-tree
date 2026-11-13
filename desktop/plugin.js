@@ -8386,7 +8386,7 @@ async function releaseRuntime(request, runtime) {
 var CreateFailure = class extends Error {
   stage;
   error;
-  /** A refused title: the untitled row the create left was deleted, kept (touched since), or the delete failed. */
+  /** A refused title: the untitled row the create left was deleted, or the delete failed. */
   cleanup;
   release;
   constructor(stage2, cause, message, extra = {}) {
@@ -8416,13 +8416,15 @@ async function createSession(deps, params) {
   try {
     await deps.request("session.title", { session_id: runtimeId, title: params.title, profile: params.profile });
   } catch (error) {
-    let release = await releaseRuntime(deps.request, runtime), cleanup;
+    let release = await releaseRuntime(deps.request, runtime), kept;
     try {
-      cleanup = await deps.removeIfUntouched(params.profile, sessionId) ? "deleted" : "kept";
+      kept = await deps.removeIfUntouched(params.profile, sessionId);
     } catch {
-      cleanup = "failed";
+      throw new CreateFailure("title", error, titleRefusalText(params.title, error), { cleanup: "failed", release });
     }
-    throw new CreateFailure("title", error, titleRefusalText(params.title, error), { cleanup, release });
+    if (!kept)
+      throw new CreateFailure("title", error, titleRefusalText(params.title, error), { cleanup: "deleted", release });
+    return { sessionId, release, titleWarning: { reason: reason(error), storedTitle: (kept.title ?? "").trim() || null } };
   }
   return { sessionId, release: await releaseRuntime(deps.request, runtime) };
 }
@@ -12266,6 +12268,9 @@ function projectLabelOf(model, projectId, framed) {
   let noProject = model.projects.find((project) => project.isNoProject);
   return projectId === NO_PROJECT_ID ? noProject?.label ?? (framed ? "Home" : "No project") : model.projects.find((project) => project.id === projectId)?.label ?? projectId;
 }
+function onPanelRect(point, rects) {
+  return rects.some((rect) => rect.right > rect.left && rect.bottom > rect.top && point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom);
+}
 function projectInfoOf(model, projectId) {
   return projectId === NO_PROJECT_ID ? model.projects.find((project) => project.isNoProject) : model.projects.find((project) => project.id === projectId);
 }
@@ -12284,17 +12289,18 @@ function useCreateSession(options) {
         {
           request: (method, params) => host2.request(method, params),
           mintId: randomUuid,
-          // R3: only the untitled empty row this attempt left, re-checked just before.
+          // R3: only the untitled empty row this attempt left, re-checked just before; a titled
+          // or used row is kept (and is then a created session).
           async removeIfUntouched(owner, id2) {
             let row = (await fetchSessions(ctx, { profile: owner, includeArchived: !0 })).sessions.find((each) => each.id === id2);
-            return row ? (row.title ?? "").trim() || (row.message_count ?? 0) > 0 ? !1 : (await mutate(
+            return row ? (row.title ?? "").trim() || (row.message_count ?? 0) > 0 ? row : (await mutate(
               JSON.stringify(["delete", owner, id2]),
               () => fetchMutationSnapshot(ctx, owner, id2),
               (identity4) => postDelete(ctx, owner, id2, identity4)
             ).catch((error) => {
               if (!isAlreadyAbsent(error))
                 throw error;
-            }), !0) : !0;
+            }), null) : null;
           }
         },
         { profile, cwd: cwd || void 0, title }
@@ -12325,7 +12331,11 @@ function useCreateSession(options) {
   );
 }
 function CreateSessionDialog({ open, model, rows, profile, framed, projectId, busy: inFlight, onProject, onCancel, onSubmit }) {
-  let [name, setName] = useState4(() => defaultSessionName(rows, profile)), [busy, setBusy] = useState4(!1), [error, setError] = useState4(null), input = useRef4(null), options = useMemo7(() => {
+  let [name, setName] = useState4(() => defaultSessionName(rows, profile)), [busy, setBusy] = useState4(!1), [error, setError] = useState4(null), [failed, setFailed] = useState4(0), input = useRef4(null);
+  useEffect5(() => {
+    failed > 0 && !busy && (input.current?.focus(), input.current?.select());
+  }, [failed, busy]);
+  let options = useMemo7(() => {
     let list = moveTargets(model.projects, void 0).map((project2) => ({ id: project2.id, label: project2.label, folder: !0 }));
     return projectId !== NO_PROJECT_ID && !list.some((each) => each.id === projectId) && list.unshift({ id: projectId, label: projectLabelOf(model, projectId, framed), folder: !1 }), [...list, { id: NO_PROJECT_ID, label: projectLabelOf(model, NO_PROJECT_ID, framed), folder: !0 }];
   }, [model, projectId, framed]), chosen = options.find((each) => each.id === projectId) ?? options[options.length - 1], problem = nameProblem(name, rows, profile), problemText = problem?.kind === "long" ? `Title too long (${problem.length} chars, max ${MAX_TITLE_LENGTH})` : problem?.kind === "taken" ? `“${sanitizeTitle(name)}” is already the name of another session` : null, blocked = !!problem || !chosen.folder, project = projectInfoOf(model, chosen.id), submit = async () => {
@@ -12335,7 +12345,7 @@ function CreateSessionDialog({ open, model, rows, profile, framed, projectId, bu
         await onSubmit(sanitizeTitle(name), chosen.id);
       } catch (err) {
         let text = err instanceof CreateFailure ? err.message : restErrorText(err);
-        setError(text), err instanceof CreateFailure && err.cleanup === "failed" && host2.notify({ kind: "error", title: "Could not remove the untitled session", message: "The refused name left an untitled empty session; “Delete empty sessions” in Settings removes it." });
+        setError(text), setFailed((count) => count + 1), err instanceof CreateFailure && err.cleanup === "failed" && host2.notify({ kind: "error", title: "Could not remove the untitled session", message: "The refused name left an untitled empty session; “Delete empty sessions” in Settings removes it." });
       } finally {
         setBusy(!1);
       }
@@ -12595,6 +12605,11 @@ function MenuItems({ node, actions, labels }) {
 function isCanvasArea(target) {
   return !!target?.closest?.('.react-flow__pane, [data-testid="session-tree-lane-header"], [data-testid="session-tree-lane-band"]');
 }
+var PASS_THROUGH_PANELS = ".st-sw-key";
+function onPassThroughPanel(event) {
+  let rects = [...event.currentTarget.querySelectorAll(PASS_THROUGH_PANELS)].filter((panel) => getComputedStyle(panel).visibility !== "hidden").map((panel) => panel.getBoundingClientRect());
+  return onPanelRect({ x: event.clientX, y: event.clientY }, rects);
+}
 function CanvasMenuItems({ target, onChoose }) {
   return /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "new-session", "data-project-id": target.projectId, onSelect: onChoose, children: [
     /* @__PURE__ */ jsx14(Codicon9, { name: "add", size: ICON }),
@@ -12617,7 +12632,12 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus, on
   });
   let onContextMenu = useCallback3(
     (event) => {
-      let requested = actions?.takeRequestedMenuNode() ?? null, id2 = requested ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
+      let requested = actions?.takeRequestedMenuNode() ?? null;
+      if (!requested && onPassThroughPanel(event)) {
+        event.preventDefault();
+        return;
+      }
+      let id2 = requested ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
       if (actions && actions.canAct(target)) {
         setMenu({ kind: "node", id: target.id }), onOpenFor(target);
         return;
@@ -14209,7 +14229,11 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   ), onCreated = useCallback6(
     (outcome, draft, title) => {
       let id2 = outcome.sessionId;
-      style2.savesLayout && !style2.frame && sync.drop(ref, /* @__PURE__ */ new Map([[id2, spotFor(draft.point, style2.nodeSize, snap, style2.grid)]])), sync.keep(profile, createProfile, [id2]), sessions.refetch(), (scope === ALL_PROJECTS || draft.projectId === scope) && setPendingSelect({ id: id2, reveal: !!style2.frame }), host5.notify({ kind: "success", message: `Created “${title}”`, durationMs: 2e3 }), outcome.release === "failed" && host5.notify({ kind: "error", title: "Session Tree", message: `“${title}” was created, but its runtime could not be released; it ends when the gateway closes it.` });
+      if (style2.savesLayout && !style2.frame && sync.drop(ref, /* @__PURE__ */ new Map([[id2, spotFor(draft.point, style2.nodeSize, snap, style2.grid)]])), sync.keep(profile, createProfile, [id2]), sessions.refetch(), (scope === ALL_PROJECTS || draft.projectId === scope) && setPendingSelect({ id: id2, reveal: !!style2.frame }), host5.notify({ kind: "success", message: `Created “${title}”`, durationMs: 2e3 }), outcome.titleWarning) {
+        let { reason: reason2, storedTitle } = outcome.titleWarning, named2 = storedTitle === title ? "" : storedTitle ? ` It is named “${storedTitle}”.` : " It has no name.";
+        host5.notify({ kind: "warning", title: "Session Tree", message: `“${title}” was created, but Hermes reported an error while naming it (${reason2}).${named2}` });
+      }
+      outcome.release === "failed" && host5.notify({ kind: "error", title: "Session Tree", message: `“${title}” was created, but its runtime could not be released; it ends when the gateway closes it.` });
     },
     [style2, sync, ref, snap, profile, createProfile, sessions, scope]
   ), createDialog = useCreateSession({
@@ -15105,6 +15129,15 @@ g.is-dimmed {
   font: inherit;
   font-size: 13px;
   outline: 0;
+}
+
+/* The focus ring is the box's, as the Name input's: the SDK Input lights its border in the
+   theme's ring colour on focus (--dt-composer-ring, which every theme sets to its
+   midground, i.e. --ui-accent); the left edge keeps the project's colour. */
+.st-create-project:focus-within {
+  border-top-color: var(--ui-accent);
+  border-right-color: var(--ui-accent);
+  border-bottom-color: var(--ui-accent);
 }
 
 .st-create-project option {
