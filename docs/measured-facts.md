@@ -2271,8 +2271,11 @@ Shown to fail once: a marker write that also set a `state.json` key failed both 
   status` clean). Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external (the guards).
 - lint 0 errors (exit 0); build exit 0; `npm test` **453/453** (was 449: `create.test.ts` +4);
   `npm run test:py` **381 passed**; e2e run here: **create 30** (was 26: +4), subway 19, actions
-  30, each exit 0 with its real-Hermes guard passed. The other suites are unchanged since
-  `3090206` (foundation 19, core-dense 30, sync 25, swimlanes 28, rich 23, toolbar 17, final 14,
-  select 35, shared 23): 293 in all, the full `npm run test:e2e` still to be run on this commit.
+  30, each exit 0 with its real-Hermes guard passed.
+- The full `npm run test:e2e` on `0e4c6d8` (code `1cd82ee`; measured 2026-11-13), in one run:
+  exit 0, **293/293**: foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28, rich 23,
+  subway 19, toolbar 17, final 14, select 35, shared 23, create 30. The same run's other gates:
+  lint 0, `npm test` 453/453, `npm run test:py` 381 passed, build 780 401 bytes, identical to the
+  committed file.
 - At `3090206`: 778 449 bytes, `npm test` 449/449, `npm run test:py` 381 passed,
   `npm run test:e2e` 289/289 in one run.
