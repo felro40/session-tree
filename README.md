@@ -172,9 +172,14 @@ for the old per-scope positions).
   - There is no "send back to the singles list": a kept session stays on the canvas until it is
     deleted (Re-arrange gives it an automatic spot, still on the canvas).
   - A name the page cannot see is taken (an archived session's, with Show archived off) is refused
-    by the gateway after the create: the dialog shows it and the untitled row is deleted again. A
-    create the gateway refuses outright may leave an untitled empty row (measured with no model
-    configured), which "Delete empty sessions" removes.
+    by the gateway after the create: the dialog shows it, focus goes back to Name with its text
+    selected (Enter retries), and the untitled row is deleted again. A naming call that answers an
+    error while the row did get the name (or has messages) is a create: the block is placed and
+    selected as usual, and a warning toast says Hermes reported an error while naming it (and
+    which name the row has, when it differs). A create the gateway refuses outright may leave an
+    untitled empty row (measured with no model configured), which "Delete empty sessions" removes.
+  - The style's own panels over the canvas (the Rich drawer, the Subway depot and map key) offer no
+    new session; the map key still lets pan, zoom and box selection through.
   - The project dot uses the project's colour; a project without one shows the theme's neutral dot.
 
 ## Source map
@@ -274,7 +279,8 @@ Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (P
 create: `session.create` (`profile`, `cwd` + `cwd_explicit` for a project, one fresh `request_id`
 per attempt), `session.title`, then `session.detach` with the create's `subscription_id`
 (`session.close` where the client has no detach), and on a refused name the backend's fenced
-delete of the untitled row it left.
+delete of the untitled row it left (a row the re-check finds titled or used is kept, and counts as
+created).
 
 ## Development
 

@@ -2247,13 +2247,32 @@ Shown to fail once: a marker write that also set a `state.json` key failed both 
 - One existing assertion changed: `tests/py/test_plugin_api.py::test_router_mutations_are_only_the_fenced_session_actions`
   lists the router's write routes; `("/state/kept", "POST")` is added to the list.
 
-## Bundle and gates (code `3090206`; the commit after it changes only docs)
+## Review fixes (code `1cd82ee`)
 
-- **`desktop/plugin.js`: 778 449 bytes** (was 751 644: +26 805), sha256 `b58c71b8…f6ba143e6`, 91
-  esbuild inputs; `npm run build` reproduces it byte for byte (`git status` clean). Only
-  `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external (the guards).
-- lint 0 errors (exit 0); build exit 0; `npm test` **449/449** (was 413: `create.test.ts` +36);
-  `npm run test:py` **381 passed** (was 341: `test_kept.py` +40); `npm run test:e2e` **289/289,
-  exit 0** in one run: foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28, rich 23,
-  subway 19, toolbar 17, final 14, select 35, shared 23, **create 26**; every suite's real-Hermes
-  guard passed.
+- Focus after a refusal: before, focus fell to `BODY` once the disabled Name input lost it; now
+  `document.activeElement` is the Name input, its whole text selected, and Enter retries (two
+  `session.create` calls, no click).
+- A `session.title` that lands then answers -32603 (injected by wrapping `host.request`): before,
+  the dialog stayed open with "Hermes refused the name"; now the row (titled, 0 messages, ended) is
+  created: dialog closed, block centred on the click, selected, kept with Show all off, and a
+  `warning` toast "“…” was created, but Hermes reported an error while naming it (internal error)."
+- Subway map key: a right-click on the depot opens no menu (canvas 0, block 0, ghost 0) with the
+  default prevented; on the key (hit-testing gives `rf__wrapper`, `pointer-events: none` kept) it
+  offered "New session" with a ghost; now the same as the depot. Just outside it is still offered.
+- The SDK Input's focus look (computed): border colour `--dt-composer-ring` (every theme's
+  midground, `--ui-accent`), `box-shadow: none`, `outline: none`; light rgb(0, 83, 253), dark
+  rgb(74, 132, 254). The Project box (`:focus-within`) now has the same top/right/bottom border
+  colour on focus (was unchanged at 22 % alpha); its left edge keeps the project colour.
+
+## Bundle and gates (code `1cd82ee`, after the review fixes; the commit after it changes only docs)
+
+- **`desktop/plugin.js`: 780 401 bytes** (was 778 449 at `3090206`: +1 952), sha256
+  `e0fea191…036c1da81`, 91 esbuild inputs; `npm run build` reproduces it byte for byte (`git
+  status` clean). Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external (the guards).
+- lint 0 errors (exit 0); build exit 0; `npm test` **453/453** (was 449: `create.test.ts` +4);
+  `npm run test:py` **381 passed**; e2e run here: **create 30** (was 26: +4), subway 19, actions
+  30, each exit 0 with its real-Hermes guard passed. The other suites are unchanged since
+  `3090206` (foundation 19, core-dense 30, sync 25, swimlanes 28, rich 23, toolbar 17, final 14,
+  select 35, shared 23): 293 in all, the full `npm run test:e2e` still to be run on this commit.
+- At `3090206`: 778 449 bytes, `npm test` 449/449, `npm run test:py` 381 passed,
+  `npm run test:e2e` 289/289 in one run.
