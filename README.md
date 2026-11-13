@@ -57,6 +57,19 @@ user (below).
   Restore there brings one back (with Undo): it replaces the whole layout, every project's blocks,
   also from a project scope; the arrangement it replaces is kept too.
 - **Open** a session in a new tab with a double-click.
+- **Create** a session with a right-click on empty canvas (or on a group label or a Swimlanes
+  lane): **New session in ● <Project>…** names the project the click is in (the dot in its
+  colour), and a faint ghost block shows where the new block will go. In All projects the project
+  is the one whose area is under the cursor (Dense and Subway: from a group label down to the
+  next one; Rich cards: the shelf segment; Swimlanes: the lane), else the nearest block's, else No
+  project; in a project scope it is always that project. The dialog has **Name** (prefilled
+  "New session", "New session 2", …, selected; Enter creates, Escape or Cancel closes with nothing
+  made) and **Project** (the projects with a folder, and No project), and names the profile it
+  creates in (the profile filter's; in All profiles the app's active one). A name another session
+  already holds is refused inline (Hermes' own rule), as is one over 100 characters. The new block
+  appears where you right-clicked (snapped with Snap on; in Swimlanes at "now" in its lane), selected;
+  no tab opens. It stays on the canvas in every style even with Show all off (a synced marker), and
+  the other styles give it an automatic spot in its project's group.
 - **Act** on a session with a right-click (or its ⋯): Appearance ▸, Pin / Unpin, Rename…, Move to
   project ▸, Copy ID, Branch, Export, Mark as read / unread, Archive / Unarchive, Delete — the
   PROJECTS pane's menu. Delete asks first, says that branches stay as separate sessions, and is
@@ -150,6 +163,19 @@ for the old per-scope positions).
   grabbed block's snapped offset, so its spacing is kept: blocks that already sit on the grid stay
   on it, while blocks placed off the grid (the auto-layout's spacing, or drops with Snap off) keep
   their offset from the grabbed block and land on the grid only after a drop of their own.
+- **A session made from the canvas** (card 11):
+  - The core sidebar and the PROJECTS pane do not list it until its first message (they list only
+    sessions with messages; measured: not listed before or after a gateway restart).
+  - While unused it is an ended, empty session: Settings' **Delete empty sessions** removes it (then
+    its block and its kept-on-canvas marker go too), and its name is free for another session that
+    asks for it (Hermes gives an empty session's title up), so that one can end up untitled here.
+  - There is no "send back to the singles list": a kept session stays on the canvas until it is
+    deleted (Re-arrange gives it an automatic spot, still on the canvas).
+  - A name the page cannot see is taken (an archived session's, with Show archived off) is refused
+    by the gateway after the create: the dialog shows it and the untitled row is deleted again. A
+    create the gateway refuses outright may leave an untitled empty row (measured with no model
+    configured), which "Delete empty sessions" removes.
+  - The project dot uses the project's colour; a project without one shows the theme's neutral dot.
 
 ## Source map
 
@@ -163,6 +189,7 @@ for the old per-scope positions).
 | `src/model/route.ts` | Link geometry and the R13 router: one `LinkRouter` per link shape (Dense, Rich cards: `curveRouter`; Swimlanes: `orthogonalRouter`, elbows with rounded corners; Subway: `octilinearRouter`, straight while dragging, 45°-chamfered on drop); on-drop detours on a sparse orthogonal grid (A*, on a 0.01 px lattice obstacles included), drawn rounded or chamfered. |
 | `src/model/projects.ts`, `status.ts`, `format.ts` | Project membership, live status from `host.state`, display formatting. |
 | `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
+| `src/model/create.ts`, `src/page/canvas-areas.ts`, `src/page/create-session.tsx` | Card 11: a new session from a canvas right-click — which project (`projectAt` over each style's own areas: `labelSpans`, `shelfSegments`, the Swimlanes lanes), the name (Hermes' title rules), the spot, the create (create → title → release the runtime; a refused name deletes its untitled row), one submit = one session; the canvas menu (`session-menu.tsx`), the ghost (`graph-canvas.tsx`) and the dialog. |
 | `src/model/selection.ts` | Card 9: the selection (a set with one primary block) and its rules — click, Shift toggle, box (full containment), Shift + box, Esc, Ctrl/⌘+A, the never-selectable blocks, what a refresh keeps — and the group offset of a multi-block drag (with Snap, by the grabbed block's snapped spot). |
 | `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`), the Subway map style (`subway/`: the track plan `plan.ts`, metro layout `layout.ts`, label placement `labels.ts`, geometry `spec.ts`, stations/tracks `subway-flow.tsx`, label driver + map key + depot `layer.tsx`, `subway.css`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
 | `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`, with a framed style's layers), toolbar (with the style switcher; its narrow-width layout is the pure `toolbar-layout.ts`), the Re-arrange confirm and Layout history dialog (`layout-history.tsx`, its row and confirm text `history-labels.ts`), the block menu (`session-menu.tsx`, SDK ContextMenu), the actions controller with its dialogs (`session-actions.tsx`) and the shared services (`services.ts`: layout store, device prefs, push + poll). |
@@ -173,7 +200,7 @@ for the old per-scope positions).
 |---|---|
 | `plugin.yaml`, `__init__.py` | Agent half. No tools; it exists so `plugins.enabled` can mount the backend. |
 | `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`: the session rows, the session actions the SDK has no verb for (rename, read state, archive, delete, export), each through the core endpoint's own code path, and the synced layout store. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
-| `dashboard/layout_store.py` | The synced layout store (standard library only): `<HERMES_HOME>/session-tree/state.json`, atomic writes under a thread lock + `fcntl.flock`, caps, corrupt-file backup, prune, and the Layout history backups in `backups.json` (`docs/layout-sync.md`). |
+| `dashboard/layout_store.py` | The synced layout store (standard library only): `<HERMES_HOME>/session-tree/state.json`, atomic writes under a thread lock + `fcntl.flock`, caps, corrupt-file backup, prune, the Layout history backups in `backups.json`, and (card 11) the kept-on-canvas markers in `kept.json` (`docs/layout-sync.md`). |
 | `dashboard/session_details.py` | Card 6: the Rich cards details (plain-text excerpt of the last message, 7-day activity) read through a read-only `SessionDB`, bounded per id (`docs/rich-cards.md`). |
 | `desktop/plugin.js` | Desktop half. **Built output** of `src/` (`npm run build`), committed so the package installs without a build. |
 | `src/` | TypeScript + JSX source: `plugin.tsx` (registration), `page/`, `settings/`, `model/` (pure graph rules), `shims/react-dom.ts`. |
@@ -225,6 +252,14 @@ lineage root, so a compaction does not move it), once per profile + style (scope
 another scope is a 409 `scope_layout_retired`); a `state.json` of a newer schema is served
 read-only and never written (409 `newer_schema`).
 
+Kept on the canvas (card 11; `docs/layout-sync.md`): `POST /state/kept?session_profile=<name>`
+`{ids: [1–100 session ids]}` marks sessions of that profile (not `*`; each id must be a stored
+session there, else 404) as kept on the canvas: `{ok, epoch, rev, changed, added}`. The markers
+live in `kept.json` beside `state.json`; `state.json` keeps its shape (only its `rev` moves, so
+the push and the poll carry the change, `kind: "kept"`, `profile: "*"`). `GET /state` answers them
+as `kept: {<owner profile>: [ids]}` (absent when there is none) and prunes the markers of sessions
+that no longer exist, with the positions.
+
 Rich cards details (card 6; see `docs/rich-cards.md`): `POST /sessions/details`
 `{profile, ids: [≤ 100], tz_offset_minutes}` → `{profile, tz_offset_minutes, days, details: {id:
 {excerpt, excerpt_role, activity: [7]}}}`. `excerpt` is the last user / assistant message as plain
@@ -235,7 +270,11 @@ count), about 1.8 ms per id on a 5,000-message session.
 
 Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (Pin, Appearance),
 `session.branch_stored` (Branch), `session.workspace.move` (Move to project), `session.title`
-(Rename of the session focused in the app), clipboard through the SDK `CopyButton`.
+(Rename of the session focused in the app), clipboard through the SDK `CopyButton`; card 11's
+create: `session.create` (`profile`, `cwd` + `cwd_explicit` for a project, one fresh `request_id`
+per attempt), `session.title`, then `session.detach` with the create's `subscription_id`
+(`session.close` where the client has no detach), and on a refused name the backend's fenced
+delete of the untitled row it left.
 
 ## Development
 
@@ -252,7 +291,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style; also the Re-arrange confirm, Layout history opened from its toast and restored from the other device, and a reopened page keeping its scope and view), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook), `scripts/e2e-toolbar.ts` (the toolbar at window widths 1600 → 360 px and page widths 1400 → 340 px, fractional ones around every layout change too, in every style, with nine projects, and under Hermes' UI scale at 80–125 %: no overlap, nothing squeezed or clipped, the bar shows the row / stacked / wrapped layout it applied and the same one at any UI scale, the scope strip's wheel and Shift + wheel scroll and selected chip, light theme), `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style), `scripts/e2e-select.ts` (card 9: box selection and group moves in Dense, Subway and Rich cards, two contexts, the 500-session group drag; `SESSION_TREE_SELECT_ONLY=scale` runs only that last check) and `scripts/e2e-shared.ts` (card 10: one layout per style — the migration on a copy of the real store, then in Dense, Subway and Rich: a scope never moves a block, the first visit and Fit frame the project, a block dragged in a scope shows in All and in a second context, a scoped Re-arrange with its Undo and Layout history entry; in Dense, the Undo of a project and an All Re-arrange after a block moved to another project, and the confirm's block count; `SESSION_TREE_REAL_STATE` names the store copy). The actions, sync, swimlanes, rich, subway, toolbar, final, select and shared suites mutate (or add to) their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-toolbar` / `-final` / `-select` / `-shared` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style; also the Re-arrange confirm, Layout history opened from its toast and restored from the other device, and a reopened page keeping its scope and view), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook), `scripts/e2e-toolbar.ts` (the toolbar at window widths 1600 → 360 px and page widths 1400 → 340 px, fractional ones around every layout change too, in every style, with nine projects, and under Hermes' UI scale at 80–125 %: no overlap, nothing squeezed or clipped, the bar shows the row / stacked / wrapped layout it applied and the same one at any UI scale, the scope strip's wheel and Shift + wheel scroll and selected chip, light theme), `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style), `scripts/e2e-select.ts` (card 9: box selection and group moves in Dense, Subway and Rich cards, two contexts, the 500-session group drag; `SESSION_TREE_SELECT_ONLY=scale` runs only that last check) and `scripts/e2e-shared.ts` (card 10: one layout per style — the migration on a copy of the real store, then in Dense, Subway and Rich: a scope never moves a block, the first visit and Fit frame the project, a block dragged in a scope shows in All and in a second context, a scoped Re-arrange with its Undo and Layout history entry; in Dense, the Undo of a project and an All Re-arrange after a block moved to another project, and the confirm's block count; `SESSION_TREE_REAL_STATE` names the store copy), and `scripts/e2e-create.ts` (card 11: a new session from a canvas right-click in Dense, Subway, Rich cards and Swimlanes — the offered project, the ghost, the row, the spot, the selection, a reload and a second context, Show all off in every style, a project scope, the dialog's paths, No project, the block menu unchanged, "Delete empty sessions"; its home names a model, `model.default: test-model`, so `session.create` works). The actions, sync, swimlanes, rich, subway, toolbar, final, select, shared and create suites mutate (or add to) their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-toolbar` / `-final` / `-select` / `-shared` / `-create` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `npm run clean:e2e` | `scripts/e2e/clean.ts`: frees the disk the test homes take (a full `test:e2e` makes 7 homes of about 460 MB). Removes the e2e trash and this role's stopped test homes of the current card (`c<card>-<role>`, `c<card>-<role>-<variant>`; `SESSION_TREE_ROLE`); `npm run clean:e2e -- --all` does every card's and role's. Keeps `pytest-venv` and everything that is not a test home (logs, screenshot folders), refuses (and removes nothing) while a test gateway runs, and prints each removed path with its size. All deleting goes through one guarded helper (`deleteTrashEntry`): only a direct child of the real `<e2e root>/trash`, never following a symlink (test homes link this checkout into `plugins/session-tree`), never a home whose gateway is alive. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 
@@ -277,8 +316,8 @@ scripts/test-hermes reset     # stop and move the role's root to ~/.cache/sessio
   `scripts/test-hermes` take their root from the harness): root `~/.cache/session-tree-e2e/c<card>-<role>/`, ports `19300 + 10·card`
   (+0..+4 coder, +5..+9 reviewer). Card 9: coder home `c9-coder/home`, ports 19390–19394 (the
   Webapp on 19390); reviewer `c9-reviewer`, ports 19395–19399. The actions, sync, swimlanes, rich,
-  subway, final and select suites' own homes are `c9-<role>-actions`, `-sync`, `-swim`, `-rich`,
-  `-subway`, `-final` and `-select` (same ports, never running at the same time as
+  subway, final, select, shared and create suites' own homes are `c9-<role>-actions`, `-sync`, `-swim`, `-rich`,
+  `-subway`, `-final`, `-select`, `-shared` and `-create` (same ports, never running at the same time as
   the other suites). Setup moves the shared home's layout store aside first
   (`<root>/layout-store-old/`), so synced positions and Snap from an earlier run do not carry over.
 - Setup writes the test config with `hermes config set` (`webapp.enabled true`, `webapp.host
