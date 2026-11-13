@@ -49,6 +49,13 @@ the same code.
   Session Tree that predates it reads ``state.json`` exactly as before. The backup is written
   before ``state.json``: a writer killed in between leaves an extra backup, never a lost layout.
   Schema 2 (card 10) records ``project`` (what a scoped Re-arrange reset); schema 1 still loads.
+* **Kept on the canvas** (card 11, ``kept.json`` next to ``state.json``, its own schema, the same
+  locks and atomic writes): the sessions made from a canvas right-click, which stay on the
+  canvas in every style even with Show all off. Keyed by the owning profile (never ``*``) and
+  the session's compression lineage root id, each ``{created_at}``. ``state.json`` keeps its
+  schema-1 shape byte for byte: a marker write only bumps its ``rev`` (so every window's poll and
+  push see the change), and a Session Tree that predates the file never reads it. Pruned with
+  the positions when the state is served (:meth:`LayoutStore.prune_kept`).
 """
 
 from __future__ import annotations
@@ -109,6 +116,18 @@ BACKUP_REASONS = ("rearrange", "restore")
 _BACKUP_ID_RE = re.compile(r"^[0-9a-f]{16}$")
 _BACKUP_KEYS_V1 = {"id", "profile", "style", "scope", "created_at", "reason", "positions"}
 _BACKUP_KEYS = _BACKUP_KEYS_V1 | {"project"}
+
+#: ``kept.json`` (card 11): its own schema version, caps and the 409 detail prefix of a write
+#: refused because the file was written by a newer Session Tree.
+KEPT_SCHEMA_VERSION = 1
+MAX_KEPT_PER_PROFILE = 5000
+MAX_KEPT_BATCH = 100
+MAX_KEPT_FILE_BYTES = 4 * 1024 * 1024
+KEPT_NEWER_CODE = "kept_newer"
+#: A stored session id (``SessionDB`` ids: timestamps, hex, ``local-…``, fixture slugs); no ``/``.
+_KEPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
+#: A named profile: a marker belongs to the profile that owns the session (never ``*``).
+_NAMED_PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 #: Card 10 (L1, A1): block positions are stored once per profile + style, under this scope key
 #: (the All projects layout, kept as it was). Every other scope key is retired: dropped by the
@@ -374,6 +393,58 @@ def _encode(data: dict[str, Any]) -> bytes:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")
 
 
+# --- kept on the canvas (card 11) -------------------------------------------------------------
+
+def check_named_profile(profile: Any) -> str:
+    if not isinstance(profile, str) or not _NAMED_PROFILE_RE.fullmatch(profile):
+        raise StoreError(400, "a kept session belongs to one named profile (not '*')")
+    return profile
+
+
+def check_kept_ids(ids: Any) -> list[str]:
+    """``[session id, …]``: 1-:data:`MAX_KEPT_BATCH` stored session ids (no ``/``)."""
+    if not isinstance(ids, list) or not ids:
+        raise StoreError(400, f"ids must be a list of 1-{MAX_KEPT_BATCH} session ids")
+    if len(ids) > MAX_KEPT_BATCH:
+        raise StoreError(413, f"at most {MAX_KEPT_BATCH} session ids per request")
+    for sid in ids:
+        if not isinstance(sid, str) or not _KEPT_ID_RE.fullmatch(sid):
+            raise StoreError(400, "a session id is 1-200 letters, digits or ._:- and starts with a letter or digit")
+    return list(dict.fromkeys(ids))
+
+
+def _empty_kept() -> dict[str, Any]:
+    return {"schema": KEPT_SCHEMA_VERSION, "kept": {}}
+
+
+def _validate_kept(raw: Any) -> dict[str, Any]:
+    """The parsed ``kept.json``, checked as strictly as ``state.json``."""
+    if not isinstance(raw, dict):
+        raise CorruptState("not an object")
+    schema = raw.get("schema")
+    if isinstance(schema, int) and not isinstance(schema, bool) and schema > KEPT_SCHEMA_VERSION:
+        raise NewerSchema(str(schema))
+    if isinstance(schema, bool) or schema != KEPT_SCHEMA_VERSION or set(raw) != {"schema", "kept"}:
+        raise CorruptState("schema")
+    kept = raw["kept"]
+    if not isinstance(kept, dict) or len(kept) > MAX_PROFILES:
+        raise CorruptState("kept")
+    for profile, entries in kept.items():
+        if not isinstance(profile, str) or not _NAMED_PROFILE_RE.fullmatch(profile):
+            raise CorruptState("kept.profile")
+        if not isinstance(entries, dict) or not 1 <= len(entries) <= MAX_KEPT_PER_PROFILE:
+            raise CorruptState("kept.entries")
+        for sid, entry in entries.items():
+            if not isinstance(sid, str) or not _KEPT_ID_RE.fullmatch(sid):
+                raise CorruptState("kept.id")
+            if not isinstance(entry, dict) or set(entry) != {"created_at"}:
+                raise CorruptState("kept.entry")
+            stamp = entry["created_at"]
+            if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or not math.isfinite(stamp):
+                raise CorruptState("kept.created_at")
+    return raw
+
+
 def _history_of(each: dict[str, Any]) -> tuple[str, str]:
     """The history a backup belongs to: its profile + style (card 10, A8; the scope is always
     :data:`SHARED_SCOPE` once the migration ran)."""
@@ -429,6 +500,7 @@ class LayoutStore:
         self.path = Path(path)
         self.lock_path = self.path.with_name("state.lock")
         self.backups_path = self.path.with_name("backups.json")
+        self.kept_path = self.path.with_name("kept.json")
         self._clock = clock
         self._thread_lock = threading.Lock()
         self._last_stamp = 0.0
@@ -1016,6 +1088,143 @@ class LayoutStore:
             return changes[0] > 0
 
         self._mutate(change)
+        return changes[0]
+
+    # kept on the canvas (card 11) --------------------------------------------------------------
+
+    def _read_kept_file(self) -> dict[str, Any]:
+        """``kept.json``; raises CorruptState / NewerSchema. No lock: ``os.replace`` is atomic."""
+        try:
+            data = self.kept_path.read_bytes()
+        except FileNotFoundError:
+            return _empty_kept()
+        if len(data) > MAX_KEPT_FILE_BYTES:
+            raise CorruptState("too large")
+        try:
+            raw = json.loads(data.decode("utf-8"), parse_constant=_refuse_constant)
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise CorruptState(str(exc)) from exc
+        return _validate_kept(raw)
+
+    def _load_kept_locked(self, *, for_write: bool) -> dict[str, Any]:
+        """Under the locks: the markers, a corrupt file moved aside first (``.bak``)."""
+        try:
+            return self._read_kept_file()
+        except CorruptState:
+            self._backup_corrupt(self.kept_path)
+            return _empty_kept()
+        except NewerSchema as exc:
+            if for_write:
+                raise StoreError(409, f"{KEPT_NEWER_CODE}: kept.json has schema {exc}; this Session Tree writes schema "
+                                      f"{KEPT_SCHEMA_VERSION}, so it does not change it") from exc
+            return {**_empty_kept(), "read_only": True}
+
+    def _read_kept(self) -> dict[str, Any]:
+        try:
+            return self._read_kept_file()
+        except NewerSchema:
+            return {**_empty_kept(), "read_only": True}
+        except CorruptState:
+            with self._locked():
+                return self._load_kept_locked(for_write=False)
+
+    def kept_snapshot(self, profile: str) -> dict[str, list[str]]:
+        """The kept sessions a view shows: ``{owner profile: [session id, …]}`` for a named
+        profile (its own), or every owner for ``*`` (the All profiles view)."""
+        check_profile(profile)
+        kept = self._read_kept()["kept"]
+        owners = list(kept) if profile == "*" else [profile]
+        return {owner: sorted(kept[owner]) for owner in owners if kept.get(owner)}
+
+    def keep_sessions(self, profile: str, ids: Any) -> dict[str, Any]:
+        """Mark sessions of ``profile`` (their lineage root ids) as kept on the canvas. Written
+        under the store's locks: ``kept.json`` first (atomically), then ``state.json`` with only its
+        ``rev`` bumped, so every window's poll and push pick the change up. Already kept: nothing
+        changes (no new revision)."""
+        check_named_profile(profile)
+        wanted = check_kept_ids(ids)
+        added = [0]
+        holder: dict[str, Any] = {}
+
+        def change(state: dict[str, Any], stamp: float) -> bool:
+            data = self._load_kept_locked(for_write=True)
+            entries = data["kept"].get(profile, {})
+            new = [sid for sid in wanted if sid not in entries]
+            if not new:
+                return False
+            if profile not in data["kept"] and len(data["kept"]) >= MAX_PROFILES:
+                raise StoreError(413, f"at most {MAX_PROFILES} profiles keep sessions on the canvas")
+            if len(entries) + len(new) > MAX_KEPT_PER_PROFILE:
+                raise StoreError(413, f"at most {MAX_KEPT_PER_PROFILE} kept sessions per profile")
+            for sid in new:
+                entries[sid] = {"created_at": stamp}
+            data["kept"][profile] = entries
+            encoded = _encode(data)
+            if len(encoded) > MAX_KEPT_FILE_BYTES:
+                raise StoreError(413, f"kept.json would exceed {MAX_KEPT_FILE_BYTES} bytes")
+            holder["bytes"] = encoded
+            added[0] = len(new)
+            return True
+
+        def write(_stamp: float) -> None:
+            self._replace_file_locked(self.kept_path, holder["bytes"])
+
+        state, changed = self._mutate(change, write)
+        return {"ok": True, "epoch": state["epoch"], "rev": state["rev"], "changed": changed, "added": added[0]}
+
+    def prune_kept(self, profile: str, existing: Callable[[dict[Optional[str], set[str]]], Optional[dict[Optional[str], Any]]]) -> int:
+        """Drop the markers of sessions that no longer exist (deleted, or removed by "Delete empty
+        sessions"), and move one keyed by a compression lineage member to the root's key; like
+        :meth:`prune`, for the owners a view shows (``*``: every owner). ``existing`` is the same
+        callback (keyed by owner profile here). Nothing happens when that cannot be known, or
+        while ``state.json`` or ``kept.json`` is read-only (a newer schema)."""
+        check_profile(profile)
+        if "store_schema" in self.read():
+            return 0
+        data = self._read_kept()
+        if data.get("read_only"):
+            return 0
+        owners = list(data["kept"]) if profile == "*" else [profile]
+        candidates: dict[Optional[str], set[str]] = {owner: set(data["kept"][owner]) for owner in owners if data["kept"].get(owner)}
+        if not candidates:
+            return 0
+        answer = existing({key: set(ids) for key, ids in candidates.items()})
+        if answer is None:
+            return 0
+        alive: dict[Optional[str], dict[str, str]] = {
+            key: (dict(found) if isinstance(found, dict) else {sid: sid for sid in found}) for key, found in answer.items()}
+        if all(alive.get(key, {}).get(sid) == sid for key, ids in candidates.items() for sid in ids):
+            return 0
+        changes = [0]
+        holder: dict[str, Any] = {}
+
+        def change(state: dict[str, Any], _stamp: float) -> bool:
+            current = self._load_kept_locked(for_write=True)
+            for owner, ids in candidates.items():
+                entries = current["kept"].get(owner)
+                if not entries:
+                    continue
+                for sid in list(entries):
+                    if sid not in ids or sid not in entries:
+                        continue  # kept after the existence check: next time
+                    if sid not in alive.get(owner, {}):
+                        del entries[sid]
+                        changes[0] += 1
+                        continue
+                    root = alive[owner][sid]
+                    if root and root != sid:
+                        entry = entries.pop(sid)
+                        entries.setdefault(root, entry)
+                        changes[0] += 1
+                if not entries:
+                    del current["kept"][owner]
+            holder["bytes"] = _encode(current)
+            return changes[0] > 0
+
+        def write(_stamp: float) -> None:
+            self._replace_file_locked(self.kept_path, holder["bytes"])
+
+        self._mutate(change, write)
         return changes[0]
 
 

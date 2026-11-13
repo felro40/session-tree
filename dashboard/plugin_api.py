@@ -527,8 +527,15 @@ def get_state(profile: str = _profile_query(), since_rev: Optional[int] = Query(
     store = _state_store()
     if since_rev is not None and epoch is not None and (epoch, since_rev) == store.version():
         return {"schema": layout_store.SCHEMA_VERSION, "epoch": epoch, "rev": since_rev, "unchanged": True}
-    pruned = _store_call(store.prune, name, _existing_ids(name))
+    existing = _existing_ids(name)
+    pruned = _store_call(store.prune, name, existing)
+    # Card 11: the kept-on-canvas markers of sessions that no longer exist go in the same pass.
+    pruned += _store_call(store.prune_kept, name, existing)
     snapshot = store.snapshot(name)
+    kept = store.kept_snapshot(name)
+    if kept:
+        # ``{owner profile: [session id, …]}``; absent when there is none (an older page ignores it).
+        snapshot["kept"] = kept
     if pruned:
         _changed(snapshot["rev"], name, "prune", snapshot["epoch"])
     return snapshot
@@ -640,6 +647,34 @@ def forget_blocks(body: ForgetBody, profile: str = _profile_query()) -> dict[str
     result = _store_call(_state_store().forget_blocks, name, body.ids)
     if result["changed"]:
         _changed(result["rev"], name, "forget", result["epoch"])
+    return result
+
+
+class KeepBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: Stored session ids of the profile (``session_profile``), checked by the store (1-100).
+    ids: list[Any]
+
+
+@router.post("/state/kept")
+async def keep_on_canvas(body: KeepBody, profile: str = _profile_query()) -> dict[str, Any]:
+    """Card 11: sessions made from a canvas right-click stay on the canvas in every style, also
+    with Show all off, in every window and device of this gateway. ``session_profile`` names the
+    profile that owns them (not ``*``); each id must be a stored session there (404 otherwise).
+    Kept in ``kept.json`` beside ``state.json`` (``state.json``'s shape is untouched; only its
+    ``rev`` moves). A marker goes when its session no longer exists (``GET /state`` prunes it)."""
+    from fastapi.concurrency import run_in_threadpool
+
+    name, home = _one_profile(profile)
+    ids = body.ids
+    _store_call(layout_store.check_kept_ids, ids)
+    for sid in ids:
+        await run_in_threadpool(_require_session, name, home, sid)
+    result = await run_in_threadpool(_store_call, _state_store().keep_sessions, name, ids)
+    if result["changed"]:
+        # Every view that shows the profile: its own and All profiles.
+        _changed(result["rev"], ALL_PROFILES, "kept", result["epoch"])
     return result
 
 

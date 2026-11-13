@@ -21,8 +21,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchHealth, fetchProfiles, fetchProjects, fetchSessions } from '../api.ts'
 import { applyOverrides } from '../model/actions.ts'
 import { scopeFrameIds, viewOnArrival } from '../model/camera.ts'
+import { spotFor } from '../model/create.ts'
+import type { CreateOutcome } from '../model/create.ts'
 import { viewportKey } from '../model/device-prefs.ts'
-import { ALL_PROFILES, ALL_PROJECTS, buildGraph, layoutKeysOf } from '../model/graph.ts'
+import { ALL_PROFILES, ALL_PROJECTS, buildGraph, isKept, layoutKeysOf } from '../model/graph.ts'
 import type { GraphNode } from '../model/graph.ts'
 import { laidOutFamilies } from '../model/layout.ts'
 import type { LayoutResult, Point } from '../model/layout.ts'
@@ -36,6 +38,8 @@ import { visibleRows } from '../model/sessions.ts'
 import { liveStatus } from '../model/status.ts'
 import type { HostStatusSnapshot } from '../model/status.ts'
 import { getStyle, registeredStyles, resolveStyleId } from '../styles/registry.ts'
+import { useCreateSession } from './create-session.tsx'
+import type { CreateDraft } from './create-session.tsx'
 import { createFrameCache } from './frame-cache.ts'
 import { GraphCanvas, MAX_ZOOM, MIN_ZOOM } from './graph-canvas.tsx'
 import { LayoutHistoryDialog, RearrangeConfirm } from './layout-history.tsx'
@@ -172,10 +176,15 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
   // Session actions patch rows optimistically until the server rows agree (card 3).
   const [overrides, setOverrides] = useRowOverrides(serverRows)
   const rows = useMemo(() => applyOverrides(serverRows, overrides), [serverRows, overrides])
+  // Card 11: the sessions kept on the canvas (made from a canvas right-click), synced. A string
+  // key, so the model is rebuilt only when the set itself changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
+  const keptKeys = useMemo(() => [...sync.kept(profile)].sort().join('\n'), [sync, profile, syncVersion])
+  const kept = useMemo<ReadonlySet<string>>(() => new Set(keptKeys ? keptKeys.split('\n') : []), [keptKeys])
 
   const model = useMemo(
-    () => buildGraph(rows, projectList, { profile, showArchived, scope }),
-    [rows, projectList, profile, showArchived, scope]
+    () => buildGraph(rows, projectList, { profile, showArchived, scope, kept }),
+    [rows, projectList, profile, showArchived, scope, kept]
   )
 
   const spec = useMemo(() => style.layoutSpec({ showAll }), [style, showAll])
@@ -535,14 +544,19 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   // R14: after Branch the page stays, then places (mergeLayout) and selects the new child. The
   // selection is adjusted during render once the child is laid out; the effect only moves the
-  // viewport to it (an external system).
-  const [pendingSelect, setPendingSelect] = useState<null | string>(null)
+  // viewport to it (an external system). Card 11: a session made from a canvas right-click is
+  // selected the same way, without moving the view (its block is where the user clicked), but
+  // in Swimlanes (it lands at "now", which may be off screen).
+  const [pendingSelect, setPendingSelect] = useState<null | { id: string; reveal: boolean }>(null)
   const [reveal, setReveal] = useState<null | { id: string }>(null)
 
-  if (pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === false && layout.positions.has(pendingSelect)) {
+  if (pendingSelect && model.nodeById.get(pendingSelect.id)?.readOnly === false && layout.positions.has(pendingSelect.id)) {
     setPendingSelect(null)
-    setSelection({ ids: [pendingSelect], primary: pendingSelect })
-    setReveal({ id: pendingSelect })
+    setSelection({ ids: [pendingSelect.id], primary: pendingSelect.id })
+
+    if (pendingSelect.reveal) {
+      setReveal({ id: pendingSelect.id })
+    }
   }
 
   useEffect(() => {
@@ -564,12 +578,68 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     runtime: { focusedStoredSessionId: focusedStoredSessionId ?? null, focusedSessionId: focusedSessionId ?? null },
     refreshSessions: () => void sessions.refetch(),
     refreshProjects: () => void projects.refetch(),
-    onBranched: id => setPendingSelect(id),
+    onBranched: id => setPendingSelect({ id, reveal: true }),
     onMoved: id => sync.forget(profile, keys.toStore(id)),
     onRemoved: id => setSelection(current => (current.ids.includes(id) ? reduceSelection(current, { type: 'toggle', id }, () => false) : current))
   })
 
-  const visibleCount = useMemo(() => visibleRows(rows).length, [rows])
+  // Card 11: a new session from a right-click on the canvas (A1: in the profile filter's
+  // profile; in All profiles, the app's active one).
+  const createProfile = profile === ALL_PROFILES ? activeProfile : profile
+  const [createDraft, setCreateDraft] = useState<CreateDraft | null>(null)
+  const newSession = useMemo(
+    () => ({
+      draft: createDraft,
+      open: (point: Point, projectId: string) => setCreateDraft({ point, projectId, phase: 'menu' }),
+      choose: () => setCreateDraft(current => (current ? { ...current, phase: 'dialog' } : current)),
+      dismiss: () => setCreateDraft(current => (current?.phase === 'menu' ? null : current))
+    }),
+    [createDraft]
+  )
+  const onCreated = useCallback(
+    (outcome: CreateOutcome, draft: CreateDraft, title: string) => {
+      const id = outcome.sessionId
+
+      // A3: the spot is stored for the style on screen only; the others place the block with
+      // their auto-layout, in its project's group (it is kept on the canvas there too).
+      if (style.savesLayout && !style.frame) {
+        sync.drop(ref, new Map([[id, spotFor(draft.point, style.nodeSize, snap, style.grid)]]))
+      }
+
+      sync.keep(profile, createProfile, [id])
+      void sessions.refetch()
+
+      if (scope === ALL_PROJECTS || draft.projectId === scope) {
+        setPendingSelect({ id, reveal: Boolean(style.frame) })
+      }
+
+      host.notify({ kind: 'success', message: `Created “${title}”`, durationMs: 2000 })
+
+      if (outcome.titleWarning) {
+        const { reason, storedTitle } = outcome.titleWarning
+        const named = storedTitle === title ? '' : storedTitle ? ` It is named “${storedTitle}”.` : ' It has no name.'
+
+        host.notify({ kind: 'warning', title: 'Session Tree', message: `“${title}” was created, but Hermes reported an error while naming it (${reason}).${named}` })
+      }
+
+      if (outcome.release === 'failed') {
+        host.notify({ kind: 'error', title: 'Session Tree', message: `“${title}” was created, but its runtime could not be released; it ends when the gateway closes it.` })
+      }
+    },
+    [style, sync, ref, snap, profile, createProfile, sessions, scope]
+  )
+  const createDialog = useCreateSession({
+    ctx,
+    model,
+    rows: serverRows,
+    profile: createProfile,
+    framed: Boolean(style.frame),
+    draft: createDraft,
+    setDraft: setCreateDraft,
+    onCreated
+  })
+
+  const visibleCount = useMemo(() => visibleRows(rows, row => isKept(kept, row)).length, [rows, kept])
   const onCanvas = useMemo(
     () => (frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0)),
     [model, spec, frameLayout]
@@ -674,6 +744,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           onToggleLane={onToggleLane}
           panelOpen={panelOpen}
           onPanel={onPanel}
+          newSession={newSession}
         />
         {onCanvas === 0 && (
           <div className="session-tree__hint" data-testid="session-tree-no-branches">
@@ -790,6 +861,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           </div>
         )}
         {dialogs}
+        {createDialog}
         <RearrangeConfirm
           open={confirmRearrange && style.savesLayout}
           viewLabel={viewLabel}

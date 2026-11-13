@@ -458,7 +458,9 @@ No action needed a direct `state.db` write, so nothing was blocked.
   owner refusal instead (`permission_denied`, 403, unowned row).
 - **Rename through `session.title`** is chosen only for the session focused in the app; in the
   Webapp that session's tab covers the page, so the e2e could not trigger it — the route choice is
-  unit-tested (`renameRoute`).
+  unit-tested (`renameRoute`). Card 11 measured `session.title` from the page for a runtime the
+  plugin created: it lands (the canonical client sends it as `session.mutate rename`; card 11 §
+  Pre-check P1).
 - **Appearance read-back** is the store `host.sessions.setColor` writes (localStorage); blocks keep
   the project colour (R11 asks for the project colour on blocks).
 
@@ -2152,3 +2154,128 @@ keys. A checkout with a real `node_modules` wrote `node_modules/…`: the same c
 lint 0; `npm test` **413/413** (was 412: +1 guard); `npm run test:py` **341 passed**; build 0
 (751 644 B, `git status` clean but the `node_modules` symlink); e2e smoke: reset + foundation
 **19/19**, final (the committed bundle) **14/14**; both real-Hermes guards passed.
+
+# Measured facts — Session Tree 11 (a new session from a canvas right-click)
+
+Start commit `5d660bed` (`dev`). Isolated test Hermes v0.23.1 @ `3b42157858`, coder home
+`c9-coder-create` (port 19390). Every call below went through `__HERMES_PLUGIN_SDK__.host.request`
+from the signed-in Webapp page with the plugin loaded; rows were read back read-only (sqlite
+`mode=ro`) and through the backend's `/sessions`. The Webapp's client is the **canonical**
+protocol (`apps/desktop/src/api/canonical-protocol.ts`). Probe scripts (not committed):
+`~/.hermes/profiles/coder/cache/scratch/p1/probe{,2,3,4,5,6}.ts`.
+
+## Pre-check P1 — the create route (before the UI)
+
+| Step | Measured |
+|---|---|
+| `session.create {…, idempotency_key}` | **Refused client-side:** "Canonical gateway does not support explicit session options: idempotency_key" (`prepareCreate`'s allow-list). `request_id` is accepted and is the retry key: the same `request_id` twice gave the same `session_id`. The client also reuses a request id for identical params when none is sent, so the page sends a fresh one per attempt. It rewrites `source` to `gui`. |
+| `session.create` with no model | `4001 storage_unavailable` while the home names no model; it still leaves an untitled 0-message row. Works with a `model` param or `model.default` in the home's config (the e2e sets `model.default: test-model`, ruling R5; no provider, no prompt is sent). |
+| `session.create` (with a model) | **The row is persisted at create time** (a canonical local session, `local-…` id, not a draft): `cwd` = the chosen root, `profile_name` right (`default`, and `work` for profile work), `user_id` = the host owner, `title` NULL, `ended_at` NULL. `git_repo_root` stays NULL (minutes later and after a restart): `projectOf` finds the project through the `cwd` fallback. |
+| `session.title` | **Works** for the runtime the plugin created: sent as `session.mutate rename` (revision 0 → 1), stored at `title_source = user`, 0 messages, not hidden or archived; `/sessions` returns the row. |
+| `session.close` | **-32601 "unknown method: session.close — not available on this Hermes backend"**: a canonical session belongs to the gateway; its views detach. Without a release the row stays open (`ended_at` NULL, `is_active: true`) and `GET /api/sessions/empty/count` stays 0. |
+| `session.detach {session_id, subscription_id (the create's), end_reason: 'cli_close'}` | **Works:** `detached: true`; the row gets `ended_at` and `end_reason = cli_close`, `is_active` false; the empty count includes it. |
+| A taken title through `session.title` | **-32603 "internal error"**, not 4022; the create has already left an untitled empty row (after detach it is ended and empty, so "Delete empty sessions" counts it). |
+| No cwd (P1.2) | The row's `cwd` = the gateway's launch home (`…/userhome`), not NULL: `projectOf` → No project (no project root holds it). |
+| P1.4 restart | All rows survive a gateway stop/start; `host.openSession(id)` opens the titled row in a tab. |
+
+The parent session ruled on this (R1–R7, 2026-11-12, "do recommended"): `request_id` per attempt;
+release with `session.detach` (one helper, `session.close` where there is no subscription, a
+-32601 falls back to the other once); a name clash pre-checked with Hermes' rule, and a refused
+title cleaned up; No project = no cwd. Measured for the ruling:
+
+- **R2 (the Webapp's path): `session.detach`.** Every create in the e2e ends with a detach; the
+  rows read `ended_at` set, `is_active: false`, and the empty count includes them (e2e
+  "the created rows: ended and not active").
+- **R3b: `title` in `session.create` is not usable.** The client allows it, but the canonical
+  gateway treats it as a lookup by title: a create with a title another session holds answered
+  **that existing session** (`stored_session_id` of the session titled "…", 6 messages for a
+  fixture's title — the lineage tip), and the detach that followed **ended it**; no new row. So the
+  page keeps create → `session.title`, and on a refused title detaches and deletes only the
+  untitled row it left (through the backend's fenced delete, after re-reading the row: still
+  untitled, 0 messages). Measured in the e2e: an archived session's title (not loaded with Show
+  archived off, so the page's pre-check cannot see it) → -32603, the dialog shows "Hermes refused
+  the name …", no row is left.
+- **R6: the core sidebar does not list the empty titled session**, before a restart (a titled,
+  ended, empty session made a minute earlier: not in the SESSIONS list, while a fixture session
+  is) nor after a gateway restart. The card-1-P1 run's sighting of "Probe detach" after a restart
+  did not repeat (re-measured: not listed). README keeps the limitation.
+- **R7: Branch leaves no open runtime.** `session.branch_stored` through the canonical client
+  (a `session.mutate branch` on the parent) answers `session_id == stored_session_id` and no
+  `subscription_id`; the child row has its messages and `is_active: false` right away. The page's
+  Branch never calls `session.close` then (it only does for a different runtime id), so Branch is
+  left as it is.
+- **D6 (Settings' "Delete empty sessions"):** with the gateway running, the core's
+  `DELETE /api/sessions/empty?profile=default` answers **409 "Exclusive maintenance refused:
+  Gateway runtime already owns profile …"** (the handler needs the store's exclusive maintenance),
+  and without `?profile=` a 400 (the host serves several profiles). So the e2e runs the core
+  handler itself (`scripts/e2e/core-delete-empty.py` through the test launcher) with the gateway
+  stopped; it deletes every unused created session, and after the restart their blocks are gone
+  and `GET /state` prunes their markers.
+
+## The project under the cursor (D4/D5)
+
+`projectAt` reads the areas each style already uses to place blocks: `labelSpans` (extracted from
+`mergeLayout` and the Subway merge: a band runs from a label down to the next one; a boundary
+belongs to the band below), `shelfSegments` (extracted from the Rich merge) and the Swimlanes lanes
+(`swimAreas`). No computed position changed: every existing layout unit test and e2e position
+check passes unchanged. In the e2e the offered project matched the clicked area in Dense
+(syscanvas), Subway (mdesign), Rich cards (hermes-plugins) and Swimlanes (the lane), and the
+scoped project over a dimmed area. The first e2e run found a test bug worth noting: a point
+rounded to a whole pixel 0.4 px above a label's top edge is in the band above, as defined.
+
+## The marker and the store
+
+`kept.json` (its own schema 1) beside `state.json`; a marker write bumps only `state.json`'s `rev`.
+pytest: the base commit's `layout_store.py` (`git show 5d660bed:dashboard/layout_store.py`) loads a
+copy of `state.json` written after marker writes unchanged (same `read()` and `snapshot()`, no
+`.bak`), and keeps writing it; `state.json` has exactly `{schema, epoch, rev, settings, layouts}`.
+Shown to fail once: a marker write that also set a `state.json` key failed both shape tests
+(then reverted).
+
+## Changed acceptance lines (ruling R1–R7) and assertions
+
+- D1 / A2 / A8: create → title → `session.close` with one `idempotency_key` per attempt →
+  create (one fresh `request_id` per attempt) → title → `session.detach` (`session.close` only
+  where the create answers no subscription; a -32601 tries the other once).
+- P1.1: the row's `source` is `gui` (the client rewrites `desktop`), and `git_repo_root` stays
+  NULL; the project comes from the `cwd` fallback.
+- P1.3 / A2: a taken title answers 4022 and leaves no row → a name a loaded session holds is
+  refused inline (Create disabled, nothing sent); one only the gateway refuses answers -32603, and
+  the untitled row the create left is deleted (fenced delete, re-checked), so no row is left.
+- e2e D6: "the core's `DELETE /api/sessions/empty` on the test Hermes" → the same core handler,
+  run with the gateway stopped (the HTTP route answers 409 while the gateway owns the store).
+- One existing assertion changed: `tests/py/test_plugin_api.py::test_router_mutations_are_only_the_fenced_session_actions`
+  lists the router's write routes; `("/state/kept", "POST")` is added to the list.
+
+## Review fixes (code `1cd82ee`)
+
+- Focus after a refusal: before, focus fell to `BODY` once the disabled Name input lost it; now
+  `document.activeElement` is the Name input, its whole text selected, and Enter retries (two
+  `session.create` calls, no click).
+- A `session.title` that lands then answers -32603 (injected by wrapping `host.request`): before,
+  the dialog stayed open with "Hermes refused the name"; now the row (titled, 0 messages, ended) is
+  created: dialog closed, block centred on the click, selected, kept with Show all off, and a
+  `warning` toast "“…” was created, but Hermes reported an error while naming it (internal error)."
+- Subway map key: a right-click on the depot opens no menu (canvas 0, block 0, ghost 0) with the
+  default prevented; on the key (hit-testing gives `rf__wrapper`, `pointer-events: none` kept) it
+  offered "New session" with a ghost; now the same as the depot. Just outside it is still offered.
+- The SDK Input's focus look (computed): border colour `--dt-composer-ring` (every theme's
+  midground, `--ui-accent`), `box-shadow: none`, `outline: none`; light rgb(0, 83, 253), dark
+  rgb(74, 132, 254). The Project box (`:focus-within`) now has the same top/right/bottom border
+  colour on focus (was unchanged at 22 % alpha); its left edge keeps the project colour.
+
+## Bundle and gates (code `1cd82ee`, after the review fixes; the commit after it changes only docs)
+
+- **`desktop/plugin.js`: 780 401 bytes** (was 778 449 at `3090206`: +1 952), sha256
+  `e0fea191…036c1da81`, 91 esbuild inputs; `npm run build` reproduces it byte for byte (`git
+  status` clean). Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external (the guards).
+- lint 0 errors (exit 0); build exit 0; `npm test` **453/453** (was 449: `create.test.ts` +4);
+  `npm run test:py` **381 passed**; e2e run here: **create 30** (was 26: +4), subway 19, actions
+  30, each exit 0 with its real-Hermes guard passed.
+- The full `npm run test:e2e` on `0e4c6d8` (code `1cd82ee`; measured 2026-11-13), in one run:
+  exit 0, **293/293**: foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28, rich 23,
+  subway 19, toolbar 17, final 14, select 35, shared 23, create 30. The same run's other gates:
+  lint 0, `npm test` 453/453, `npm run test:py` 381 passed, build 780 401 bytes, identical to the
+  committed file.
+- At `3090206`: 778 449 bytes, `npm test` 449/449, `npm run test:py` 381 passed,
+  `npm run test:e2e` 289/289 in one run.

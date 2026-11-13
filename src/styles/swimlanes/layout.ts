@@ -301,7 +301,7 @@ export function layoutSwimlanes(input: SwimInput): SwimLayout {
   const node = (id: string) => model.nodeById.get(id)!
 
   // --- what goes on the axis -------------------------------------------------------------------
-  const onAxis = new Set(model.families.filter(family => showAll || family.nodeIds.length > 1).flatMap(family => family.nodeIds))
+  const onAxis = new Set(model.families.filter(family => showAll || family.nodeIds.length > 1 || family.kept === true).flatMap(family => family.nodeIds))
   const time = new Map<string, null | number>()
   const future = new Set<string>()
 
@@ -723,3 +723,11 @@ export function fitSwimlanes(layout: Pick<SwimLayout, 'bounds'>, width: number, 
 
 /** The frame's layout as the page holds it (`frame.compute`): a `SwimLayout` with `fit`. */
 export type SwimFrameLayout = SwimLayout & FrameLayout
+
+/**
+ * Card 11: what a canvas right-click reads (D5, A4): the lanes (a lane's project key, its top and
+ * height) and the x of "now", where a new session lands.
+ */
+export function swimAreas(layout: Pick<SwimLayout, 'lanes' | 'nowX'>): { lanes: readonly { key: string; top: number; height: number }[]; nowX: number } {
+  return { lanes: layout.lanes, nowX: layout.nowX }
+}

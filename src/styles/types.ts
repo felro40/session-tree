@@ -110,6 +110,11 @@ export interface StyleFrame {
   extraNodes(layout: FrameLayout): Node[]
   Under: ComponentType<{ layout: FrameLayout; nowMs: number }>
   Over: ComponentType<FrameLayerProps>
+  /**
+   * Card 11: the lanes a canvas right-click reads its project from (D5) and the x of "now",
+   * where a new session lands (Swimlanes, A4).
+   */
+  lanes?(layout: FrameLayout): { lanes: readonly { key: string; top: number; height: number }[]; nowX: number }
 }
 
 /** What a style's canvas layer gets (card 6, Rich cards: the details driver and the drawer). */
@@ -178,4 +183,10 @@ export interface StyleDefinition {
   panelDefaultOpen?: boolean
   /** Card 7: Fit's padding (Subway: room for the labels above the top row and the depot below). */
   fitPadding?: FitViewOptions['padding']
+  /**
+   * Card 11: which laid-out areas a canvas right-click reads its project from (D5): `bands`
+   * (a group label down to the next one; the default) or `shelves` (Rich cards' shelf
+   * segments). A framed style uses its lanes (`FrameLayout.lanes`).
+   */
+  areas?: 'bands' | 'shelves'
 }

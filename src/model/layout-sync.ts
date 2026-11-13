@@ -70,6 +70,11 @@ export interface StateSnapshot {
   /** The file has a newer schema: everything is served empty and every write is refused. */
   read_only?: boolean
   store_schema?: number
+  /**
+   * Card 11: the sessions kept on the canvas that this view shows, `{owner profile: [lineage root
+   * id, …]}` (`kept.json`). Absent when there is none, and from a backend that predates it.
+   */
+  kept?: Record<string, string[]>
 }
 
 export type StateAnswer = StateSnapshot | { schema: number; epoch?: string; rev: number; unchanged: true }
@@ -105,6 +110,11 @@ export interface SyncTransport {
   putProjectBlocks(profile: string, body: ProjectBlocksBody): Promise<{ rev: number; changed: boolean }>
   /** Forget these blocks in every layout of the profile (a session moved to another project). */
   forgetBlocks(profile: string, ids: string[]): Promise<{ rev: number; changed: boolean }>
+  /**
+   * Card 11: keep these sessions of `owner` (a named profile; lineage root ids) on the canvas
+   * (`POST /state/kept`). Optional: a transport without it refuses the keep (a 400).
+   */
+  keepSessions?(owner: string, ids: string[]): Promise<{ rev: number; changed: boolean }>
 }
 
 export interface ProjectBlocksBody {
@@ -191,8 +201,12 @@ type Op =
   | { kind: 'project'; ref: LayoutRef; project: string; entries: [string, Point][]; remove: string[]; backup: boolean }
   | { kind: 'forget'; profile: string; ids: string[] }
   | { kind: 'settings'; profile: string; patch: Partial<SyncedSettings> }
+  /** Card 11: keep `owner`'s sessions on the canvas; `profile` is the view that asked. */
+  | { kind: 'keep'; profile: string; owner: string; ids: string[] }
 
 type LayoutOp = Extract<Op, { ref: LayoutRef }>
+
+const isLayoutOp = (op: Op): op is LayoutOp => op.kind === 'upsert' || op.kind === 'replace' || op.kind === 'project'
 
 export type SyncStatus = 'loading' | 'offline' | 'online'
 
@@ -425,8 +439,34 @@ export class LayoutSync {
     const out = new Map<string, Point>(Object.entries(stored).map(([id, entry]) => [id, { x: entry.x, y: entry.y }]))
 
     for (const op of this.overlay()) {
-      if (op.kind === 'forget' ? op.profile === ref.profile : op.kind !== 'settings' && sameRef(op.ref, ref)) {
-        applyOp(out, op as LayoutOp | Extract<Op, { kind: 'forget' }>)
+      if (op.kind === 'forget' ? op.profile === ref.profile : isLayoutOp(op) && sameRef(op.ref, ref)) {
+        applyOp(out, op as Extract<Op, { kind: 'forget' }> | LayoutOp)
+      }
+    }
+
+    return out
+  }
+
+  /**
+   * Card 11: the sessions kept on the canvas in the `profile` view (`keptKey(owner, root id)`):
+   * the server's, with this window's unsent keeps on top.
+   */
+  kept(profile: string): Set<string> {
+    const out = new Set<string>()
+
+    for (const [owner, ids] of Object.entries(this.profile(profile).server?.kept ?? {})) {
+      if (Array.isArray(ids)) {
+        for (const id of ids) {
+          out.add(`${owner}\u0000${id}`)
+        }
+      }
+    }
+
+    for (const op of this.overlay()) {
+      if (op.kind === 'keep' && op.profile === profile) {
+        for (const id of op.ids) {
+          out.add(`${op.owner}\u0000${id}`)
+        }
       }
     }
 
@@ -563,6 +603,16 @@ export class LayoutSync {
    */
   forget(profile: string, key: string): void {
     this.queue({ kind: 'forget', profile, ids: [key] }, true)
+  }
+
+  /**
+   * Card 11: keep `owner`'s sessions (lineage root ids) on the canvas, in every window and
+   * device; `profile` is the view this window shows (its snapshot shows the change at once).
+   */
+  keep(profile: string, owner: string, ids: readonly string[]): void {
+    if (ids.length > 0) {
+      this.queue({ kind: 'keep', profile, owner, ids: [...ids] }, true)
+    }
   }
 
   setSettings(profile: string, patch: Partial<SyncedSettings>): void {
@@ -952,6 +1002,12 @@ export class LayoutSync {
   private async send(op: Op): Promise<void> {
     if (op.kind === 'settings') {
       await this.transport.patchSettings(op.profile, op.patch)
+    } else if (op.kind === 'keep') {
+      if (!this.transport.keepSessions) {
+        throw new Error('400: this backend keeps no sessions on the canvas')
+      }
+
+      await this.transport.keepSessions(op.owner, op.ids)
     } else if (op.kind === 'forget') {
       await this.transport.forgetBlocks(op.profile, op.ids)
     } else if (op.kind === 'upsert') {
@@ -1002,6 +1058,17 @@ export class LayoutSync {
 
     const state = this.profile(opProfile(op))
     const server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }
+
+    if (op.kind === 'keep') {
+      const kept = { ...(server.kept ?? {}) }
+
+      kept[op.owner] = [...new Set([...(kept[op.owner] ?? []), ...op.ids])].sort()
+      state.server = { ...server, kept }
+      this.cache(opProfile(op))
+
+      return
+    }
+
     const refs: LayoutRef[] =
       op.kind === 'forget'
         ? Object.entries(server.layouts).flatMap(([style, scopes]) => Object.keys(scopes).map(scope => ({ profile: op.profile, style, scope })))
@@ -1227,7 +1294,7 @@ export class LayoutSync {
   }
 }
 
-function applyOp(target: Map<string, Point>, op: Exclude<Op, { kind: 'settings' }>): void {
+function applyOp(target: Map<string, Point>, op: Extract<Op, { kind: 'forget' }> | LayoutOp): void {
   if (op.kind === 'forget') {
     for (const id of op.ids) {
       target.delete(id)
@@ -1267,7 +1334,7 @@ function applyOp(target: Map<string, Point>, op: Exclude<Op, { kind: 'settings' 
 }
 
 function opProfile(op: Op): string {
-  return op.kind === 'settings' || op.kind === 'forget' ? op.profile : op.ref.profile
+  return op.kind === 'settings' || op.kind === 'forget' || op.kind === 'keep' ? op.profile : op.ref.profile
 }
 
 function isSnapshot(value: unknown): value is StateSnapshot {
@@ -1291,6 +1358,10 @@ function isOp(value: unknown): value is Op {
     return typeof op.profile === 'string' && Array.isArray(op.ids)
   }
 
+  if (op.kind === 'keep') {
+    return typeof op.profile === 'string' && typeof op.owner === 'string' && Array.isArray(op.ids) && op.ids.every(id => typeof id === 'string')
+  }
+
   if (op.kind === 'project') {
     return (
       Boolean(op.ref) &&
@@ -1310,7 +1381,7 @@ function isOp(value: unknown): value is Op {
  * queued (its per-project layouts are retired; the server answers 409 `scope_layout_retired`).
  */
 function isRetiredOp(op: Op): boolean {
-  return op.kind !== 'settings' && op.kind !== 'forget' && op.ref.scope !== SHARED_SCOPE
+  return isLayoutOp(op) && op.ref.scope !== SHARED_SCOPE
 }
 
 export { refKey as layoutRefKey }
