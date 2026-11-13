@@ -60,9 +60,10 @@ export interface LayoutResult {
   labels: GroupLabel[]
 }
 
-/** Families this spec puts on the canvas. */
+/** Families this spec puts on the canvas: with Show all every one; otherwise the trees, and the
+ *  singles kept on the canvas (card 11: made from a canvas right-click). */
 export function laidOutFamilies(model: GraphModel, spec: Pick<LayoutSpec, 'includeSingles'>): Family[] {
-  return model.families.filter(family => spec.includeSingles || family.nodeIds.length > 1)
+  return model.families.filter(family => spec.includeSingles || family.nodeIds.length > 1 || family.kept === true)
 }
 
 /** Family-local positions (origin 0,0) and the family's height. */
@@ -303,6 +304,41 @@ export function blockGroups(families: readonly Family[]): Map<string, string> {
   return new Map(families.flatMap(family => family.nodeIds.map(id => [id, groupKey(family.projectId)] as const)))
 }
 
+/** One group label on the canvas and how far down its band reaches. */
+export interface LabelSpan {
+  /** The label id (`group:<project>`, or a continuation label). */
+  id: string
+  /** Its group (`group:<project>`; `labelGroup` of the id). */
+  key: string
+  x: number
+  y: number
+  /** The y of the next label below it (strictly lower), `Infinity` for the lowest. */
+  next: number
+}
+
+type LabelEntry = readonly [string, Point]
+
+/** Top to bottom, then left to right, then by id (`mergeLayout`'s order of its labels). */
+export const byLabelPosition = ([a, p]: LabelEntry, [b, q]: LabelEntry): number => p.y - q.y || p.x - q.x || a.localeCompare(b)
+
+/**
+ * The labels among `entries` (top-lefts by id; non-label ids are skipped), in `order` (default
+ * `byLabelPosition`), each with the y where the next label down starts. The one band rule every
+ * vertical style shares: a group's band runs from its label down to the next label
+ * (`mergeLayout`, the Subway merge, and card 11's `projectAt`).
+ */
+export function labelSpans(entries: Iterable<LabelEntry>, order: (a: LabelEntry, b: LabelEntry) => number = byLabelPosition): LabelSpan[] {
+  const labels = [...entries].filter(([id]) => id.startsWith(GROUP_PREFIX)).sort(order)
+
+  return labels.map(([id, point]) => ({
+    id,
+    key: labelGroup(id),
+    x: point.x,
+    y: point.y,
+    next: labels.find(([, other]) => other.y > point.y)?.[1].y ?? Infinity
+  }))
+}
+
 /** Vertical room of one group label on the canvas: under it, down to the next label. */
 interface Band {
   top: number
@@ -355,16 +391,13 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
 
   const bottomOf = (rects: Rect[]) => Math.max(0, ...rects.map(rect => rect.y + rect.height))
 
-  const bandUnder = (labelY: number, labels: [string, Point][]): Band => {
-    const next = labels.find(([, point]) => point.y > labelY)
-
-    return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : Infinity }
-  }
+  /** The room under a label: from under it down to a row gap above the next label (`labelSpans`). */
+  const bandBelow = (span: LabelSpan): Band => ({ top: span.y + spec.labelHeight, bottom: span.next === Infinity ? Infinity : span.next - spec.rowGap })
 
   /** The band of `key`'s group holding `anchorY` (its lowest label at or above it), else its first. */
   const bandOf = (key: string, anchorY?: number): Band | undefined => {
-    const labels = labelEntries()
-    const own = labels.filter(([id]) => labelGroup(id) === key)
+    const labels = labelSpans(positions)
+    const own = labels.filter(span => span.key === key)
 
     if (own.length === 0) {
       // No label for this group: the band the anchor sits in, between whatever labels surround it.
@@ -372,22 +405,18 @@ export function mergeLayout(previous: ReadonlyMap<string, Point> | undefined, mo
         return undefined
       }
 
-      const above = labels.filter(([, point]) => point.y <= anchorY).pop()
+      const above = labels.filter(span => span.y <= anchorY).pop()
 
-      return above ? bandUnder(above[1].y, labels) : { top: -Infinity, bottom: labels[0] ? labels[0][1].y - spec.rowGap : Infinity }
+      return above ? bandBelow(above) : { top: -Infinity, bottom: labels[0] ? labels[0].y - spec.rowGap : Infinity }
     }
 
-    const pick = anchorY === undefined ? own[0] : (own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0])
+    const pick = anchorY === undefined ? own[0] : (own.filter(span => span.y <= anchorY).pop() ?? own[0])
 
-    return bandUnder(pick[1].y, labels)
+    return bandBelow(pick)
   }
 
   /** Every band of `key`'s group, top to bottom: its label's, then its continuation labels'. */
-  const bandsOf = (key: string): Band[] => {
-    const labels = labelEntries()
-
-    return labels.filter(([id]) => labelGroup(id) === key).map(([, point]) => bandUnder(point.y, labels))
-  }
+  const bandsOf = (key: string): Band[] => labelSpans(positions).filter(span => span.key === key).map(bandBelow)
 
   /**
    * The first origin (columns from `x0` rightwards, rows in `rowsFor(column)` order) where every

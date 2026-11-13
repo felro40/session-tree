@@ -602,6 +602,76 @@ g.is-dimmed {
   font-size: 12px;
 }
 
+/* --- card 11: a new session from a right-click on the canvas ---------------------------- */
+
+.st-new-session-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.st-new-session-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* The ghost block: where the new session goes, faint, in its project's colour. */
+.session-tree__ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--st-pc);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--st-pc) 14%, transparent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.st-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.st-create-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-left: 3px solid var(--st-pc);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+}
+
+.st-create-project select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+
+.st-create-project option {
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-primary);
+}
+
+.st-create-note {
+  color: var(--ui-text-tertiary);
+  font-size: 11.5px;
+}
+
 .session-tree__canvas:focus {
   outline: none;
 }

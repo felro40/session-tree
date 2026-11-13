@@ -136,7 +136,8 @@ export function stateTransport(ctx: PluginContext): SyncTransport {
     deleteLayout: (profile, style, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style, scope })}`, { method: 'DELETE', timeoutMs: 15000 }),
     putLayout: (profile, body) => ctx.rest(`/state/layout?${profileQuery(profile)}`, { method: 'PUT', body, timeoutMs: 20000 }),
     putProjectBlocks: (profile, body) => ctx.rest(`/state/layout/project?${profileQuery(profile)}`, { method: 'PUT', body, timeoutMs: 20000 }),
-    forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: 'POST', body: { ids }, timeoutMs: 15000 })
+    forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: 'POST', body: { ids }, timeoutMs: 15000 }),
+    keepSessions: (owner, ids) => ctx.rest(`/state/kept?${profileQuery(owner)}`, { method: 'POST', body: { ids }, timeoutMs: 15000 })
   }
 }
 

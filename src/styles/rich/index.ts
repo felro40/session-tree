@@ -27,6 +27,7 @@ export const richStyle: StyleDefinition = {
   draggable: true,
   savesLayout: true,
   singles: 'drawer',
+  areas: 'shelves',
   router: curveRouter,
   ports: richPorts,
   grid: RICH_GRID,

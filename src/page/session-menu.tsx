@@ -2,9 +2,11 @@
  * The block menu (R14): the PROJECTS pane session menu's items, in its order and with its labels
  * (`apps/desktop/src/app/chat/sidebar/session-actions-menu.tsx`, row surface), built from the
  * SDK UI kit's ContextMenu. It opens on a right-click on an in-scope session block, or from a ⋯
- * button (block or inspector). Dimmed out-of-scope blocks, stand-ins and empty canvas get no
- * menu and no browser menu either (R5, R7). Esc or a click outside closes it; focus then goes
- * back to the canvas (never to a button Space would click), unless a dialog opened from it.
+ * button (block or inspector). Dimmed out-of-scope blocks and stand-ins get no menu and no
+ * browser menu either (R5, R7). Card 11: empty canvas, a group label or a lane gets the canvas
+ * menu instead: "New session in ● <Project>…" (`create-session.tsx`). Esc or a click outside
+ * closes it; focus then goes back to the canvas (never to a button Space would click), unless a
+ * dialog opened from it.
  *
  * The app's Open-in-new-tab / New window / Open in terminal items are not part of R14 (double-
  * click opens a tab here).
@@ -24,11 +26,13 @@ import {
   icons,
   PROFILE_SWATCHES
 } from '@hermes/plugin-sdk'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react'
 
 import { deleteBlockedReason } from '../model/actions.ts'
 import type { GraphModel, GraphNode } from '../model/graph.ts'
+import type { ProjectInfo } from '../model/projects.ts'
+import { projectColor } from '../styles/shared.tsx'
 import { useMenuLabels } from './labels.ts'
 import type { MenuLabels } from './labels.ts'
 import { useSessionActions } from './session-actions-context.ts'
@@ -161,13 +165,62 @@ export interface SessionMenuProps {
   onOpenFor(node: GraphNode): void
   /** Where focus goes when the menu closes (the canvas). */
   onRestoreFocus(): void
+  /**
+   * Card 11: a right-click on empty canvas, a group label or a lane (not on a block): the
+   * new session it offers, or `null` for no menu at all.
+   */
+  onCanvasMenu?(event: ReactMouseEvent<HTMLElement>): CanvasMenuTarget | null
+  /** Card 11: "New session in ● <Project>…" was chosen (its dialog opens). */
+  onCanvasMenuChosen?(): void
+  /** Card 11: the canvas menu closed without a choice (Esc, a click outside). */
+  onCanvasMenuDismissed?(): void
 }
 
-export function SessionMenu({ model, children, onOpenFor, onRestoreFocus }: SessionMenuProps) {
+/** Card 11: what the canvas menu offers: a new session in this project. */
+export interface CanvasMenuTarget {
+  projectId: string
+  /** As the canvas's own group label (or lane) names the project. */
+  label: string
+  project?: ProjectInfo
+}
+
+/**
+ * Card 11 (A5): where a right-click offers a new session: empty canvas (React Flow's pane and
+ * what is drawn on it), a group label, a lane chip, and the Swimlanes lane bands and headers.
+ * Not a style's own panels over the canvas (Rich drawer, Subway depot and map key).
+ */
+export function isCanvasArea(target: EventTarget | null): boolean {
+  return Boolean((target as Element | null)?.closest?.('.react-flow__pane, [data-testid="session-tree-lane-header"], [data-testid="session-tree-lane-band"]'))
+}
+
+type MenuTarget = { kind: 'canvas'; target: CanvasMenuTarget } | { kind: 'node'; id: string }
+
+function CanvasMenuItems({ target, onChoose }: { target: CanvasMenuTarget; onChoose(): void }) {
+  return (
+    <ContextMenuItem data-action="new-session" data-project-id={target.projectId} onSelect={onChoose}>
+      <Codicon name="add" size={ICON} />
+      <span className="st-new-session-label">
+        New session in{' '}
+        <span className="st-new-session-dot" data-testid="session-tree-new-session-dot" style={{ backgroundColor: projectColor(target.project) }} aria-hidden="true" />{' '}
+        <span data-testid="session-tree-new-session-project">{target.label}</span>…
+      </span>
+    </ContextMenuItem>
+  )
+}
+
+export function SessionMenu({ model, children, onOpenFor, onRestoreFocus, onCanvasMenu, onCanvasMenuChosen, onCanvasMenuDismissed }: SessionMenuProps) {
   const actions = useSessionActions()
   const labels = useMenuLabels()
-  const [nodeId, setNodeId] = useState<null | string>(null)
-  const node = nodeId ? model.nodeById.get(nodeId) : undefined
+  const [menu, setMenu] = useState<MenuTarget | null>(null)
+  const node = menu?.kind === 'node' ? model.nodeById.get(menu.id) : undefined
+  const canvas = menu?.kind === 'canvas' ? menu.target : undefined
+  // Card 11: the canvas menu's outcome, read when it closes.
+  const chosen = useRef(false)
+  const latest = useRef({ menu, onCanvasMenuDismissed })
+
+  useEffect(() => {
+    latest.current = { menu, onCanvasMenuDismissed }
+  })
 
   const onContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
@@ -175,24 +228,65 @@ export function SessionMenu({ model, children, onOpenFor, onRestoreFocus }: Sess
       const id = requested ?? nodeIdAt(event.target)
       const target = id ? model.nodeById.get(id) : undefined
 
-      if (!actions || !actions.canAct(target)) {
-        // R5 / R7 and empty canvas: neither our menu nor the browser's.
-        event.preventDefault()
+      if (actions && actions.canAct(target)) {
+        setMenu({ kind: 'node', id: target!.id })
+        onOpenFor(target!)
 
         return
       }
 
-      setNodeId(target!.id)
-      onOpenFor(target!)
+      // Card 11 (A5): empty canvas, a group label, a lane: the canvas menu. A dimmed block or a
+      // stand-in still gets no menu (R5, R7).
+      const offer = !target && !requested && actions && onCanvasMenu && isCanvasArea(event.target) ? onCanvasMenu(event) : null
+
+      if (offer) {
+        chosen.current = false
+        setMenu({ kind: 'canvas', target: offer })
+
+        return
+      }
+
+      // R5 / R7: neither our menu nor the browser's.
+      event.preventDefault()
     },
-    [actions, model, onOpenFor]
+    [actions, model, onOpenFor, onCanvasMenu]
   )
 
+  const onOpenChange = useCallback((open: boolean) => {
+    if (!open && latest.current.menu?.kind === 'canvas' && !chosen.current) {
+      latest.current.onCanvasMenuDismissed?.()
+    }
+  }, [])
+
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild onContextMenu={onContextMenu}>
         {children}
       </ContextMenuTrigger>
+      {actions && canvas && (
+        <ContextMenuContent
+          className="w-56"
+          aria-label="Canvas actions"
+          data-testid="session-tree-canvas-menu"
+          data-project-id={canvas.projectId}
+          onCloseAutoFocus={event => {
+            event.preventDefault()
+
+            if (!actions.dialogOpening()) {
+              onRestoreFocus()
+            }
+          }}
+        >
+          <CanvasMenuItems
+            target={canvas}
+            onChoose={() => {
+              chosen.current = true
+              actions.noteDialogFromMenu()
+              onCanvasMenuChosen?.()
+            }}
+          />
+        </ContextMenuContent>
+      )}
       {actions && node && actions.canAct(node) && (
         <ContextMenuContent
           className="w-40"

@@ -69,13 +69,14 @@ export function forkParentId(row: SessionRow): string | undefined {
 }
 
 /** R6: delegate_task children and machine sources never become blocks; neither do empty
- *  launch stubs (no messages), which the core sidebar also leaves out (`min_messages=1`). */
-export function isHiddenRow(row: SessionRow): boolean {
+ *  launch stubs (no messages), which the core sidebar also leaves out (`min_messages=1`) —
+ *  except a session kept on the canvas (card 11: made from a canvas right-click, `kept`). */
+export function isHiddenRow(row: SessionRow, kept?: (row: SessionRow) => boolean): boolean {
   if (row.is_internal_child) {
     return true
   }
 
-  if (row.message_count === 0) {
+  if (row.message_count === 0 && !kept?.(row)) {
     return true
   }
 
@@ -84,8 +85,21 @@ export function isHiddenRow(row: SessionRow): boolean {
   return HIDDEN_SOURCES.has(source)
 }
 
-export function visibleRows(rows: readonly SessionRow[]): SessionRow[] {
-  return rows.filter(row => !isHiddenRow(row))
+/**
+ * Card 11: the key a kept-on-canvas marker names a session by: its owning profile and its
+ * compression lineage root id (the store keys it so; a compaction keeps it).
+ */
+export function keptKey(profile: string, rootId: string): string {
+  return `${profile}\u0000${rootId}`
+}
+
+/** A row's lineage root id (`_lineage_root_id`, else its own id). */
+export function lineageRootOf(row: SessionRow): string {
+  return row._lineage_root_id?.trim() || row.id
+}
+
+export function visibleRows(rows: readonly SessionRow[], kept?: (row: SessionRow) => boolean): SessionRow[] {
+  return rows.filter(row => !isHiddenRow(row, kept))
 }
 
 /** The number of earlier compression segments folded into a block (R6 ×N). */

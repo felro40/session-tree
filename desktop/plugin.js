@@ -66,15 +66,15 @@ var require_use_sync_external_store_shim_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useState9 = React2.useState, useEffect10 = React2.useEffect, useLayoutEffect5 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useState10 = React2.useState, useEffect12 = React2.useEffect, useLayoutEffect5 = React2.useLayoutEffect, useDebugValue2 = React2.useDebugValue;
     function useSyncExternalStore$2(subscribe, getSnapshot) {
-      var value2 = getSnapshot(), _useState = useState9({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
+      var value2 = getSnapshot(), _useState = useState10({ inst: { value: value2, getSnapshot } }), inst = _useState[0].inst, forceUpdate = _useState[1];
       return useLayoutEffect5(
         function() {
           inst.value = value2, inst.getSnapshot = getSnapshot, checkIfSnapshotChanged(inst) && forceUpdate({ inst });
         },
         [subscribe, value2, getSnapshot]
-      ), useEffect10(
+      ), useEffect12(
         function() {
           return checkIfSnapshotChanged(inst) && forceUpdate({ inst }), subscribe(function() {
             checkIfSnapshotChanged(inst) && forceUpdate({ inst });
@@ -119,14 +119,14 @@ var require_with_selector_production = __commonJS({
     function is(x, y) {
       return x === y && (x !== 0 || 1 / x === 1 / y) || x !== x && y !== y;
     }
-    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef9 = React2.useRef, useEffect10 = React2.useEffect, useMemo10 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
+    var objectIs = typeof Object.is == "function" ? Object.is : is, useSyncExternalStore4 = shim.useSyncExternalStore, useRef11 = React2.useRef, useEffect12 = React2.useEffect, useMemo11 = React2.useMemo, useDebugValue2 = React2.useDebugValue;
     exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector2, isEqual) {
-      var instRef = useRef9(null);
+      var instRef = useRef11(null);
       if (instRef.current === null) {
         var inst = { hasValue: !1, value: null };
         instRef.current = inst;
       } else inst = instRef.current;
-      instRef = useMemo10(
+      instRef = useMemo11(
         function() {
           function memoizedSelector(nextSnapshot) {
             if (!hasMemo) {
@@ -154,7 +154,7 @@ var require_with_selector_production = __commonJS({
         [getSnapshot, getServerSnapshot, selector2, isEqual]
       );
       var value2 = useSyncExternalStore4(subscribe, instRef[0], instRef[1]);
-      return useEffect10(
+      return useEffect12(
         function() {
           inst.hasValue = !0, inst.value = value2;
         },
@@ -175,7 +175,7 @@ var require_with_selector = __commonJS({
 
 // src/plugin.tsx
 init_define_import_meta_env();
-import { host as host6, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
+import { host as host7, PALETTE_AREA, ROUTES_AREA, SIDEBAR_NAV_AREA } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/base.css
 var base_default = `/* this will be exported as base.css and can be used for a basic styling */
@@ -687,7 +687,7 @@ svg.react-flow__connectionline {
 
 // src/page/session-tree-page.tsx
 init_define_import_meta_env();
-import { Button as Button3, EmptyState, ErrorState, host as host4, useQuery as useQuery2, useValue } from "@hermes/plugin-sdk";
+import { Button as Button4, EmptyState, ErrorState, host as host5, useQuery as useQuery2, useValue } from "@hermes/plugin-sdk";
 
 // node_modules/@xyflow/react/dist/esm/index.js
 init_define_import_meta_env();
@@ -3372,8 +3372,8 @@ function clampPositionToParent(childPosition, childDimensions, parent) {
     [parentX + parentWidth, parentY + parentHeight]
   ], childDimensions);
 }
-var calcAutoPanVelocity = (value2, min, max) => value2 < min ? clamp(Math.abs(value2 - min), 1, min) / min : value2 > max ? -clamp(Math.abs(value2 - max), 1, min) / min : 0, calcAutoPan = (pos, bounds, speed = 15, distance2 = 40) => {
-  let xMovement = calcAutoPanVelocity(pos.x, distance2, bounds.width - distance2) * speed, yMovement = calcAutoPanVelocity(pos.y, distance2, bounds.height - distance2) * speed;
+var calcAutoPanVelocity = (value2, min, max) => value2 < min ? clamp(Math.abs(value2 - min), 1, min) / min : value2 > max ? -clamp(Math.abs(value2 - max), 1, min) / min : 0, calcAutoPan = (pos, bounds, speed = 15, distance3 = 40) => {
+  let xMovement = calcAutoPanVelocity(pos.x, distance3, bounds.width - distance3) * speed, yMovement = calcAutoPanVelocity(pos.y, distance3, bounds.height - distance3) * speed;
   return [xMovement, yMovement];
 }, getBoundsOfBoxes = (box1, box2) => ({
   x: Math.min(box1.x, box2.x),
@@ -3559,8 +3559,8 @@ function getBezierEdgeCenter({ sourceX, sourceY, targetX, targetY, sourceControl
   let centerX = sourceX * 0.125 + sourceControlX * 0.375 + targetControlX * 0.375 + targetX * 0.125, centerY = sourceY * 0.125 + sourceControlY * 0.375 + targetControlY * 0.375 + targetY * 0.125, offsetX = Math.abs(centerX - sourceX), offsetY = Math.abs(centerY - sourceY);
   return [centerX, centerY, offsetX, offsetY];
 }
-function calculateControlOffset(distance2, curvature) {
-  return distance2 >= 0 ? 0.5 * distance2 : curvature * 25 * Math.sqrt(-distance2);
+function calculateControlOffset(distance3, curvature) {
+  return distance3 >= 0 ? 0.5 * distance3 : curvature * 25 * Math.sqrt(-distance3);
 }
 function getControlWithCurvature({ pos, x1, y1, x2, y2, c }) {
   switch (pos) {
@@ -4227,12 +4227,12 @@ function XYDrag({ onNodeMouseDown, getStoreItems, onDragStart, onDrag, onDragSto
     destroy
   };
 }
-function getNodesWithinDistance(position, nodeLookup, distance2) {
+function getNodesWithinDistance(position, nodeLookup, distance3) {
   let nodes = [], rect = {
-    x: position.x - distance2,
-    y: position.y - distance2,
-    width: distance2 * 2,
-    height: distance2 * 2
+    x: position.x - distance3,
+    y: position.y - distance3,
+    width: distance3 * 2,
+    height: distance3 * 2
   };
   for (let node of nodeLookup.values())
     getOverlappingArea(rect, nodeToRect(node)) > 0 && nodes.push(node);
@@ -4246,8 +4246,8 @@ function getClosestHandle(position, connectionRadius, nodeLookup, fromHandle) {
     for (let handle of allHandles) {
       if (fromHandle.nodeId === handle.nodeId && fromHandle.type === handle.type && fromHandle.id === handle.id)
         continue;
-      let { x, y } = getHandlePosition(node, handle, handle.position, !0), distance2 = Math.sqrt(Math.pow(x - position.x, 2) + Math.pow(y - position.y, 2));
-      distance2 > connectionRadius || (distance2 < minDistance ? (closestHandles = [{ ...handle, x, y }], minDistance = distance2) : distance2 === minDistance && closestHandles.push({ ...handle, x, y }));
+      let { x, y } = getHandlePosition(node, handle, handle.position, !0), distance3 = Math.sqrt(Math.pow(x - position.x, 2) + Math.pow(y - position.y, 2));
+      distance3 > connectionRadius || (distance3 < minDistance ? (closestHandles = [{ ...handle, x, y }], minDistance = distance3) : distance3 === minDistance && closestHandles.push({ ...handle, x, y }));
     }
   }
   if (!closestHandles.length)
@@ -4655,8 +4655,8 @@ function XYPanZoom({ domNode, minZoom, maxZoom, translateExtent, viewport, onPan
   function setTranslateExtent(translateExtent2) {
     d3ZoomInstance?.translateExtent(translateExtent2);
   }
-  function setClickDistance(distance2) {
-    let validDistance = !isNumeric(distance2) || distance2 < 0 ? 0 : distance2;
+  function setClickDistance(distance3) {
+    let validDistance = !isNumeric(distance3) || distance3 < 0 ? 0 : distance3;
     d3ZoomInstance?.clickDistance(validDistance);
   }
   return {
@@ -7002,6 +7002,11 @@ function EdgeLabelRenderer({ children: children2 }) {
   let edgeLabelRenderer = useStore(selector$6);
   return edgeLabelRenderer ? createPortal(children2, edgeLabelRenderer) : null;
 }
+var selector$5 = (s) => s.domNode?.querySelector(".react-flow__viewport-portal");
+function ViewportPortal({ children: children2 }) {
+  let viewPortalDiv = useStore(selector$5);
+  return viewPortalDiv ? createPortal(children2, viewPortalDiv) : null;
+}
 var viewportSelector = (state) => ({
   x: state.transform[0],
   y: state.transform[1],
@@ -7362,7 +7367,7 @@ function ResizeControl({ nodeId, position, variant = ResizeControlVariant.Handle
 var NodeResizeControl = memo(ResizeControl);
 
 // src/page/session-tree-page.tsx
-import { useCallback as useCallback6, useEffect as useEffect8, useMemo as useMemo9, useRef as useRef8, useState as useState8 } from "react";
+import { useCallback as useCallback6, useEffect as useEffect10, useMemo as useMemo10, useRef as useRef10, useState as useState9 } from "react";
 
 // src/api.ts
 init_define_import_meta_env();
@@ -7507,7 +7512,8 @@ function stateTransport(ctx) {
     deleteLayout: (profile, style2, scope) => ctx.rest(`/state/layout?${profileQuery(profile, { style: style2, scope })}`, { method: "DELETE", timeoutMs: 15e3 }),
     putLayout: (profile, body) => ctx.rest(`/state/layout?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
     putProjectBlocks: (profile, body) => ctx.rest(`/state/layout/project?${profileQuery(profile)}`, { method: "PUT", body, timeoutMs: 2e4 }),
-    forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: "POST", body: { ids }, timeoutMs: 15e3 })
+    forgetBlocks: (profile, ids) => ctx.rest(`/state/forget?${profileQuery(profile)}`, { method: "POST", body: { ids }, timeoutMs: 15e3 }),
+    keepSessions: (owner, ids) => ctx.rest(`/state/kept?${profileQuery(owner)}`, { method: "POST", body: { ids }, timeoutMs: 15e3 })
   };
 }
 var LAYOUT_CHANGED_EVENT = "plugin.session-tree.layout.changed";
@@ -7613,9 +7619,9 @@ function deleteBlockedReason(status) {
 function branchNote(branches) {
   return branches <= 0 ? "" : branches === 1 ? "Its 1 branch stays as a separate session." : `Its ${branches} branches stay as separate sessions.`;
 }
-function renameRoute(row, host7, title) {
+function renameRoute(row, host8, title) {
   let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]);
-  return title.trim() && host7.focusedSessionId && host7.focusedStoredSessionId && ids.has(host7.focusedStoredSessionId) ? { kind: "rpc", runtimeId: host7.focusedSessionId } : { kind: "backend" };
+  return title.trim() && host8.focusedSessionId && host8.focusedStoredSessionId && ids.has(host8.focusedStoredSessionId) ? { kind: "rpc", runtimeId: host8.focusedSessionId } : { kind: "backend" };
 }
 var DEFINITIVE = /revision_conflict|stale_generation|permission_denied|profile_mismatch|invalid_params|admission_conflict|session_busy|retained_receipts|runtime_coordination_required|unknown_execution|not_found|mutation_identity_required|client_upgrade_required|Session not found/;
 function createFencedMutation(mintId) {
@@ -7722,14 +7728,20 @@ function forkParentId(row) {
   if (!trimmed(row._reset_from))
     return trimmed(row._branched_from) ?? trimmed(row.parent_session_id);
 }
-function isHiddenRow(row) {
-  if (row.is_internal_child || row.message_count === 0)
+function isHiddenRow(row, kept) {
+  if (row.is_internal_child || row.message_count === 0 && !kept?.(row))
     return !0;
   let source = (row.source ?? "").trim().toLowerCase();
   return HIDDEN_SOURCES.has(source);
 }
-function visibleRows(rows) {
-  return rows.filter((row) => !isHiddenRow(row));
+function keptKey(profile, rootId) {
+  return `${profile}\0${rootId}`;
+}
+function lineageRootOf(row) {
+  return row._lineage_root_id?.trim() || row.id;
+}
+function visibleRows(rows, kept) {
+  return rows.filter((row) => !isHiddenRow(row, kept));
 }
 function compactedCount(row) {
   return typeof row.compacted_segments == "number" ? Math.max(0, row.compacted_segments) : Math.max(0, (row._lineage_ids?.length ?? 1) - 1);
@@ -7795,9 +7807,13 @@ var ALL_PROJECTS = "all", ALL_PROFILES = "*", STANDIN_PREFIX = "missing:", byCre
   let na = model.nodeById.get(a), nb = model.nodeById.get(b);
   return (na?.createdAt ?? 0) - (nb?.createdAt ?? 0) || a.localeCompare(b);
 };
+function isKept(kept, row) {
+  return !!(kept && kept.size > 0 && (kept.has(keptKey(profileKey(row), lineageRootOf(row))) || kept.has(keptKey(profileKey(row), row.id))));
+}
 function filterRows(rows, options) {
+  let kept = (row) => isKept(options.kept, row);
   return rows.filter(
-    (row) => !isHiddenRow(row) && (options.showArchived || !row.archived) && (options.profile === ALL_PROFILES || profileKey(row) === options.profile)
+    (row) => !isHiddenRow(row, kept) && (options.showArchived || !row.archived) && (options.profile === ALL_PROFILES || profileKey(row) === options.profile)
   );
 }
 function buildGraph(rows, projects, options) {
@@ -7827,7 +7843,8 @@ function buildGraph(rows, projects, options) {
       outOfScope: !1,
       readOnly: !1,
       familyId: id2,
-      single: !0
+      single: !0,
+      kept: isKept(options.kept, row)
     };
     nodes.push(node), nodeById.set(id2, node);
   }
@@ -7856,6 +7873,7 @@ function buildGraph(rows, projects, options) {
           readOnly: !0,
           familyId: source,
           single: !1,
+          kept: !1,
           missingId: resolved.parentId
         };
         nodes.push(standin), nodeById.set(source, standin);
@@ -7918,14 +7936,14 @@ function assignFamilies(model) {
       inScope: !0,
       lastActive: Math.max(0, ...ids.map((id2) => model.nodeById.get(id2)?.lastActive ?? 0))
     }, sessionIds = ids.filter((id2) => model.nodeById.get(id2)?.kind === "session"), lead = sessionIds.find((id2) => !model.parentOf.has(id2) && !model.continuedFrom.has(id2)) ?? sessionIds[0];
-    family.projectId = lead ? model.nodeById.get(lead)?.projectId : void 0;
+    family.projectId = lead ? model.nodeById.get(lead)?.projectId : void 0, ids.some((id2) => model.nodeById.get(id2)?.kept) && (family.kept = !0);
     for (let id2 of ids) {
       let node = model.nodeById.get(id2);
       node.familyId = root2, node.single = ids.length === 1;
     }
     model.families.push(family);
   }
-  model.families.sort((a, b) => b.lastActive - a.lastActive || a.id.localeCompare(b.id)), model.singles = model.families.filter((family) => family.nodeIds.length === 1).map((family) => model.nodeById.get(family.nodeIds[0]));
+  model.families.sort((a, b) => b.lastActive - a.lastActive || a.id.localeCompare(b.id)), model.singles = model.families.filter((family) => family.nodeIds.length === 1 && !family.kept).map((family) => model.nodeById.get(family.nodeIds[0]));
 }
 function applyScope(model, scope) {
   let all = scope === ALL_PROJECTS;
@@ -7974,7 +7992,7 @@ function layoutKeysOf(model) {
 init_define_import_meta_env();
 var GROUP_PREFIX = "group:", LABEL_WIDTH = 240, groupKey = (projectId) => `${GROUP_PREFIX}${projectId ?? NO_PROJECT_ID}`;
 function laidOutFamilies(model, spec) {
-  return model.families.filter((family) => spec.includeSingles || family.nodeIds.length > 1);
+  return model.families.filter((family) => spec.includeSingles || family.nodeIds.length > 1 || family.kept === !0);
 }
 function layoutFamily(model, family, spec) {
   let step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, members = new Set(family.nodeIds), positions = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set(), cursorY = 0, byCreated3 = (a, b) => (model.nodeById.get(a)?.createdAt ?? 0) - (model.nodeById.get(b)?.createdAt ?? 0) || a.localeCompare(b), place = (id2, depth) => {
@@ -8072,26 +8090,31 @@ function drawnLabels(positions, shown) {
 function blockGroups(families) {
   return new Map(families.flatMap((family) => family.nodeIds.map((id2) => [id2, groupKey(family.projectId)])));
 }
+var byLabelPosition = ([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b);
+function labelSpans(entries, order = byLabelPosition) {
+  let labels = [...entries].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(order);
+  return labels.map(([id2, point]) => ({
+    id: id2,
+    key: labelGroup(id2),
+    x: point.x,
+    y: point.y,
+    next: labels.find(([, other]) => other.y > point.y)?.[1].y ?? 1 / 0
+  }));
+}
 function mergeLayout(previous, model, spec) {
   if (!previous || previous.size === 0)
     return layoutGraph(model, spec);
-  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandUnder = (labelY, labels) => {
-    let next = labels.find(([, point]) => point.y > labelY);
-    return { top: labelY + spec.labelHeight, bottom: next ? next[1].y - spec.rowGap : 1 / 0 };
-  }, bandOf = (key, anchorY) => {
-    let labels = labelEntries(), own = labels.filter(([id2]) => labelGroup(id2) === key);
+  let positions = new Map(previous), families = laidOutFamilies(model, spec), shown = new Set(families.flatMap((family) => family.nodeIds)), step = spec.nodeHeight + spec.rowGap, column = spec.nodeWidth + spec.columnGap, clearX = spec.columnGap / 2, clearY = spec.rowGap / 2, blockRects = () => [...positions].filter(([id2]) => !id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => rectOf(id2, point, spec)).map((rect) => ({ x: rect.x - clearX, y: rect.y - clearY, width: rect.width + 2 * clearX, height: rect.height + 2 * clearY })), labelEntries = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || p.x - q.x || a.localeCompare(b)), occupied = () => [...blockRects(), ...labelEntries().map(([id2, point]) => rectOf(id2, point, spec))], bottomOf = (rects) => Math.max(0, ...rects.map((rect) => rect.y + rect.height)), bandBelow = (span) => ({ top: span.y + spec.labelHeight, bottom: span.next === 1 / 0 ? 1 / 0 : span.next - spec.rowGap }), bandOf = (key, anchorY) => {
+    let labels = labelSpans(positions), own = labels.filter((span) => span.key === key);
     if (own.length === 0) {
       if (anchorY === void 0)
         return;
-      let above = labels.filter(([, point]) => point.y <= anchorY).pop();
-      return above ? bandUnder(above[1].y, labels) : { top: -1 / 0, bottom: labels[0] ? labels[0][1].y - spec.rowGap : 1 / 0 };
+      let above = labels.filter((span) => span.y <= anchorY).pop();
+      return above ? bandBelow(above) : { top: -1 / 0, bottom: labels[0] ? labels[0].y - spec.rowGap : 1 / 0 };
     }
-    let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0];
-    return bandUnder(pick2[1].y, labels);
-  }, bandsOf = (key) => {
-    let labels = labelEntries();
-    return labels.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => bandUnder(point.y, labels));
-  }, findSpot = (shape, height, band, x0, rowsFor) => {
+    let pick2 = anchorY === void 0 ? own[0] : own.filter((span) => span.y <= anchorY).pop() ?? own[0];
+    return bandBelow(pick2);
+  }, bandsOf = (key) => labelSpans(positions).filter((span) => span.key === key).map(bandBelow), findSpot = (shape, height, band, x0, rowsFor) => {
     let all = occupied(), lowest = band.bottom === 1 / 0 ? Math.max(band.top, bottomOf(all)) + step + height : band.bottom, top = band.top === -1 / 0 ? Math.min(0, ...all.map((rect) => rect.y)) : band.top, maxTop = lowest - height;
     if (maxTop < top)
       return;
@@ -8203,6 +8226,221 @@ function viewOnArrival(saved, ids, positions, size, pane) {
     return point ? [{ x: point.x, y: point.y, ...size }] : [];
   });
   return anyInView(rects, saved, pane.width, pane.height) ? saved : "fit";
+}
+
+// src/model/create.ts
+init_define_import_meta_env();
+
+// src/model/selection.ts
+init_define_import_meta_env();
+var EMPTY_SELECTION = Object.freeze({ ids: Object.freeze([]), primary: null }), make = (ids, primary) => ids.length === 0 ? EMPTY_SELECTION : { ids, primary: primary !== null && ids.includes(primary) ? primary : ids[ids.length - 1] };
+function canvasSelectable(model, shown, id2) {
+  let node = model.nodeById.get(id2);
+  return !!(node && shown.has(id2) && node.kind === "session" && !node.readOnly);
+}
+function reduceSelection(selection2, action, selectable, plainSelectable = selectable) {
+  switch (action.type) {
+    case "only":
+      return plainSelectable(action.id) ? make([action.id], action.id) : EMPTY_SELECTION;
+    case "toggle": {
+      if (selection2.ids.includes(action.id)) {
+        let ids = selection2.ids.filter((id2) => id2 !== action.id);
+        return make(ids, selection2.primary === action.id ? null : selection2.primary);
+      }
+      return selectable(action.id) ? make([...selection2.ids.filter(selectable), action.id], action.id) : selection2;
+    }
+    case "box": {
+      let boxed = unique(action.ids.filter(selectable));
+      if (!action.additive)
+        return make(boxed, boxed[0] ?? null);
+      if (boxed.length === 0)
+        return selection2;
+      let kept = selection2.ids.filter(selectable), added = boxed.filter((id2) => !kept.includes(id2));
+      return make([...kept, ...added], added[0] ?? selection2.primary);
+    }
+    case "all": {
+      let ids = unique(action.ids.filter(selectable));
+      return make(ids, selection2.primary);
+    }
+    case "clear":
+      return EMPTY_SELECTION;
+  }
+}
+function unique(ids) {
+  return [...new Set(ids)];
+}
+function singleSelected(selection2) {
+  return selection2.ids.length === 1 ? selection2.ids[0] : null;
+}
+function keepShown(selection2, selectable, singleOk = selectable) {
+  if (selection2.ids.length === 0)
+    return selection2;
+  if (selection2.ids.length === 1)
+    return singleOk(selection2.ids[0]) ? selection2 : EMPTY_SELECTION;
+  let ids = selection2.ids.filter(selectable);
+  return ids.length === selection2.ids.length ? selection2 : make(ids, selection2.primary);
+}
+function boxOf(a, b) {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
+}
+function fullyInside(rects, box) {
+  let right = box.x + box.width, bottom = box.y + box.height, out = [];
+  for (let [id2, rect] of rects)
+    rect.x >= box.x && rect.y >= box.y && rect.x + rect.width <= right && rect.y + rect.height <= bottom && out.push(id2);
+  return out;
+}
+function snapPoint(point, grid) {
+  return { x: grid * Math.round(point.x / grid), y: grid * Math.round(point.y / grid) };
+}
+function groupPositions(starts, grabbedId, grabbedNow, snap, grid) {
+  let origin = starts.get(grabbedId) ?? grabbedNow, target = snap ? snapPoint(grabbedNow, grid) : grabbedNow, dx = target.x - origin.x, dy = target.y - origin.y, out = /* @__PURE__ */ new Map();
+  for (let [id2, start2] of starts)
+    out.set(id2, id2 === grabbedId ? { x: target.x, y: target.y } : { x: start2.x + dx, y: start2.y + dy });
+  return out;
+}
+
+// src/model/create.ts
+var projectOfKey = (key) => key.slice(GROUP_PREFIX.length) || NO_PROJECT_ID;
+function areaAt(areas, point) {
+  if (areas.kind === "bands") {
+    let span = areas.spans.find((each) => point.y >= each.y && point.y < each.next);
+    return span ? projectOfKey(span.key) : void 0;
+  }
+  if (areas.kind === "shelves") {
+    let segment = areas.segments.find((each) => point.x >= each.x && point.x < each.right && point.y >= each.y && point.y < each.bottom);
+    return segment ? projectOfKey(segment.key) : void 0;
+  }
+  return areas.lanes.find((lane) => point.y >= lane.top && point.y < lane.top + lane.height)?.key;
+}
+var distance2 = (point, rect) => {
+  let dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width)), dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height));
+  return Math.hypot(dx, dy);
+};
+function projectAt({ areas, point, blocks, scope }) {
+  if (scope !== "all")
+    return scope;
+  let area2 = areaAt(areas, point);
+  if (area2 !== void 0)
+    return area2;
+  let best;
+  for (let block of blocks) {
+    let d = distance2(point, block.rect);
+    (!best || d < best.d) && (best = { projectId: block.projectId, d });
+  }
+  return best ? best.projectId ?? NO_PROJECT_ID : NO_PROJECT_ID;
+}
+function spotFor(click, size, snap, grid) {
+  let spot = { x: click.x - size.width / 2, y: click.y - size.height / 2 };
+  return snap ? snapPoint(spot, grid) : spot;
+}
+var DEFAULT_SESSION_NAME = "New session", LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, TITLE_CONTROL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, TITLE_INVISIBLE = /[\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff\ufffc\ufff9-\ufffb]/g;
+function sanitizeTitle(title) {
+  return title.replace(LONE_SURROGATE, "�").replace(TITLE_CONTROL, "").replace(TITLE_INVISIBLE, "").replace(/\s+/g, " ").trim();
+}
+var titleLength = (title) => [...title].length, profileOf = (row) => (row.profile ?? "").trim() || "default";
+function titleHolder(rows, profile, title) {
+  return rows.find(
+    (row) => profileOf(row) === profile && (row.title ?? "") === title && !((row.message_count ?? 0) === 0 && row.ended_at != null && !row.archived)
+  );
+}
+function defaultSessionName(rows, profile) {
+  let taken = new Set(rows.filter((row) => profileOf(row) === profile).map((row) => (row.title ?? "").trim()));
+  for (let n = 1; ; n += 1) {
+    let name = n === 1 ? DEFAULT_SESSION_NAME : `${DEFAULT_SESSION_NAME} ${n}`;
+    if (!taken.has(name))
+      return name;
+  }
+}
+function nameProblem(name, rows, profile) {
+  let title = sanitizeTitle(name);
+  if (!title)
+    return { kind: "empty" };
+  if (titleLength(title) > MAX_TITLE_LENGTH)
+    return { kind: "long", length: titleLength(title) };
+  let holder = titleHolder(rows, profile, title);
+  return holder ? { kind: "taken", holder } : null;
+}
+var isUnknownMethod = (error) => {
+  let value2 = error;
+  return value2?.code === -32601 || /unknown method|-32601/i.test(String(value2?.message ?? error ?? ""));
+};
+async function releaseRuntime(request, runtime) {
+  let detach = () => request("session.detach", {
+    session_id: runtime.sessionId,
+    ...runtime.subscriptionId ? { subscription_id: runtime.subscriptionId } : {},
+    end_reason: "cli_close",
+    profile: runtime.profile
+  }).then(() => "detach"), close = () => request("session.close", { session_id: runtime.sessionId, profile: runtime.profile }).then(() => "close"), [first, second] = runtime.subscriptionId ? [detach, close] : [close, detach];
+  try {
+    return await first();
+  } catch (error) {
+    if (!isUnknownMethod(error))
+      return "failed";
+  }
+  try {
+    return await second();
+  } catch {
+    return "failed";
+  }
+}
+var CreateFailure = class extends Error {
+  stage;
+  error;
+  /** A refused title: the untitled row the create left was deleted, kept (touched since), or the delete failed. */
+  cleanup;
+  release;
+  constructor(stage2, cause, message, extra = {}) {
+    super(message), this.stage = stage2, this.error = cause, this.cleanup = extra.cleanup, this.release = extra.release;
+  }
+}, reason = (error) => String(error?.message ?? error ?? "unknown error");
+function titleRefusalText(title, error) {
+  let text = reason(error);
+  return error?.code === 4022 || /already in use/i.test(text) ? `“${title}” is already the name of another session. Pick another name.` : `Hermes refused the name “${title}” (${text}). It may be the name of a session this page does not show; pick another name.`;
+}
+async function createSession(deps, params) {
+  let created;
+  try {
+    created = await deps.request("session.create", {
+      profile: params.profile,
+      ...params.cwd ? { cwd: params.cwd, cwd_explicit: !0 } : {},
+      source: "desktop",
+      request_id: deps.mintId()
+    });
+  } catch (error) {
+    throw new CreateFailure("create", error, `Could not create the session (${reason(error)})`);
+  }
+  let runtimeId = created?.session_id, sessionId = created?.stored_session_id || runtimeId;
+  if (!runtimeId || !sessionId)
+    throw new CreateFailure("create", created, "The gateway returned no session id");
+  let runtime = { sessionId: runtimeId, subscriptionId: created.subscription_id, profile: params.profile };
+  try {
+    await deps.request("session.title", { session_id: runtimeId, title: params.title, profile: params.profile });
+  } catch (error) {
+    let release = await releaseRuntime(deps.request, runtime), cleanup;
+    try {
+      cleanup = await deps.removeIfUntouched(params.profile, sessionId) ? "deleted" : "kept";
+    } catch {
+      cleanup = "failed";
+    }
+    throw new CreateFailure("title", error, titleRefusalText(params.title, error), { cleanup, release });
+  }
+  return { sessionId, release: await releaseRuntime(deps.request, runtime) };
+}
+function createAttempts() {
+  let flight = null;
+  return {
+    run(start2) {
+      if (flight)
+        return { flight, joined: !0 };
+      let current = start2().finally(() => {
+        flight === current && (flight = null);
+      });
+      return flight = current, { flight: current, joined: !1 };
+    },
+    get busy() {
+      return flight !== null;
+    }
+  };
 }
 
 // src/model/device-prefs.ts
@@ -8321,7 +8559,7 @@ function sanitize(value2) {
 
 // src/model/layout-sync.ts
 init_define_import_meta_env();
-var layoutRef = (profile, style2) => ({ profile, style: style2, scope: "all" });
+var layoutRef = (profile, style2) => ({ profile, style: style2, scope: "all" }), isLayoutOp = (op) => op.kind === "upsert" || op.kind === "replace" || op.kind === "project";
 var RETRY_MS = [1e3, 2e3, 5e3, 5e3, 1e4], POLL_MS = 5e3, CACHE_KEY = "layoutCache.v1", PENDING_KEY = "layoutPending.v2", LEGACY_PENDING_KEY = "layoutPending.v1", DROPS_KEY = "layoutDrops.v1", ORPHAN_MS = 3e4, DROP_RECORD_MS = 720 * 36e5, DROP_RECORD_MAX = 5e3, BATCH_LIMIT = 1e3, NEWER_SCHEMA = "newer_schema", EMPTY_SETTINGS = { style: null, snap: !1 }, IDENTITY_KEYS = { toStore: (id2) => id2, fromStore: (key) => key }, refKey = (ref) => `${ref.profile}\0${ref.style}\0${ref.scope}`, entryKey = (ref, key) => `${refKey(ref)}\0${key}`, sameRef = (a, b) => a.profile === b.profile && a.style === b.style && a.scope === b.scope;
 function refusalKind(error) {
   let match = /^(\d{3}): ([\s\S]*)$/.exec(error instanceof Error ? error.message : String(error ?? ""));
@@ -8438,7 +8676,23 @@ var LayoutSync = class {
   positions(ref) {
     let stored = this.profile(ref.profile).server?.layouts[ref.style]?.[ref.scope] ?? {}, out = new Map(Object.entries(stored).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
     for (let op of this.overlay())
-      (op.kind === "forget" ? op.profile === ref.profile : op.kind !== "settings" && sameRef(op.ref, ref)) && applyOp(out, op);
+      (op.kind === "forget" ? op.profile === ref.profile : isLayoutOp(op) && sameRef(op.ref, ref)) && applyOp(out, op);
+    return out;
+  }
+  /**
+   * Card 11: the sessions kept on the canvas in the `profile` view (`keptKey(owner, root id)`):
+   * the server's, with this window's unsent keeps on top.
+   */
+  kept(profile) {
+    let out = /* @__PURE__ */ new Set();
+    for (let [owner, ids] of Object.entries(this.profile(profile).server?.kept ?? {}))
+      if (Array.isArray(ids))
+        for (let id2 of ids)
+          out.add(`${owner}\0${id2}`);
+    for (let op of this.overlay())
+      if (op.kind === "keep" && op.profile === profile)
+        for (let id2 of op.ids)
+          out.add(`${op.owner}\0${id2}`);
     return out;
   }
   // --- local changes ------------------------------------------------------------------------
@@ -8511,6 +8765,13 @@ var LayoutSync = class {
    */
   forget(profile, key) {
     this.queue({ kind: "forget", profile, ids: [key] }, !0);
+  }
+  /**
+   * Card 11: keep `owner`'s sessions (lineage root ids) on the canvas, in every window and
+   * device; `profile` is the view this window shows (its snapshot shows the change at once).
+   */
+  keep(profile, owner, ids) {
+    ids.length > 0 && this.queue({ kind: "keep", profile, owner, ids: [...ids] }, !0);
   }
   setSettings(profile, patch) {
     this.queue({ kind: "settings", profile, patch }, !0);
@@ -8674,7 +8935,11 @@ var LayoutSync = class {
   async send(op) {
     if (op.kind === "settings")
       await this.transport.patchSettings(op.profile, op.patch);
-    else if (op.kind === "forget")
+    else if (op.kind === "keep") {
+      if (!this.transport.keepSessions)
+        throw new Error("400: this backend keeps no sessions on the canvas");
+      await this.transport.keepSessions(op.owner, op.ids);
+    } else if (op.kind === "forget")
       await this.transport.forgetBlocks(op.profile, op.ids);
     else if (op.kind === "upsert")
       for (let start2 = 0; start2 < op.entries.length; start2 += BATCH_LIMIT)
@@ -8706,7 +8971,13 @@ var LayoutSync = class {
         state2.server && (state2.server = { ...state2.server, settings: { ...state2.server.settings, ...op.patch } });
       return;
     }
-    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} }, refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes2]) => Object.keys(scopes2).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
+    let state = this.profile(opProfile(op)), server = state.server ?? { schema: 1, rev: 0, settings: this.anySettings(), layouts: {} };
+    if (op.kind === "keep") {
+      let kept = { ...server.kept ?? {} };
+      kept[op.owner] = [.../* @__PURE__ */ new Set([...kept[op.owner] ?? [], ...op.ids])].sort(), state.server = { ...server, kept }, this.cache(opProfile(op));
+      return;
+    }
+    let refs = op.kind === "forget" ? Object.entries(server.layouts).flatMap(([style2, scopes2]) => Object.keys(scopes2).map((scope) => ({ profile: op.profile, style: style2, scope }))) : [op.ref];
     for (let ref of refs) {
       let scopes2 = server.layouts[ref.style] ??= {}, current = new Map(Object.entries(scopes2[ref.scope] ?? {}).map(([id2, entry]) => [id2, { x: entry.x, y: entry.y }]));
       applyOp(current, op), current.size === 0 ? delete scopes2[ref.scope] : scopes2[ref.scope] = Object.fromEntries([...current].map(([id2, point]) => [id2, { ...point, updated_at: now2 }])), Object.keys(scopes2).length === 0 && delete server.layouts[ref.style];
@@ -8825,7 +9096,7 @@ function applyOp(target, op) {
     (op.mode === "set" || !target.has(id2)) && target.set(id2, point);
 }
 function opProfile(op) {
-  return op.kind === "settings" || op.kind === "forget" ? op.profile : op.ref.profile;
+  return op.kind === "settings" || op.kind === "forget" || op.kind === "keep" ? op.profile : op.ref.profile;
 }
 function isSnapshot(value2) {
   let snapshot = value2;
@@ -8833,10 +9104,10 @@ function isSnapshot(value2) {
 }
 function isOp(value2) {
   let op = value2;
-  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : op.kind === "project" ? !!op.ref && typeof op.project == "string" && Array.isArray(op.entries) && Array.isArray(op.remove) && op.remove.every((id2) => typeof id2 == "string") && typeof op.backup == "boolean" : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
+  return !op || typeof op != "object" ? !1 : op.kind === "settings" ? typeof op.profile == "string" && !!op.patch : op.kind === "forget" ? typeof op.profile == "string" && Array.isArray(op.ids) : op.kind === "keep" ? typeof op.profile == "string" && typeof op.owner == "string" && Array.isArray(op.ids) && op.ids.every((id2) => typeof id2 == "string") : op.kind === "project" ? !!op.ref && typeof op.project == "string" && Array.isArray(op.entries) && Array.isArray(op.remove) && op.remove.every((id2) => typeof id2 == "string") && typeof op.backup == "boolean" : (op.kind === "upsert" || op.kind === "replace") && !!op.ref && (op.entries === null || Array.isArray(op.entries));
 }
 function isRetiredOp(op) {
-  return op.kind !== "settings" && op.kind !== "forget" && op.ref.scope !== "all";
+  return isLayoutOp(op) && op.ref.scope !== "all";
 }
 
 // src/model/layout-undo.ts
@@ -8868,78 +9139,10 @@ function projectReset(model, scope, fresh, stored, keys) {
   return { keys: [...out], spots, blocks };
 }
 
-// src/model/selection.ts
-init_define_import_meta_env();
-var EMPTY_SELECTION = Object.freeze({ ids: Object.freeze([]), primary: null }), make = (ids, primary) => ids.length === 0 ? EMPTY_SELECTION : { ids, primary: primary !== null && ids.includes(primary) ? primary : ids[ids.length - 1] };
-function canvasSelectable(model, shown, id2) {
-  let node = model.nodeById.get(id2);
-  return !!(node && shown.has(id2) && node.kind === "session" && !node.readOnly);
-}
-function reduceSelection(selection2, action, selectable, plainSelectable = selectable) {
-  switch (action.type) {
-    case "only":
-      return plainSelectable(action.id) ? make([action.id], action.id) : EMPTY_SELECTION;
-    case "toggle": {
-      if (selection2.ids.includes(action.id)) {
-        let ids = selection2.ids.filter((id2) => id2 !== action.id);
-        return make(ids, selection2.primary === action.id ? null : selection2.primary);
-      }
-      return selectable(action.id) ? make([...selection2.ids.filter(selectable), action.id], action.id) : selection2;
-    }
-    case "box": {
-      let boxed = unique(action.ids.filter(selectable));
-      if (!action.additive)
-        return make(boxed, boxed[0] ?? null);
-      if (boxed.length === 0)
-        return selection2;
-      let kept = selection2.ids.filter(selectable), added = boxed.filter((id2) => !kept.includes(id2));
-      return make([...kept, ...added], added[0] ?? selection2.primary);
-    }
-    case "all": {
-      let ids = unique(action.ids.filter(selectable));
-      return make(ids, selection2.primary);
-    }
-    case "clear":
-      return EMPTY_SELECTION;
-  }
-}
-function unique(ids) {
-  return [...new Set(ids)];
-}
-function singleSelected(selection2) {
-  return selection2.ids.length === 1 ? selection2.ids[0] : null;
-}
-function keepShown(selection2, selectable, singleOk = selectable) {
-  if (selection2.ids.length === 0)
-    return selection2;
-  if (selection2.ids.length === 1)
-    return singleOk(selection2.ids[0]) ? selection2 : EMPTY_SELECTION;
-  let ids = selection2.ids.filter(selectable);
-  return ids.length === selection2.ids.length ? selection2 : make(ids, selection2.primary);
-}
-function boxOf(a, b) {
-  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
-}
-function fullyInside(rects, box) {
-  let right = box.x + box.width, bottom = box.y + box.height, out = [];
-  for (let [id2, rect] of rects)
-    rect.x >= box.x && rect.y >= box.y && rect.x + rect.width <= right && rect.y + rect.height <= bottom && out.push(id2);
-  return out;
-}
-function snapPoint(point, grid) {
-  return { x: grid * Math.round(point.x / grid), y: grid * Math.round(point.y / grid) };
-}
-function groupPositions(starts, grabbedId, grabbedNow, snap, grid) {
-  let origin = starts.get(grabbedId) ?? grabbedNow, target = snap ? snapPoint(grabbedNow, grid) : grabbedNow, dx = target.x - origin.x, dy = target.y - origin.y, out = /* @__PURE__ */ new Map();
-  for (let [id2, start2] of starts)
-    out.set(id2, id2 === grabbedId ? { x: target.x, y: target.y } : { x: start2.x + dx, y: start2.y + dy });
-  return out;
-}
-
 // src/model/status.ts
 init_define_import_meta_env();
-function liveStatus(row, host7) {
-  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host7.focusedStoredSessionId && ids.has(host7.focusedStoredSessionId)), focusedBusy = open && (host7.busy || !!(host7.focusedSessionId && host7.busyBySession[host7.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host7.busyBySession[row.id], needsInput = [...ids].some((id2) => host7.needsInput.has(id2)), unread = !!row.unread;
+function liveStatus(row, host8) {
+  let ids = /* @__PURE__ */ new Set([row.id, ...row._lineage_ids ?? []]), open = !!(host8.focusedStoredSessionId && ids.has(host8.focusedStoredSessionId)), focusedBusy = open && (host8.busy || !!(host8.focusedSessionId && host8.busyBySession[host8.focusedSessionId])), running = !!row.is_active || focusedBusy || !!host8.busyBySession[row.id], needsInput = [...ids].some((id2) => host8.needsInput.has(id2)), unread = !!row.unread;
   return {
     running,
     needsInput,
@@ -10468,6 +10671,16 @@ function freshRichLayout(model, spec) {
   }
   return { positions, labels };
 }
+function shelfSegments(entries) {
+  let shelfLabels = [...entries].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => ({ key: labelGroup(id2), x: point.x, y: point.y })), sameRow = (a, b) => Math.abs(a.y - b.y) < 1;
+  return shelfLabels.map((label) => ({
+    key: label.key,
+    x: shelfLabels.some((other) => sameRow(other, label) && other.x < label.x) ? label.x : -1 / 0,
+    y: label.y,
+    right: Math.min(1 / 0, ...shelfLabels.filter((other) => sameRow(other, label) && other.x > label.x).map((other) => other.x)),
+    bottom: Math.min(1 / 0, ...shelfLabels.filter((other) => other.y > label.y + 1).map((other) => other.y))
+  }));
+}
 var RectIndex = class _RectIndex {
   buckets = /* @__PURE__ */ new Map();
   static SIZE = 400;
@@ -10497,13 +10710,7 @@ function mergeRichLayout(previous, model, spec) {
   }, bottom = 0;
   for (let [id2, point] of positions)
     index2.add(id2.startsWith(GROUP_PREFIX) ? labelRect2(point) : cardRect(point)), bottom = Math.max(bottom, point.y + (id2.startsWith(GROUP_PREFIX) ? spec.labelHeight : spec.nodeHeight));
-  let shelfLabels = [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).map(([id2, point]) => ({ key: labelGroup(id2), x: point.x, y: point.y })), sameRow = (a, b) => Math.abs(a.y - b.y) < 1, segments = shelfLabels.map((label) => ({
-    key: label.key,
-    x: shelfLabels.some((other) => sameRow(other, label) && other.x < label.x) ? label.x : -1 / 0,
-    y: label.y,
-    right: Math.min(1 / 0, ...shelfLabels.filter((other) => sameRow(other, label) && other.x > label.x).map((other) => other.x)),
-    bottom: Math.min(1 / 0, ...shelfLabels.filter((other) => other.y > label.y + 1).map((other) => other.y))
-  })), inOtherGroup = (point, key) => {
+  let segments = shelfSegments(positions), inOtherGroup = (point, key) => {
     let cx = point.x + spec.nodeWidth / 2, cy = point.y + spec.nodeHeight / 2;
     return segments.some((segment) => segment.key !== key && cx >= segment.x && cx < segment.right && cy >= segment.y && cy < segment.bottom);
   }, continueGroup = (key) => {
@@ -10602,6 +10809,7 @@ var richStyle = {
   draggable: !0,
   savesLayout: !0,
   singles: "drawer",
+  areas: "shelves",
   router: curveRouter,
   ports: richPorts,
   grid: 20,
@@ -10816,19 +11024,13 @@ function mergeSubwayLayout(previous, model, spec) {
     let rect = id2.startsWith(GROUP_PREFIX) ? labelRect2(point) : footprint(point);
     index2.add(rect), bottom = Math.max(bottom, rect.y + rect.height);
   }
-  let labelsSorted = () => [...positions].filter(([id2]) => id2.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || (a < b ? -1 : 1)), bandOf = (key, anchorY) => {
-    let all = labelsSorted(), own = all.filter(([id2]) => labelGroup(id2) === key);
+  let bySubwayOrder = ([a, p], [b, q]) => p.y - q.y || (a < b ? -1 : 1), bandBelow = (span) => ({ top: span.y + 26, bottom: span.next }), bandOf = (key, anchorY) => {
+    let own = labelSpans(positions, bySubwayOrder).filter((span) => span.key === key);
     if (own.length === 0)
       return;
-    let pick2 = anchorY === void 0 ? own[0] : own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0], next = all.find(([, point]) => point.y > pick2[1].y);
-    return { top: pick2[1].y + 26, bottom: next ? next[1].y : 1 / 0 };
-  }, bandsOf = (key) => {
-    let all = labelsSorted();
-    return all.filter(([id2]) => labelGroup(id2) === key).map(([, point]) => {
-      let next = all.find(([, other]) => other.y > point.y);
-      return { top: point.y + 26, bottom: next ? next[1].y : 1 / 0 };
-    });
-  }, inBand = (point, band) => footprint(point).y >= band.top && point.y + 20 + 4 <= band.bottom, free = (point) => index2.hits(footprint(point)).length === 0, place = (id2, point) => {
+    let pick2 = anchorY === void 0 ? own[0] : own.filter((span) => span.y <= anchorY).pop() ?? own[0];
+    return bandBelow(pick2);
+  }, bandsOf = (key) => labelSpans(positions, bySubwayOrder).filter((span) => span.key === key).map(bandBelow), inBand = (point, band) => footprint(point).y >= band.top && point.y + 20 + 4 <= band.bottom, free = (point) => index2.hits(footprint(point)).length === 0, place = (id2, point) => {
     positions.set(id2, point);
     let rect = footprint(point);
     index2.add(rect), bottom = Math.max(bottom, rect.y + rect.height);
@@ -11383,7 +11585,7 @@ function localCalendar(offsetAt) {
   } };
 }
 function layoutSwimlanes(input) {
-  let { model, showAll, collapsed } = input, nowS = input.nowMs / 1e3, fixed = input.tzOffsetMinutes ?? 0, calendar = localCalendar(input.offsetAt ?? (() => fixed)), today = calendar.dayOf(nowS), firstDay = today - 8, scope = model.options.scope, scoped = scope !== ALL_PROJECTS, projectById = new Map(model.projects.map((project) => [project.id, project])), laneOf = (node2) => laneKeyOf(node2, projectById), node = (id2) => model.nodeById.get(id2), onAxis = new Set(model.families.filter((family) => showAll || family.nodeIds.length > 1).flatMap((family) => family.nodeIds)), time = /* @__PURE__ */ new Map(), future = /* @__PURE__ */ new Set();
+  let { model, showAll, collapsed } = input, nowS = input.nowMs / 1e3, fixed = input.tzOffsetMinutes ?? 0, calendar = localCalendar(input.offsetAt ?? (() => fixed)), today = calendar.dayOf(nowS), firstDay = today - 8, scope = model.options.scope, scoped = scope !== ALL_PROJECTS, projectById = new Map(model.projects.map((project) => [project.id, project])), laneOf = (node2) => laneKeyOf(node2, projectById), node = (id2) => model.nodeById.get(id2), onAxis = new Set(model.families.filter((family) => showAll || family.nodeIds.length > 1 || family.kept === !0).flatMap((family) => family.nodeIds)), time = /* @__PURE__ */ new Map(), future = /* @__PURE__ */ new Set();
   for (let each of model.nodes)
     if (each.kind === "session") {
       let start2 = effectiveStart(each, nowS);
@@ -11550,6 +11752,9 @@ function swimNowX(layout, nowMs) {
 function fitSwimlanes(layout, width, height, minZoom) {
   let { minX, maxX, height: contentHeight } = layout.bounds, availableWidth = Math.max(60, width - 168 - 16), availableHeight = Math.max(60, height - 26 - 12), zoom3 = Math.min(1.15, Math.max(minZoom, Math.min(availableWidth / Math.max(1, maxX - minX), availableHeight / Math.max(1, contentHeight))));
   return { x: 176 - minX * zoom3, y: 32, zoom: zoom3 };
+}
+function swimAreas(layout) {
+  return { lanes: layout.lanes, nowX: layout.nowX };
 }
 
 // src/styles/swimlanes/swim-flow.tsx
@@ -11996,7 +12201,8 @@ var swimFrame = {
     }));
   },
   Under: SwimUnder,
-  Over: SwimOver
+  Over: SwimOver,
+  lanes: (frameLayout) => swimAreas(frameLayout)
 }, swimlanesStyle = {
   id: "swimlanes",
   label: "Project swimlanes",
@@ -12040,9 +12246,171 @@ function resolveStyleId(override, synced) {
   return isRegisteredStyle(override) ? override : isRegisteredStyle(synced) ? synced : DEFAULT_STYLE_ID;
 }
 
+// src/page/create-session.tsx
+init_define_import_meta_env();
+import { Button, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, host as host2, Input, isSubmitEnter, randomUuid } from "@hermes/plugin-sdk";
+import { useEffect as useEffect5, useMemo as useMemo7, useRef as useRef4, useState as useState4 } from "react";
+
+// src/page/canvas-areas.ts
+init_define_import_meta_env();
+function canvasAreas(style2, positions, labels, frameLayout) {
+  if (style2.frame && frameLayout)
+    return { kind: "lanes", lanes: style2.frame.lanes?.(frameLayout).lanes ?? [] };
+  let drawn = labels.flatMap((label) => {
+    let point = positions.get(label.id);
+    return point ? [[label.id, point]] : [];
+  });
+  return style2.areas === "shelves" ? { kind: "shelves", segments: shelfSegments(drawn) } : { kind: "bands", spans: labelSpans(drawn) };
+}
+function projectLabelOf(model, projectId, framed) {
+  let noProject = model.projects.find((project) => project.isNoProject);
+  return projectId === NO_PROJECT_ID ? noProject?.label ?? (framed ? "Home" : "No project") : model.projects.find((project) => project.id === projectId)?.label ?? projectId;
+}
+function projectInfoOf(model, projectId) {
+  return projectId === NO_PROJECT_ID ? model.projects.find((project) => project.isNoProject) : model.projects.find((project) => project.id === projectId);
+}
+
+// src/page/create-session.tsx
+import { jsx as jsx13, jsxs as jsxs11 } from "react/jsx-runtime";
+function useCreateSession(options) {
+  let latest = useRef4(options), [attempts] = useState4(() => createAttempts()), [mutate] = useState4(() => createFencedMutation(randomUuid));
+  useEffect5(() => {
+    latest.current = options;
+  });
+  let submit = (title, projectId) => {
+    let { ctx, profile, model } = latest.current, project = projectId === NO_PROJECT_ID ? void 0 : model.projects.find((each) => each.id === projectId), cwd = project ? projectRootCwd(project) : void 0;
+    return attempts.run(
+      () => createSession(
+        {
+          request: (method, params) => host2.request(method, params),
+          mintId: randomUuid,
+          // R3: only the untitled empty row this attempt left, re-checked just before.
+          async removeIfUntouched(owner, id2) {
+            let row = (await fetchSessions(ctx, { profile: owner, includeArchived: !0 })).sessions.find((each) => each.id === id2);
+            return row ? (row.title ?? "").trim() || (row.message_count ?? 0) > 0 ? !1 : (await mutate(
+              JSON.stringify(["delete", owner, id2]),
+              () => fetchMutationSnapshot(ctx, owner, id2),
+              (identity4) => postDelete(ctx, owner, id2, identity4)
+            ).catch((error) => {
+              if (!isAlreadyAbsent(error))
+                throw error;
+            }), !0) : !0;
+          }
+        },
+        { profile, cwd: cwd || void 0, title }
+      )
+    ).flight;
+  }, { draft } = options;
+  return /* @__PURE__ */ jsx13(
+    CreateSessionDialog,
+    {
+      open: draft?.phase === "dialog",
+      model: options.model,
+      rows: options.rows,
+      profile: options.profile,
+      framed: options.framed,
+      projectId: draft?.projectId ?? NO_PROJECT_ID,
+      busy: () => attempts.busy,
+      onProject: (projectId) => {
+        let current = latest.current.draft;
+        current && latest.current.setDraft({ ...current, projectId });
+      },
+      onCancel: () => latest.current.setDraft(null),
+      onSubmit: async (title, projectId) => {
+        let current = latest.current.draft, outcome = await submit(title, projectId);
+        current && latest.current.onCreated(outcome, { ...current, projectId }, title), latest.current.setDraft(null);
+      }
+    },
+    draft?.phase === "dialog" ? `${draft.point.x},${draft.point.y}` : "closed"
+  );
+}
+function CreateSessionDialog({ open, model, rows, profile, framed, projectId, busy: inFlight, onProject, onCancel, onSubmit }) {
+  let [name, setName] = useState4(() => defaultSessionName(rows, profile)), [busy, setBusy] = useState4(!1), [error, setError] = useState4(null), input = useRef4(null), options = useMemo7(() => {
+    let list = moveTargets(model.projects, void 0).map((project2) => ({ id: project2.id, label: project2.label, folder: !0 }));
+    return projectId !== NO_PROJECT_ID && !list.some((each) => each.id === projectId) && list.unshift({ id: projectId, label: projectLabelOf(model, projectId, framed), folder: !1 }), [...list, { id: NO_PROJECT_ID, label: projectLabelOf(model, NO_PROJECT_ID, framed), folder: !0 }];
+  }, [model, projectId, framed]), chosen = options.find((each) => each.id === projectId) ?? options[options.length - 1], problem = nameProblem(name, rows, profile), problemText = problem?.kind === "long" ? `Title too long (${problem.length} chars, max ${MAX_TITLE_LENGTH})` : problem?.kind === "taken" ? `“${sanitizeTitle(name)}” is already the name of another session` : null, blocked = !!problem || !chosen.folder, project = projectInfoOf(model, chosen.id), submit = async () => {
+    if (!(blocked || busy || inFlight())) {
+      setBusy(!0), setError(null);
+      try {
+        await onSubmit(sanitizeTitle(name), chosen.id);
+      } catch (err) {
+        let text = err instanceof CreateFailure ? err.message : restErrorText(err);
+        setError(text), err instanceof CreateFailure && err.cleanup === "failed" && host2.notify({ kind: "error", title: "Could not remove the untitled session", message: "The refused name left an untitled empty session; “Delete empty sessions” in Settings removes it." });
+      } finally {
+        setBusy(!1);
+      }
+    }
+  };
+  return /* @__PURE__ */ jsx13(Dialog, { open, onOpenChange: (next) => !next && !busy && onCancel(), children: /* @__PURE__ */ jsxs11(
+    DialogContent,
+    {
+      className: "max-w-md",
+      "data-testid": "session-tree-create-dialog",
+      "data-profile": profile,
+      "data-project-id": chosen.id,
+      onOpenAutoFocus: (event) => {
+        event.preventDefault(), input.current?.focus(), input.current?.select();
+      },
+      children: [
+        /* @__PURE__ */ jsx13(DialogHeader, { children: /* @__PURE__ */ jsx13(DialogTitle, { children: "New session" }) }),
+        /* @__PURE__ */ jsxs11("label", { className: "st-create-field", children: [
+          /* @__PURE__ */ jsx13("span", { children: "Name" }),
+          /* @__PURE__ */ jsx13(
+            Input,
+            {
+              ref: input,
+              "aria-label": "Name",
+              "data-testid": "session-tree-create-name",
+              disabled: busy,
+              value: name,
+              onChange: (event) => {
+                setName(event.target.value), setError(null);
+              },
+              onKeyDown: (event) => {
+                isSubmitEnter(event) && (event.preventDefault(), submit());
+              }
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxs11("label", { className: "st-create-field", children: [
+          /* @__PURE__ */ jsx13("span", { children: "Project" }),
+          /* @__PURE__ */ jsxs11("span", { className: "st-create-project", style: { "--st-pc": projectColor(project) }, children: [
+            /* @__PURE__ */ jsx13(ProjectGlyph, { project, size: 12 }),
+            /* @__PURE__ */ jsx13(
+              "select",
+              {
+                "aria-label": "Project",
+                "data-testid": "session-tree-create-project",
+                disabled: busy,
+                value: chosen.id,
+                onChange: (event) => {
+                  onProject(event.target.value), setError(null);
+                },
+                children: options.map((each) => /* @__PURE__ */ jsx13("option", { value: each.id, children: each.label }, each.id))
+              }
+            )
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs11("div", { className: "st-create-note", "data-testid": "session-tree-create-profile", children: [
+          "Profile: ",
+          profile
+        ] }),
+        !chosen.folder && /* @__PURE__ */ jsx13("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-create-folder", children: "This project has no folder; pick another project." }),
+        (error ?? problemText) && /* @__PURE__ */ jsx13("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-create-error", "data-kind": error ? "server" : problem?.kind, children: error ?? problemText }),
+        /* @__PURE__ */ jsxs11(DialogFooter, { children: [
+          /* @__PURE__ */ jsx13(Button, { type: "button", variant: "ghost", disabled: busy, "data-testid": "session-tree-create-cancel", onClick: onCancel, children: "Cancel" }),
+          /* @__PURE__ */ jsx13(Button, { type: "button", disabled: blocked || busy, "data-testid": "session-tree-create-submit", onClick: () => {
+            submit();
+          }, children: busy ? "Creating…" : "Create" })
+        ] })
+      ]
+    }
+  ) });
+}
+
 // src/page/graph-canvas.tsx
 init_define_import_meta_env();
-import { useCallback as useCallback4, useEffect as useEffect5, useMemo as useMemo7, useRef as useRef4, useState as useState5 } from "react";
+import { useCallback as useCallback4, useEffect as useEffect7, useMemo as useMemo8, useRef as useRef6, useState as useState6 } from "react";
 
 // src/page/canvas-routing.ts
 init_define_import_meta_env();
@@ -12113,8 +12481,8 @@ import {
   icons,
   PROFILE_SWATCHES
 } from "@hermes/plugin-sdk";
-import { useCallback as useCallback3, useState as useState4 } from "react";
-import { Fragment as Fragment9, jsx as jsx13, jsxs as jsxs11 } from "react/jsx-runtime";
+import { useCallback as useCallback3, useEffect as useEffect6, useRef as useRef5, useState as useState5 } from "react";
+import { Fragment as Fragment9, jsx as jsx14, jsxs as jsxs12 } from "react/jsx-runtime";
 function nodeIdAt(target) {
   let element = target?.closest?.(".react-flow__node, [data-st-node]");
   return element?.getAttribute("data-st-node") ?? element?.getAttribute("data-id") ?? null;
@@ -12122,8 +12490,8 @@ function nodeIdAt(target) {
 var ICON = 14;
 function MenuItems({ node, actions, labels }) {
   let row = node.row, status = actions.statusOf(node), unread = !!row.unread, blocked = deleteBlockedReason(status), targets = actions.moveTargets(node), ArchiveOff = icons.ArchiveOff;
-  return /* @__PURE__ */ jsxs11(Fragment9, { children: [
-    /* @__PURE__ */ jsxs11(
+  return /* @__PURE__ */ jsxs12(Fragment9, { children: [
+    /* @__PURE__ */ jsxs12(
       ContextMenuItem,
       {
         "data-action": "rename",
@@ -12131,27 +12499,27 @@ function MenuItems({ node, actions, labels }) {
           actions.noteDialogFromMenu(), actions.rename(node);
         },
         children: [
-          /* @__PURE__ */ jsx13(Codicon9, { name: "edit", size: ICON }),
-          /* @__PURE__ */ jsx13("span", { children: labels.rename })
+          /* @__PURE__ */ jsx14(Codicon9, { name: "edit", size: ICON }),
+          /* @__PURE__ */ jsx14("span", { children: labels.rename })
         ]
       }
     ),
-    /* @__PURE__ */ jsxs11(ContextMenuItem, { "data-action": "pin", "data-pinned": row.pinned ? "true" : "false", onSelect: () => actions.togglePin(node), children: [
-      /* @__PURE__ */ jsx13(Codicon9, { name: "pin", size: ICON }),
-      /* @__PURE__ */ jsx13("span", { children: row.pinned ? labels.unpin : labels.pin })
+    /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "pin", "data-pinned": row.pinned ? "true" : "false", onSelect: () => actions.togglePin(node), children: [
+      /* @__PURE__ */ jsx14(Codicon9, { name: "pin", size: ICON }),
+      /* @__PURE__ */ jsx14("span", { children: row.pinned ? labels.unpin : labels.pin })
     ] }),
-    /* @__PURE__ */ jsxs11(ContextMenuItem, { "data-action": "read", "data-unread": unread ? "true" : "false", onSelect: () => {
+    /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "read", "data-unread": unread ? "true" : "false", onSelect: () => {
       actions.toggleUnread(node);
     }, children: [
-      /* @__PURE__ */ jsx13(Codicon9, { name: unread ? "mail-read" : "mail", size: ICON }),
-      /* @__PURE__ */ jsx13("span", { children: unread ? labels.markRead : labels.markUnread })
+      /* @__PURE__ */ jsx14(Codicon9, { name: unread ? "mail-read" : "mail", size: ICON }),
+      /* @__PURE__ */ jsx14("span", { children: unread ? labels.markRead : labels.markUnread })
     ] }),
-    /* @__PURE__ */ jsxs11(ContextMenuSub, { children: [
-      /* @__PURE__ */ jsxs11(ContextMenuSubTrigger, { "data-action": "appearance", children: [
-        /* @__PURE__ */ jsx13(Codicon9, { name: "symbol-color", size: ICON }),
-        /* @__PURE__ */ jsx13("span", { children: labels.appearance })
+    /* @__PURE__ */ jsxs12(ContextMenuSub, { children: [
+      /* @__PURE__ */ jsxs12(ContextMenuSubTrigger, { "data-action": "appearance", children: [
+        /* @__PURE__ */ jsx14(Codicon9, { name: "symbol-color", size: ICON }),
+        /* @__PURE__ */ jsx14("span", { children: labels.appearance })
       ] }),
-      /* @__PURE__ */ jsx13(ContextMenuSubContent, { className: "p-2", "data-testid": "session-tree-menu-appearance", children: /* @__PURE__ */ jsx13(
+      /* @__PURE__ */ jsx14(ContextMenuSubContent, { className: "p-2", "data-testid": "session-tree-menu-appearance", children: /* @__PURE__ */ jsx14(
         ColorSwatches,
         {
           clearIcon: "circle-slash",
@@ -12162,7 +12530,7 @@ function MenuItems({ node, actions, labels }) {
         }
       ) })
     ] }),
-    /* @__PURE__ */ jsx13(
+    /* @__PURE__ */ jsx14(
       CopyButton,
       {
         appearance: "context-menu-item",
@@ -12174,36 +12542,36 @@ function MenuItems({ node, actions, labels }) {
         onCopyError: (error) => actions.copyFailed(error)
       }
     ),
-    /* @__PURE__ */ jsx13(ContextMenuSeparator, {}),
-    /* @__PURE__ */ jsxs11(ContextMenuItem, { "data-action": "branch", onSelect: () => {
+    /* @__PURE__ */ jsx14(ContextMenuSeparator, {}),
+    /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "branch", onSelect: () => {
       actions.branch(node);
     }, children: [
-      /* @__PURE__ */ jsx13(Codicon9, { name: "repo-forked", size: ICON }),
-      /* @__PURE__ */ jsx13("span", { children: labels.branch })
+      /* @__PURE__ */ jsx14(Codicon9, { name: "repo-forked", size: ICON }),
+      /* @__PURE__ */ jsx14("span", { children: labels.branch })
     ] }),
-    /* @__PURE__ */ jsxs11(ContextMenuItem, { "data-action": "export", onSelect: () => {
+    /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "export", onSelect: () => {
       actions.exportSession(node);
     }, children: [
-      /* @__PURE__ */ jsx13(Codicon9, { name: "cloud-download", size: ICON }),
-      /* @__PURE__ */ jsx13("span", { children: labels.export })
+      /* @__PURE__ */ jsx14(Codicon9, { name: "cloud-download", size: ICON }),
+      /* @__PURE__ */ jsx14("span", { children: labels.export })
     ] }),
-    /* @__PURE__ */ jsxs11(ContextMenuSub, { children: [
-      /* @__PURE__ */ jsxs11(ContextMenuSubTrigger, { "data-action": "move", children: [
-        /* @__PURE__ */ jsx13(Codicon9, { name: "folder", size: ICON }),
-        /* @__PURE__ */ jsx13("span", { children: labels.moveToProject })
+    /* @__PURE__ */ jsxs12(ContextMenuSub, { children: [
+      /* @__PURE__ */ jsxs12(ContextMenuSubTrigger, { "data-action": "move", children: [
+        /* @__PURE__ */ jsx14(Codicon9, { name: "folder", size: ICON }),
+        /* @__PURE__ */ jsx14("span", { children: labels.moveToProject })
       ] }),
-      /* @__PURE__ */ jsx13(ContextMenuSubContent, { "data-testid": "session-tree-menu-move", children: targets.length === 0 ? /* @__PURE__ */ jsx13(ContextMenuItem, { disabled: !0, children: labels.moveNoProjects }) : targets.map((project) => /* @__PURE__ */ jsx13(ContextMenuItem, { "data-action": "move-to", "data-project-id": project.id, onSelect: () => {
+      /* @__PURE__ */ jsx14(ContextMenuSubContent, { "data-testid": "session-tree-menu-move", children: targets.length === 0 ? /* @__PURE__ */ jsx14(ContextMenuItem, { disabled: !0, children: labels.moveNoProjects }) : targets.map((project) => /* @__PURE__ */ jsx14(ContextMenuItem, { "data-action": "move-to", "data-project-id": project.id, onSelect: () => {
         actions.moveTo(node, project);
       }, children: project.label }, project.id)) })
     ] }),
-    /* @__PURE__ */ jsx13(ContextMenuSeparator, {}),
-    /* @__PURE__ */ jsxs11(ContextMenuItem, { "data-action": "archive", "data-archived": row.archived ? "true" : "false", onSelect: () => {
+    /* @__PURE__ */ jsx14(ContextMenuSeparator, {}),
+    /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "archive", "data-archived": row.archived ? "true" : "false", onSelect: () => {
       actions.toggleArchive(node);
     }, children: [
-      row.archived && ArchiveOff ? /* @__PURE__ */ jsx13(ArchiveOff, { className: "size-3.5" }) : /* @__PURE__ */ jsx13(Codicon9, { name: "archive", size: ICON }),
-      /* @__PURE__ */ jsx13("span", { children: row.archived ? labels.unarchive : labels.archive })
+      row.archived && ArchiveOff ? /* @__PURE__ */ jsx14(ArchiveOff, { className: "size-3.5" }) : /* @__PURE__ */ jsx14(Codicon9, { name: "archive", size: ICON }),
+      /* @__PURE__ */ jsx14("span", { children: row.archived ? labels.unarchive : labels.archive })
     ] }),
-    /* @__PURE__ */ jsxs11(
+    /* @__PURE__ */ jsxs12(
       ContextMenuItem,
       {
         variant: "destructive",
@@ -12216,29 +12584,77 @@ function MenuItems({ node, actions, labels }) {
           actions.noteDialogFromMenu(), actions.remove(node);
         },
         children: [
-          /* @__PURE__ */ jsx13(Codicon9, { name: "trash", size: ICON }),
-          /* @__PURE__ */ jsx13("span", { children: labels.delete }),
-          blocked && /* @__PURE__ */ jsx13("span", { className: "st-menu-note", children: blocked })
+          /* @__PURE__ */ jsx14(Codicon9, { name: "trash", size: ICON }),
+          /* @__PURE__ */ jsx14("span", { children: labels.delete }),
+          blocked && /* @__PURE__ */ jsx14("span", { className: "st-menu-note", children: blocked })
         ]
       }
     )
   ] });
 }
-function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) {
-  let actions = useSessionActions(), labels = useMenuLabels(), [nodeId, setNodeId] = useState4(null), node = nodeId ? model.nodeById.get(nodeId) : void 0, onContextMenu = useCallback3(
+function isCanvasArea(target) {
+  return !!target?.closest?.('.react-flow__pane, [data-testid="session-tree-lane-header"], [data-testid="session-tree-lane-band"]');
+}
+function CanvasMenuItems({ target, onChoose }) {
+  return /* @__PURE__ */ jsxs12(ContextMenuItem, { "data-action": "new-session", "data-project-id": target.projectId, onSelect: onChoose, children: [
+    /* @__PURE__ */ jsx14(Codicon9, { name: "add", size: ICON }),
+    /* @__PURE__ */ jsxs12("span", { className: "st-new-session-label", children: [
+      "New session in",
+      " ",
+      /* @__PURE__ */ jsx14("span", { className: "st-new-session-dot", "data-testid": "session-tree-new-session-dot", style: { backgroundColor: projectColor(target.project) }, "aria-hidden": "true" }),
+      " ",
+      /* @__PURE__ */ jsx14("span", { "data-testid": "session-tree-new-session-project", children: target.label }),
+      "…"
+    ] })
+  ] });
+}
+function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus, onCanvasMenu, onCanvasMenuChosen, onCanvasMenuDismissed }) {
+  let actions = useSessionActions(), labels = useMenuLabels(), [menu, setMenu] = useState5(null), node = menu?.kind === "node" ? model.nodeById.get(menu.id) : void 0, canvas = menu?.kind === "canvas" ? menu.target : void 0, chosen = useRef5(!1), latest = useRef5({ menu, onCanvasMenuDismissed });
+  useEffect6(() => {
+    latest.current = { menu, onCanvasMenuDismissed };
+  });
+  let onContextMenu = useCallback3(
     (event) => {
-      let id2 = actions?.takeRequestedMenuNode() ?? null ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
-      if (!actions || !actions.canAct(target)) {
-        event.preventDefault();
+      let requested = actions?.takeRequestedMenuNode() ?? null, id2 = requested ?? nodeIdAt(event.target), target = id2 ? model.nodeById.get(id2) : void 0;
+      if (actions && actions.canAct(target)) {
+        setMenu({ kind: "node", id: target.id }), onOpenFor(target);
         return;
       }
-      setNodeId(target.id), onOpenFor(target);
+      let offer = !target && !requested && actions && onCanvasMenu && isCanvasArea(event.target) ? onCanvasMenu(event) : null;
+      if (offer) {
+        chosen.current = !1, setMenu({ kind: "canvas", target: offer });
+        return;
+      }
+      event.preventDefault();
     },
-    [actions, model, onOpenFor]
-  );
-  return /* @__PURE__ */ jsxs11(ContextMenu, { children: [
-    /* @__PURE__ */ jsx13(ContextMenuTrigger, { asChild: !0, onContextMenu, children: children2 }),
-    actions && node && actions.canAct(node) && /* @__PURE__ */ jsx13(
+    [actions, model, onOpenFor, onCanvasMenu]
+  ), onOpenChange = useCallback3((open) => {
+    !open && latest.current.menu?.kind === "canvas" && !chosen.current && latest.current.onCanvasMenuDismissed?.();
+  }, []);
+  return /* @__PURE__ */ jsxs12(ContextMenu, { onOpenChange, children: [
+    /* @__PURE__ */ jsx14(ContextMenuTrigger, { asChild: !0, onContextMenu, children: children2 }),
+    actions && canvas && /* @__PURE__ */ jsx14(
+      ContextMenuContent,
+      {
+        className: "w-56",
+        "aria-label": "Canvas actions",
+        "data-testid": "session-tree-canvas-menu",
+        "data-project-id": canvas.projectId,
+        onCloseAutoFocus: (event) => {
+          event.preventDefault(), actions.dialogOpening() || onRestoreFocus();
+        },
+        children: /* @__PURE__ */ jsx14(
+          CanvasMenuItems,
+          {
+            target: canvas,
+            onChoose: () => {
+              chosen.current = !0, actions.noteDialogFromMenu(), onCanvasMenuChosen?.();
+            }
+          }
+        )
+      }
+    ),
+    actions && node && actions.canAct(node) && /* @__PURE__ */ jsx14(
       ContextMenuContent,
       {
         className: "w-40",
@@ -12248,14 +12664,14 @@ function SessionMenu({ model, children: children2, onOpenFor, onRestoreFocus }) 
         onCloseAutoFocus: (event) => {
           event.preventDefault(), actions.dialogOpening() || onRestoreFocus();
         },
-        children: /* @__PURE__ */ jsx13(MenuItems, { node, actions, labels })
+        children: /* @__PURE__ */ jsx14(MenuItems, { node, actions, labels })
       }
     )
   ] });
 }
 
 // src/page/graph-canvas.tsx
-import { jsx as jsx14, jsxs as jsxs12 } from "react/jsx-runtime";
+import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
 var MIN_ZOOM = 0.3, MAX_ZOOM = 2.5, VISIBLE_ONLY_ABOVE = 150, OUT_OF_SCOPE_TIP = "Outside this project — switch to All projects to edit", STANDIN_TIP = "Parent not loaded — deleted, hidden or outside the loaded sessions", TOOLTIP_DELAY_MS = 350, PAN_KEYS = ["Space", "Alt"];
 function isTypingTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
@@ -12268,24 +12684,24 @@ function isTextField(target) {
 function StyleProviders({ model, children: children2 }) {
   return registeredStyles().reduceRight((inner, each) => {
     let Provider2 = each.Provider;
-    return Provider2 ? /* @__PURE__ */ jsx14(Provider2, { model, children: inner }, each.id) : inner;
+    return Provider2 ? /* @__PURE__ */ jsx15(Provider2, { model, children: inner }, each.id) : inner;
   }, children2);
 }
 function GraphCanvas(props) {
-  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel } = props, [mountViewport] = useState5(initialViewport), [mountFit] = useState5(() => ({
+  let { style: style2, spec, model, positions, labels, selection: selection2, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = !1, onPanel, newSession } = props, [mountViewport] = useState6(initialViewport), [mountFit] = useState6(() => ({
     padding: style2.fitPadding ?? 0.08,
     maxZoom: 1.25,
     ...fitIds && fitIds.length > 0 ? { nodes: fitIds.map((id2) => ({ id: id2 })) } : {}
-  })), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef4(null), [drag2, setDrag] = useState5(), dragGroup = useRef4(null), actions = useSessionActions(), [tooltip, setTooltip] = useState5(), spaceDown = useRef4(!1), altDown = useRef4(!1), [panKeyHeld, setPanKeyHeld] = useState5(!1), tooltipTimer = useRef4(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef4(boxSelect), boxStart = useRef4(null), [activeExtra, setActiveExtra] = useState5(null), active = frame2 ? activeExtra : null, [routing] = useState5(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo7(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo7(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo7(() => {
+  })), ctx = usePluginCtx(), flow = useReactFlow(), flowStore = useStoreApi(), wrapper = useRef6(null), [drag2, setDrag] = useState6(), dragGroup = useRef6(null), actions = useSessionActions(), [tooltip, setTooltip] = useState6(), spaceDown = useRef6(!1), altDown = useRef6(!1), [panKeyHeld, setPanKeyHeld] = useState6(!1), tooltipTimer = useRef6(void 0), frame2 = style2.frame && frameLayout ? style2.frame : void 0, boxSelect = style2.draggable, boxSelectRef = useRef6(boxSelect), boxStart = useRef6(null), [activeExtra, setActiveExtra] = useState6(null), active = frame2 ? activeExtra : null, [routing] = useState6(createCanvasRouting), frameShown = frameLayout && style2.frame ? frameLayout.shown : void 0, { shown, rects, links, routes } = routing.get({ model, spec, frameShown, positions, ports: style2.ports, router: style2.router, slots: style2.linkSlots }), selectedIds = useMemo8(() => new Set(selection2.ids), [selection2]), selectedId = singleSelected(selection2), lineage = useMemo8(() => lineageOf(model, selectedId), [model, selectedId]), selectableRects = useMemo8(() => {
     let out = /* @__PURE__ */ new Map();
     for (let [id2, rect] of rects)
       canvasSelectable(model, shown, id2) && out.set(id2, rect);
     return out;
-  }, [model, shown, rects]), selectableRef = useRef4(selectableRects);
-  useEffect5(() => {
+  }, [model, shown, rects]), selectableRef = useRef6(selectableRects);
+  useEffect7(() => {
     boxSelectRef.current = boxSelect, selectableRef.current = selectableRects;
   }, [boxSelect, selectableRects]);
-  let baseNodes = useMemo7(() => {
+  let baseNodes = useMemo8(() => {
     let { width, height } = style2.nodeSize, handles = blockHandles(width, height, style2.resetPortX), nodes2 = [], projectById = new Map(model.projects.map((project) => [project.id, project])), noProject = model.projects.find((project) => project.isNoProject);
     for (let label of labels) {
       let point = positions.get(label.id), project = label.projectId ? projectById.get(label.projectId) : noProject;
@@ -12333,10 +12749,10 @@ function GraphCanvas(props) {
       });
     }
     return frame2 && frameLayout && nodes2.push(...frame2.extraNodes(frameLayout)), nodes2;
-  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, selectedIds, nowMs, frame2, frameLayout]), nodes = useMemo7(() => {
+  }, [model, positions, labels, shown, style2, spec, statusOf, lineage, selectedId, selectedIds, nowMs, frame2, frameLayout]), nodes = useMemo8(() => {
     let moved = drag2 ? baseNodes.map((node) => drag2.has(node.id) ? { ...node, position: drag2.get(node.id), dragging: !0 } : node) : baseNodes;
     return panKeyHeld ? moved.map((node) => node.draggable ? { ...node, draggable: !1 } : node) : moved;
-  }, [baseNodes, drag2, panKeyHeld]), edges = useMemo7(
+  }, [baseNodes, drag2, panKeyHeld]), edges = useMemo8(
     () => model.edges.filter((edge) => shown.has(edge.source) && shown.has(edge.target)).map((edge) => {
       let source = model.nodeById.get(edge.source), target = model.nodeById.get(edge.target);
       return {
@@ -12412,7 +12828,7 @@ function GraphCanvas(props) {
     [graphNode, onOpen]
   ), onNodeContextMenu = useCallback4(() => hideTooltip(), [hideTooltip]), onMoveEnd = useCallback4((_event, viewport) => onViewport(viewport), [onViewport]), closeActive = useCallback4(() => setActiveExtra(null), []), onMoveStart = useCallback4(() => {
     hideTooltip(), closeActive();
-  }, [hideTooltip, closeActive]), frameUi = useMemo7(
+  }, [hideTooltip, closeActive]), frameUi = useMemo8(
     () => ({
       activeId: active?.id ?? null,
       activate(id2, element) {
@@ -12459,8 +12875,27 @@ function GraphCanvas(props) {
     for (let ms of [0, 50, 150, 400])
       ctx.setTimeout(attempt, ms);
   }, [ctx]);
-  useEffect5(() => (actions?.setMenuHost(wrapper.current), () => actions?.setMenuHost(null)), [actions]);
-  let onNodeMouseEnter = useCallback4(
+  useEffect7(() => (actions?.setMenuHost(wrapper.current), () => actions?.setMenuHost(null)), [actions]);
+  let newSessionRef = useRef6(newSession);
+  useEffect7(() => {
+    newSessionRef.current = newSession;
+  });
+  let areas = useMemo8(() => canvasAreas(style2, positions, labels, frame2 ? frameLayout : void 0), [style2, positions, labels, frame2, frameLayout]), onCanvasMenu = useCallback4(
+    (event) => {
+      let create2 = newSessionRef.current;
+      if (!create2)
+        return null;
+      hideTooltip();
+      let point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: !1 }), blocks = [...rects].map(([id2, rect]) => ({ projectId: model.nodeById.get(id2)?.projectId, rect })), projectId = projectAt({ areas, point, blocks, scope: model.options.scope });
+      return create2.open(point, projectId), { projectId, label: projectLabelOf(model, projectId, !!frame2), project: projectInfoOf(model, projectId) };
+    },
+    [areas, flow, frame2, hideTooltip, model, rects]
+  ), onCanvasMenuChosen = useCallback4(() => newSessionRef.current?.choose(), []), onCanvasMenuDismissed = useCallback4(() => newSessionRef.current?.dismiss(), []), draft = newSession?.draft ?? null, ghost = useMemo8(() => {
+    if (!draft)
+      return null;
+    let { width, height } = style2.nodeSize, framed = frame2 && frameLayout ? frame2.lanes?.(frameLayout) : void 0, lane = framed ? framed.lanes.find((each) => each.key === draft.projectId) ?? framed.lanes.find((each) => draft.point.y >= each.top && draft.point.y < each.top + each.height) : void 0;
+    return { ...frame2 ? { x: framed?.nowX ?? draft.point.x, y: lane ? lane.top + (lane.height - height) / 2 : draft.point.y - height / 2 } : spotFor(draft.point, style2.nodeSize, snap, style2.grid), width, height, projectId: draft.projectId, color: projectColor(projectInfoOf(model, draft.projectId)) };
+  }, [draft, frame2, frameLayout, model, snap, style2]), onNodeMouseEnter = useCallback4(
     (event, flowNode) => {
       let node = graphNode(flowNode), target = event.currentTarget;
       !node || !wrapper.current || (tooltipTimer.current?.(), tooltipTimer.current = ctx.setTimeout(() => {
@@ -12472,7 +12907,7 @@ function GraphCanvas(props) {
     },
     [ctx, graphNode]
   );
-  useEffect5(() => {
+  useEffect7(() => {
     let element = wrapper.current;
     if (!element)
       return;
@@ -12536,127 +12971,150 @@ function GraphCanvas(props) {
       })
     ];
     return () => offs.forEach((off) => off());
-  }, [ctx, onSelection]), useEffect5(() => () => tooltipTimer.current?.(), []);
+  }, [ctx, onSelection]), useEffect7(() => () => tooltipTimer.current?.(), []);
   let Under = frame2?.Under, Over = frame2?.Over, Layer = style2.Layer;
-  return /* @__PURE__ */ jsx14(SessionMenu, { model, onOpenFor: onMenuOpen, onRestoreFocus: restoreFocus, children: /* @__PURE__ */ jsxs12(
-    "div",
+  return /* @__PURE__ */ jsx15(
+    SessionMenu,
     {
-      ref: wrapper,
-      tabIndex: -1,
-      className: `session-tree__canvas${snap ? " has-grid" : ""}${frame2 ? " is-framed" : ""}`,
-      "data-testid": "session-tree-canvas",
-      "data-style": style2.id,
-      "data-snap": snap ? "on" : "off",
-      "data-grid": style2.grid,
-      "data-draggable": style2.draggable ? "true" : "false",
-      "data-box-select": boxSelect ? "true" : "false",
-      "data-selected-count": selection2.ids.length,
-      "data-selected": selection2.ids.join(" "),
-      "data-route-passes": routing.routed,
-      children: [
-        /* @__PURE__ */ jsxs12(FrameUiCtx.Provider, { value: frameUi, children: [
-          Under && frameLayout && /* @__PURE__ */ jsx14(Under, { layout: frameLayout, nowMs }),
-          /* @__PURE__ */ jsx14(StyleProviders, { model, children: /* @__PURE__ */ jsxs12(
-            index,
-            {
-              nodes,
-              edges,
-              nodeTypes,
-              edgeTypes,
-              onNodesChange,
-              onNodeDragStart,
-              onNodeDragStop,
-              onNodeClick,
-              onNodeDoubleClick,
-              onNodeContextMenu,
-              onNodeMouseEnter,
-              onNodeMouseLeave: hideTooltip,
-              onMoveStart,
-              onInit,
-              onSelectionStart,
-              onSelectionEnd,
-              nodesDraggable: style2.draggable,
-              panOnDrag: [1],
-              panActivationKeyCode: PAN_KEYS,
-              zoomOnScroll: !0,
-              panOnScroll: !1,
-              zoomOnDoubleClick: !1,
-              zoomOnPinch: !0,
-              selectionOnDrag: boxSelect,
-              selectionMode: SelectionMode.Full,
-              selectionKeyCode: null,
-              multiSelectionKeyCode: null,
-              deleteKeyCode: null,
-              nodesConnectable: !1,
-              nodesFocusable: !1,
-              edgesFocusable: !1,
-              elevateNodesOnSelect: !1,
-              snapToGrid: !1,
-              snapGrid: [style2.grid, style2.grid],
-              minZoom: MIN_ZOOM,
-              maxZoom: MAX_ZOOM,
-              onlyRenderVisibleElements: nodes.length > VISIBLE_ONLY_ABOVE,
-              fitView: !mountViewport && !style2.frame,
-              fitViewOptions: mountFit,
-              defaultViewport: mountViewport,
-              onMoveEnd,
-              proOptions: { hideAttribution: !0 },
-              children: [
-                snap && /* @__PURE__ */ jsx14(Background, { variant: BackgroundVariant.Dots, gap: style2.grid, size: 1.3 }),
-                Layer && /* @__PURE__ */ jsx14(
-                  Layer,
-                  {
-                    model,
-                    positions,
-                    shown,
-                    links,
-                    routes,
-                    nodeSize: style2.nodeSize,
-                    showAll: spec.includeSingles,
-                    selectedId,
-                    onSelect,
-                    onOpen,
-                    nowMs,
-                    panelOpen,
-                    onPanel: (open) => onPanel?.(open)
-                  }
-                )
-              ]
-            }
-          ) }),
-          Over && frameLayout && /* @__PURE__ */ jsx14(
-            Over,
-            {
-              layout: frameLayout,
-              model,
-              nowMs,
-              onOpen,
-              onToggleLane: (key) => onToggleLane?.(key),
-              active,
-              onCloseActive: closeActive
-            }
-          )
-        ] }),
-        tooltip && /* @__PURE__ */ jsx14(
-          "div",
-          {
-            className: "session-tree__tooltip",
-            role: "tooltip",
-            "data-testid": "session-tree-tooltip",
-            "data-node-id": tooltip.nodeId,
-            style: { left: tooltip.x, top: tooltip.y },
-            children: tooltip.text
-          }
-        )
-      ]
+      model,
+      onOpenFor: onMenuOpen,
+      onRestoreFocus: restoreFocus,
+      onCanvasMenu: newSession ? onCanvasMenu : void 0,
+      onCanvasMenuChosen,
+      onCanvasMenuDismissed,
+      children: /* @__PURE__ */ jsxs13(
+        "div",
+        {
+          ref: wrapper,
+          tabIndex: -1,
+          className: `session-tree__canvas${snap ? " has-grid" : ""}${frame2 ? " is-framed" : ""}`,
+          "data-testid": "session-tree-canvas",
+          "data-style": style2.id,
+          "data-snap": snap ? "on" : "off",
+          "data-grid": style2.grid,
+          "data-draggable": style2.draggable ? "true" : "false",
+          "data-box-select": boxSelect ? "true" : "false",
+          "data-selected-count": selection2.ids.length,
+          "data-selected": selection2.ids.join(" "),
+          "data-route-passes": routing.routed,
+          children: [
+            /* @__PURE__ */ jsxs13(FrameUiCtx.Provider, { value: frameUi, children: [
+              Under && frameLayout && /* @__PURE__ */ jsx15(Under, { layout: frameLayout, nowMs }),
+              /* @__PURE__ */ jsx15(StyleProviders, { model, children: /* @__PURE__ */ jsxs13(
+                index,
+                {
+                  nodes,
+                  edges,
+                  nodeTypes,
+                  edgeTypes,
+                  onNodesChange,
+                  onNodeDragStart,
+                  onNodeDragStop,
+                  onNodeClick,
+                  onNodeDoubleClick,
+                  onNodeContextMenu,
+                  onNodeMouseEnter,
+                  onNodeMouseLeave: hideTooltip,
+                  onMoveStart,
+                  onInit,
+                  onSelectionStart,
+                  onSelectionEnd,
+                  nodesDraggable: style2.draggable,
+                  panOnDrag: [1],
+                  panActivationKeyCode: PAN_KEYS,
+                  zoomOnScroll: !0,
+                  panOnScroll: !1,
+                  zoomOnDoubleClick: !1,
+                  zoomOnPinch: !0,
+                  selectionOnDrag: boxSelect,
+                  selectionMode: SelectionMode.Full,
+                  selectionKeyCode: null,
+                  multiSelectionKeyCode: null,
+                  deleteKeyCode: null,
+                  nodesConnectable: !1,
+                  nodesFocusable: !1,
+                  edgesFocusable: !1,
+                  elevateNodesOnSelect: !1,
+                  snapToGrid: !1,
+                  snapGrid: [style2.grid, style2.grid],
+                  minZoom: MIN_ZOOM,
+                  maxZoom: MAX_ZOOM,
+                  onlyRenderVisibleElements: nodes.length > VISIBLE_ONLY_ABOVE,
+                  fitView: !mountViewport && !style2.frame,
+                  fitViewOptions: mountFit,
+                  defaultViewport: mountViewport,
+                  onMoveEnd,
+                  proOptions: { hideAttribution: !0 },
+                  children: [
+                    snap && /* @__PURE__ */ jsx15(Background, { variant: BackgroundVariant.Dots, gap: style2.grid, size: 1.3 }),
+                    ghost && /* @__PURE__ */ jsx15(ViewportPortal, { children: /* @__PURE__ */ jsx15(
+                      "div",
+                      {
+                        className: "session-tree__ghost",
+                        "data-testid": "session-tree-ghost",
+                        "data-project-id": ghost.projectId,
+                        "data-x": ghost.x,
+                        "data-y": ghost.y,
+                        "aria-hidden": "true",
+                        style: { transform: `translate(${ghost.x}px, ${ghost.y}px)`, width: ghost.width, height: ghost.height, "--st-pc": ghost.color }
+                      }
+                    ) }),
+                    Layer && /* @__PURE__ */ jsx15(
+                      Layer,
+                      {
+                        model,
+                        positions,
+                        shown,
+                        links,
+                        routes,
+                        nodeSize: style2.nodeSize,
+                        showAll: spec.includeSingles,
+                        selectedId,
+                        onSelect,
+                        onOpen,
+                        nowMs,
+                        panelOpen,
+                        onPanel: (open) => onPanel?.(open)
+                      }
+                    )
+                  ]
+                }
+              ) }),
+              Over && frameLayout && /* @__PURE__ */ jsx15(
+                Over,
+                {
+                  layout: frameLayout,
+                  model,
+                  nowMs,
+                  onOpen,
+                  onToggleLane: (key) => onToggleLane?.(key),
+                  active,
+                  onCloseActive: closeActive
+                }
+              )
+            ] }),
+            tooltip && /* @__PURE__ */ jsx15(
+              "div",
+              {
+                className: "session-tree__tooltip",
+                role: "tooltip",
+                "data-testid": "session-tree-tooltip",
+                "data-node-id": tooltip.nodeId,
+                style: { left: tooltip.x, top: tooltip.y },
+                children: tooltip.text
+              }
+            )
+          ]
+        }
+      )
     }
-  ) });
+  );
 }
 
 // src/page/layout-history.tsx
 init_define_import_meta_env();
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, useQuery } from "@hermes/plugin-sdk";
-import { useState as useState6 } from "react";
+import { Button as Button2, Dialog as Dialog2, DialogContent as DialogContent2, DialogDescription, DialogFooter as DialogFooter2, DialogHeader as DialogHeader2, DialogTitle as DialogTitle2, useQuery } from "@hermes/plugin-sdk";
+import { useState as useState7 } from "react";
 
 // src/page/history-labels.ts
 init_define_import_meta_env();
@@ -12670,7 +13128,7 @@ function rearrangeText(viewLabel, project) {
 }
 
 // src/page/layout-history.tsx
-import { jsx as jsx15, jsxs as jsxs13 } from "react/jsx-runtime";
+import { jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
 var BACKUPS_KEPT = 10;
 function focusOn(testId) {
   return (event) => {
@@ -12687,14 +13145,14 @@ function RearrangeConfirm({
   onHistory
 }) {
   let { text, canConfirm } = rearrangeText(viewLabel, project);
-  return /* @__PURE__ */ jsx15(Dialog, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
-    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
-      /* @__PURE__ */ jsx15(DialogTitle, { children: project ? "Re-arrange this project?" : "Re-arrange this layout?" }),
-      /* @__PURE__ */ jsx15(DialogDescription, { children: /* @__PURE__ */ jsx15("span", { "data-testid": "session-tree-rearrange-text", children: text }) })
+  return /* @__PURE__ */ jsx16(Dialog2, { open, onOpenChange: (next) => !next && onClose(), children: /* @__PURE__ */ jsxs14(DialogContent2, { className: "max-w-md", "data-testid": "session-tree-rearrange-dialog", onOpenAutoFocus: focusOn("session-tree-rearrange-cancel"), children: [
+    /* @__PURE__ */ jsxs14(DialogHeader2, { children: [
+      /* @__PURE__ */ jsx16(DialogTitle2, { children: project ? "Re-arrange this project?" : "Re-arrange this layout?" }),
+      /* @__PURE__ */ jsx16(DialogDescription, { children: /* @__PURE__ */ jsx16("span", { "data-testid": "session-tree-rearrange-text", children: text }) })
     ] }),
-    /* @__PURE__ */ jsxs13(DialogFooter, { children: [
-      /* @__PURE__ */ jsx15(
-        Button,
+    /* @__PURE__ */ jsxs14(DialogFooter2, { children: [
+      /* @__PURE__ */ jsx16(
+        Button2,
         {
           type: "button",
           variant: "ghost",
@@ -12706,9 +13164,9 @@ function RearrangeConfirm({
           children: "Layout history…"
         }
       ),
-      /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", "data-testid": "session-tree-rearrange-cancel", onClick: onClose, children: "Cancel" }),
-      /* @__PURE__ */ jsx15(
-        Button,
+      /* @__PURE__ */ jsx16(Button2, { type: "button", variant: "ghost", "data-testid": "session-tree-rearrange-cancel", onClick: onClose, children: "Cancel" }),
+      /* @__PURE__ */ jsx16(
+        Button2,
         {
           type: "button",
           "data-testid": "session-tree-rearrange-confirm",
@@ -12734,7 +13192,7 @@ function LayoutHistoryDialog({
   onClose,
   onRestore
 }) {
-  let [restoring, setRestoring] = useState6(null), [error, setError] = useState6(null), list = useQuery({
+  let [restoring, setRestoring] = useState7(null), [error, setError] = useState7(null), list = useQuery({
     queryKey: ["session-tree", "backups", layout.profile, layout.style, revision],
     queryFn: async () => (await flush(), fetchBackups(ctx, layout.profile, layout.style)),
     retry: !1,
@@ -12756,16 +13214,16 @@ function LayoutHistoryDialog({
       }
     }
   }, backups = list.data?.backups ?? [];
-  return /* @__PURE__ */ jsx15(Dialog, { open: !0, onOpenChange: (open) => !open && !restoring && onClose(), children: /* @__PURE__ */ jsxs13(DialogContent, { className: "max-w-lg", "data-testid": "session-tree-history-dialog", onOpenAutoFocus: focusOn("session-tree-history-close"), children: [
-    /* @__PURE__ */ jsxs13(DialogHeader, { children: [
-      /* @__PURE__ */ jsx15(DialogTitle, { children: "Layout history" }),
-      /* @__PURE__ */ jsxs13(DialogDescription, { children: [
+  return /* @__PURE__ */ jsx16(Dialog2, { open: !0, onOpenChange: (open) => !open && !restoring && onClose(), children: /* @__PURE__ */ jsxs14(DialogContent2, { className: "max-w-lg", "data-testid": "session-tree-history-dialog", onOpenAutoFocus: focusOn("session-tree-history-close"), children: [
+    /* @__PURE__ */ jsxs14(DialogHeader2, { children: [
+      /* @__PURE__ */ jsx16(DialogTitle2, { children: "Layout history" }),
+      /* @__PURE__ */ jsxs14(DialogDescription, { children: [
         "Earlier arrangements of ",
         viewLabel,
         ", one list for every project scope. Each Re-arrange or restore keeps the arrangement it replaces (up to the last ",
         BACKUPS_KEPT,
         ", shared by your devices). Restoring replaces the current arrangement, which is kept here too.",
-        scopeLabel && /* @__PURE__ */ jsxs13("span", { "data-testid": "session-tree-history-scope-note", children: [
+        scopeLabel && /* @__PURE__ */ jsxs14("span", { "data-testid": "session-tree-history-scope-note", children: [
           " ",
           "Restoring replaces the whole layout, every project’s blocks, not only ",
           scopeLabel,
@@ -12773,13 +13231,13 @@ function LayoutHistoryDialog({
         ] })
       ] })
     ] }),
-    list.isPending && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-loading", children: "Loading…" }),
-    list.isError && !list.data && /* @__PURE__ */ jsxs13("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-error", children: [
+    list.isPending && /* @__PURE__ */ jsx16("div", { className: "st-hist-note", "data-testid": "session-tree-history-loading", children: "Loading…" }),
+    list.isError && !list.data && /* @__PURE__ */ jsxs14("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-error", children: [
       "Could not load the layout history: ",
       restErrorText(list.error)
     ] }),
-    list.data && backups.length === 0 && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-empty", children: "No earlier arrangements of this view yet. Re-arrange keeps the one it replaces here." }),
-    backups.length > 0 && /* @__PURE__ */ jsx15("ul", { className: "st-hist-list", "data-testid": "session-tree-history-list", children: backups.map((backup) => /* @__PURE__ */ jsxs13(
+    list.data && backups.length === 0 && /* @__PURE__ */ jsx16("div", { className: "st-hist-note", "data-testid": "session-tree-history-empty", children: "No earlier arrangements of this view yet. Re-arrange keeps the one it replaces here." }),
+    backups.length > 0 && /* @__PURE__ */ jsx16("ul", { className: "st-hist-list", "data-testid": "session-tree-history-list", children: backups.map((backup) => /* @__PURE__ */ jsxs14(
       "li",
       {
         className: "st-hist-row",
@@ -12789,19 +13247,19 @@ function LayoutHistoryDialog({
         "data-reason": backup.reason,
         "data-project": backup.project ?? void 0,
         children: [
-          /* @__PURE__ */ jsxs13("span", { className: "st-hist-when", children: [
-            /* @__PURE__ */ jsx15("b", { children: dateTimeLabel(backup.created_at) }),
-            /* @__PURE__ */ jsx15("span", { className: "st-hist-ago", children: agoLabel(backup.created_at, nowMs) })
+          /* @__PURE__ */ jsxs14("span", { className: "st-hist-when", children: [
+            /* @__PURE__ */ jsx16("b", { children: dateTimeLabel(backup.created_at) }),
+            /* @__PURE__ */ jsx16("span", { className: "st-hist-ago", children: agoLabel(backup.created_at, nowMs) })
           ] }),
-          /* @__PURE__ */ jsxs13("span", { className: "st-hist-what", "data-testid": "session-tree-history-what", children: [
+          /* @__PURE__ */ jsxs14("span", { className: "st-hist-what", "data-testid": "session-tree-history-what", children: [
             backup.count,
             " block",
             backup.count === 1 ? "" : "s",
             " · ",
             backupLabel(backup, projectLabel)
           ] }),
-          /* @__PURE__ */ jsx15(
-            Button,
+          /* @__PURE__ */ jsx16(
+            Button2,
             {
               type: "button",
               variant: "outline",
@@ -12818,42 +13276,42 @@ function LayoutHistoryDialog({
       },
       backup.id
     )) }),
-    list.data?.read_only && /* @__PURE__ */ jsx15("div", { className: "st-hist-note", "data-testid": "session-tree-history-read-only", children: "The history was written by a newer Session Tree: it reads as empty here." }),
-    error && /* @__PURE__ */ jsx15("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-restore-error", children: error }),
-    /* @__PURE__ */ jsx15(DialogFooter, { children: /* @__PURE__ */ jsx15(Button, { type: "button", variant: "ghost", disabled: !!restoring, "data-testid": "session-tree-history-close", onClick: onClose, children: "Close" }) })
+    list.data?.read_only && /* @__PURE__ */ jsx16("div", { className: "st-hist-note", "data-testid": "session-tree-history-read-only", children: "The history was written by a newer Session Tree: it reads as empty here." }),
+    error && /* @__PURE__ */ jsx16("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-history-restore-error", children: error }),
+    /* @__PURE__ */ jsx16(DialogFooter2, { children: /* @__PURE__ */ jsx16(Button2, { type: "button", variant: "ghost", disabled: !!restoring, "data-testid": "session-tree-history-close", onClick: onClose, children: "Close" }) })
   ] }) });
 }
 
 // src/page/session-actions.tsx
 init_define_import_meta_env();
 import {
-  Button as Button2,
+  Button as Button3,
   ConfirmDialog,
-  Dialog as Dialog2,
-  DialogContent as DialogContent2,
-  DialogFooter as DialogFooter2,
-  DialogHeader as DialogHeader2,
-  DialogTitle as DialogTitle2,
-  host as host2,
-  Input,
-  isSubmitEnter,
-  randomUuid
+  Dialog as Dialog3,
+  DialogContent as DialogContent3,
+  DialogFooter as DialogFooter3,
+  DialogHeader as DialogHeader3,
+  DialogTitle as DialogTitle3,
+  host as host3,
+  Input as Input2,
+  isSubmitEnter as isSubmitEnter2,
+  randomUuid as randomUuid2
 } from "@hermes/plugin-sdk";
-import { useEffect as useEffect6, useMemo as useMemo8, useRef as useRef5, useState as useState7 } from "react";
-import { Fragment as Fragment10, jsx as jsx16, jsxs as jsxs14 } from "react/jsx-runtime";
+import { useEffect as useEffect8, useMemo as useMemo9, useRef as useRef7, useState as useState8 } from "react";
+import { Fragment as Fragment10, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
 var errorText = (error) => restErrorText(error), rpcReason = (error) => error?.data?.reason;
 function useRowOverrides(serverRows) {
-  let [overrides, setOverrides] = useState7(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState7(serverRows);
+  let [overrides, setOverrides] = useState8(() => /* @__PURE__ */ new Map()), [settledFor, setSettledFor] = useState8(serverRows);
   return settledFor !== serverRows && (setSettledFor(serverRows), overrides.size > 0 && setOverrides(settleOverrides(serverRows, overrides))), [overrides, setOverrides];
 }
 function useSessionActionsController(options) {
-  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState7(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState7(), [deleting, setDeleting] = useState7(), [mutate] = useState7(() => createFencedMutation(randomUuid)), [branchFlights] = useState7(
-    () => createBranchFlights((method, params) => host2.request(method, params), randomUuid)
-  ), [branchCooldown] = useState7(() => createBranchCooldown(BRANCH_COOLDOWN_MS)), latest = useRef5({ options, labels, colors }), menuHost = useRef5(null), requestedMenuNode = useRef5(null), dialogFromMenu = useRef5(!1);
-  useEffect6(() => {
+  let labels = useMenuLabels(), { setOverrides } = options, [colors, setColors] = useState8(() => /* @__PURE__ */ new Map()), [renaming, setRenaming] = useState8(), [deleting, setDeleting] = useState8(), [mutate] = useState8(() => createFencedMutation(randomUuid2)), [branchFlights] = useState8(
+    () => createBranchFlights((method, params) => host3.request(method, params), randomUuid2)
+  ), [branchCooldown] = useState8(() => createBranchCooldown(BRANCH_COOLDOWN_MS)), latest = useRef7({ options, labels, colors }), menuHost = useRef7(null), requestedMenuNode = useRef7(null), dialogFromMenu = useRef7(!1);
+  useEffect8(() => {
     latest.current = { options, labels, colors };
   });
-  let actions = useMemo8(() => {
+  let actions = useMemo9(() => {
     let patch = (id2, override) => setOverrides((previous) => new Map(previous).set(id2, { ...previous.get(id2), ...override })), unpatch = (id2) => setOverrides((previous) => {
       if (!previous.has(id2))
         return previous;
@@ -12863,7 +13321,7 @@ function useSessionActionsController(options) {
       if (!isActionable(node))
         throw new Error("Not available on this block");
       return node.row;
-    }, notifyError = (error, fallback) => host2.notify({ kind: "error", title: fallback, message: errorText(error) });
+    }, notifyError = (error, fallback) => host3.notify({ kind: "error", title: fallback, message: errorText(error) });
     return {
       canAct: (node) => isActionable(node),
       statusOf: (node) => latest.current.options.statusOf(node),
@@ -12875,7 +13333,7 @@ function useSessionActionsController(options) {
       },
       togglePin(node) {
         let row = rowOf(node), pinned = !row.pinned;
-        host2.sessions.pin(row.id, pinned), patch(row.id, { pinned });
+        host3.sessions.pin(row.id, pinned), patch(row.id, { pinned });
       },
       async toggleUnread(node) {
         let row = rowOf(node), unread = !row.unread;
@@ -12892,10 +13350,10 @@ function useSessionActionsController(options) {
       },
       setColor(node, color2) {
         let row = rowOf(node);
-        host2.sessions.setColor(row.id, color2), setColors((previous) => new Map(previous).set(row.id, color2));
+        host3.sessions.setColor(row.id, color2), setColors((previous) => new Map(previous).set(row.id, color2));
       },
       copied() {
-        host2.notify({ kind: "success", message: "Session ID copied", durationMs: 2e3 });
+        host3.notify({ kind: "success", message: "Session ID copied", durationMs: 2e3 });
       },
       copyFailed(error) {
         notifyError(error, latest.current.labels.copyIdFailed);
@@ -12909,8 +13367,8 @@ function useSessionActionsController(options) {
           let child = result.stored_session_id;
           if (!child)
             throw new Error("The gateway returned no branch id");
-          result.session_id && result.session_id !== child && await host2.request("session.close", { session_id: result.session_id }).catch(() => {
-          }), branchCooldown.branched(child), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
+          result.session_id && result.session_id !== child && await host3.request("session.close", { session_id: result.session_id }).catch(() => {
+          }), branchCooldown.branched(child), latest.current.options.onBranched(child), latest.current.options.refreshSessions(), host3.notify({ kind: "success", message: `Branched “${node.title}”`, durationMs: 2e3 });
         } catch (error) {
           notifyError(error, "Could not branch session");
         }
@@ -12919,7 +13377,7 @@ function useSessionActionsController(options) {
         let row = rowOf(node);
         try {
           let bytes = decodeExportEnvelope(await fetchExport(latest.current.options.ctx, node.profile, row.id)), url = URL.createObjectURL(new Blob([bytes], { type: "application/json" })), anchor = document.createElement("a");
-          anchor.href = url, anchor.download = exportFilename(row.id, node.title), anchor.click(), latest.current.options.ctx.setTimeout(() => URL.revokeObjectURL(url), 1e3), host2.notify({ kind: "success", message: latest.current.labels.exported, durationMs: 2e3 });
+          anchor.href = url, anchor.download = exportFilename(row.id, node.title), anchor.click(), latest.current.options.ctx.setTimeout(() => URL.revokeObjectURL(url), 1e3), host3.notify({ kind: "success", message: latest.current.labels.exported, durationMs: 2e3 });
         } catch (error) {
           notifyError(error, latest.current.labels.exportFailed);
         }
@@ -12929,9 +13387,9 @@ function useSessionActionsController(options) {
         try {
           if (!cwd)
             throw new Error("That project has no folder");
-          await host2.request("session.workspace.move", { session_key: row.id, cwd, profile: node.profile }).catch((error) => {
+          await host3.request("session.workspace.move", { session_key: row.id, cwd, profile: node.profile }).catch((error) => {
             throw rpcReason(error) === "session_busy" ? new Error("The session is running; move it when it is idle") : error;
-          }), latest.current.options.onMoved(node.id), latest.current.options.refreshSessions(), latest.current.options.refreshProjects(), host2.notify({ kind: "success", message: latest.current.labels.movedTo(project.label), durationMs: 2e3 });
+          }), latest.current.options.onMoved(node.id), latest.current.options.refreshSessions(), latest.current.options.refreshProjects(), host3.notify({ kind: "success", message: latest.current.labels.movedTo(project.label), durationMs: 2e3 });
         } catch (error) {
           notifyError(error, latest.current.labels.moveFailed);
         }
@@ -12944,7 +13402,7 @@ function useSessionActionsController(options) {
             JSON.stringify(["archive", node.profile, row.id, archived]),
             () => fetchMutationSnapshot(latest.current.options.ctx, node.profile, row.id),
             (identity4) => postArchive(latest.current.options.ctx, node.profile, row.id, archived, identity4)
-          ), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: archived ? `Archived “${node.title}”` : `Unarchived “${node.title}”`, durationMs: 2e3 });
+          ), latest.current.options.refreshSessions(), host3.notify({ kind: "success", message: archived ? `Archived “${node.title}”` : `Unarchived “${node.title}”`, durationMs: 2e3 });
         } catch (error) {
           unpatch(row.id), notifyError(error, archived ? "Could not archive session" : "Could not unarchive session");
         }
@@ -12981,8 +13439,8 @@ function useSessionActionsController(options) {
       () => fetchMutationSnapshot(ctx, node.profile, row.id),
       (identity4) => postRename(ctx, node.profile, row.id, title, identity4)
     ))?.title;
-  }, dialogs = /* @__PURE__ */ jsxs14(Fragment10, { children: [
-    /* @__PURE__ */ jsx16(
+  }, dialogs = /* @__PURE__ */ jsxs15(Fragment10, { children: [
+    /* @__PURE__ */ jsx17(
       RenameDialog,
       {
         node: renaming,
@@ -12992,18 +13450,18 @@ function useSessionActionsController(options) {
           let row = node.row, route = renameRoute(row, latest.current.options.runtime, title), finalTitle = title;
           if (route.kind === "rpc")
             try {
-              finalTitle = (await host2.request("session.title", { session_id: route.runtimeId, title }))?.title ?? title;
+              finalTitle = (await host3.request("session.title", { session_id: route.runtimeId, title }))?.title ?? title;
             } catch {
               finalTitle = await backendRename(node, title) ?? title;
             }
           else
             finalTitle = await backendRename(node, title) ?? title;
-          setOverrides((previous) => new Map(previous).set(row.id, { ...previous.get(row.id), title: finalTitle || null })), latest.current.options.refreshSessions(), host2.notify({ kind: "success", message: labels.renamed, durationMs: 2e3 });
+          setOverrides((previous) => new Map(previous).set(row.id, { ...previous.get(row.id), title: finalTitle || null })), latest.current.options.refreshSessions(), host3.notify({ kind: "success", message: labels.renamed, durationMs: 2e3 });
         }
       },
       renaming?.id ?? "none"
     ),
-    /* @__PURE__ */ jsx16(
+    /* @__PURE__ */ jsx17(
       DeleteDialog,
       {
         node: deleting,
@@ -13035,7 +13493,7 @@ function RenameDialog({
   onClose,
   onSubmit
 }) {
-  let current = node?.row?.title ?? "", [value2, setValue] = useState7(current), [busy, setBusy] = useState7(!1), [error, setError] = useState7(null), submit = async () => {
+  let current = node?.row?.title ?? "", [value2, setValue] = useState8(current), [busy, setBusy] = useState8(!1), [error, setError] = useState8(null), submit = async () => {
     if (!node || busy)
       return;
     let next = value2.trim();
@@ -13047,15 +13505,15 @@ function RenameDialog({
     try {
       await onSubmit(node, next), onClose();
     } catch (err) {
-      setError(errorText(err)), host2.notify({ kind: "error", title: labels.renameFailed, message: errorText(err) });
+      setError(errorText(err)), host3.notify({ kind: "error", title: labels.renameFailed, message: errorText(err) });
     } finally {
       setBusy(!1);
     }
   };
-  return /* @__PURE__ */ jsx16(Dialog2, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs14(DialogContent2, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
-    /* @__PURE__ */ jsx16(DialogHeader2, { children: /* @__PURE__ */ jsx16(DialogTitle2, { children: labels.renameTitle }) }),
-    /* @__PURE__ */ jsx16(
-      Input,
+  return /* @__PURE__ */ jsx17(Dialog3, { open: !!node, onOpenChange: (open) => !open && !busy && onClose(), children: /* @__PURE__ */ jsxs15(DialogContent3, { className: "max-w-md", "data-testid": "session-tree-rename-dialog", "data-node-id": node?.id, children: [
+    /* @__PURE__ */ jsx17(DialogHeader3, { children: /* @__PURE__ */ jsx17(DialogTitle3, { children: labels.renameTitle }) }),
+    /* @__PURE__ */ jsx17(
+      Input2,
       {
         autoFocus: !0,
         "aria-label": labels.renameTitle,
@@ -13065,14 +13523,14 @@ function RenameDialog({
         value: value2,
         onChange: (event) => setValue(event.target.value),
         onKeyDown: (event) => {
-          isSubmitEnter(event) && (event.preventDefault(), submit());
+          isSubmitEnter2(event) && (event.preventDefault(), submit());
         }
       }
     ),
-    error && /* @__PURE__ */ jsx16("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
-    /* @__PURE__ */ jsxs14(DialogFooter2, { children: [
-      /* @__PURE__ */ jsx16(Button2, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
-      /* @__PURE__ */ jsx16(Button2, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
+    error && /* @__PURE__ */ jsx17("div", { className: "st-dialog-error", role: "alert", "data-testid": "session-tree-rename-error", children: error }),
+    /* @__PURE__ */ jsxs15(DialogFooter3, { children: [
+      /* @__PURE__ */ jsx17(Button3, { type: "button", variant: "ghost", disabled: busy, onClick: onClose, children: labels.cancel }),
+      /* @__PURE__ */ jsx17(Button3, { type: "button", disabled: busy, "data-testid": "session-tree-rename-save", onClick: () => {
         submit();
       }, children: labels.save })
     ] })
@@ -13088,12 +13546,12 @@ function DeleteDialog({
 }) {
   let note = branchNote(branches), description = node ? [labels.deleteDesc(node.title), note, blocked ?? ""].filter(Boolean).join(`
 `) : "";
-  return /* @__PURE__ */ jsx16(
+  return /* @__PURE__ */ jsx17(
     ConfirmDialog,
     {
       open: !!node,
       title: labels.deleteTitle,
-      description: /* @__PURE__ */ jsx16("span", { "data-testid": "session-tree-delete-text", children: description }),
+      description: /* @__PURE__ */ jsx17("span", { "data-testid": "session-tree-delete-text", children: description }),
       confirmLabel: labels.delete,
       busyLabel: labels.deleting,
       doneLabel: labels.deleted,
@@ -13107,7 +13565,7 @@ function DeleteDialog({
 
 // src/page/services.ts
 init_define_import_meta_env();
-import { host as host3 } from "@hermes/plugin-sdk";
+import { host as host4 } from "@hermes/plugin-sdk";
 import { useCallback as useCallback5, useSyncExternalStore as useSyncExternalStore3 } from "react";
 
 // src/settings/notes.ts
@@ -13126,7 +13584,7 @@ function createServices(ctx) {
     { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms) },
     {
       // LayoutSync calls this at most once per refusal kind per page lifetime, never per request.
-      onRefused: (error, kind) => host3.notify(
+      onRefused: (error, kind) => host4.notify(
         kind === NEWER_SCHEMA ? { kind: "warning", title: "Session Tree", message: READ_ONLY_MESSAGE } : { kind: "error", title: "Session Tree could not save the layout", message: restErrorText(error) }
       )
     }
@@ -13147,7 +13605,7 @@ function usePrefsVersion(prefs) {
 // src/page/toolbar.tsx
 init_define_import_meta_env();
 import { Codicon as Codicon10 } from "@hermes/plugin-sdk";
-import { useLayoutEffect as useLayoutEffect4, useRef as useRef6 } from "react";
+import { useLayoutEffect as useLayoutEffect4, useRef as useRef8 } from "react";
 
 // src/page/toolbar-layout.ts
 init_define_import_meta_env();
@@ -13174,8 +13632,8 @@ function cssScale(rectWidth, layoutWidth, cssZoom) {
 }
 
 // src/page/toolbar.tsx
-import { Fragment as Fragment11, jsx as jsx17, jsxs as jsxs15 } from "react/jsx-runtime";
-var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx17("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0;
+import { Fragment as Fragment11, jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
+var noFocus = (event) => event.preventDefault(), Label = ({ children: children2 }) => /* @__PURE__ */ jsx18("span", { className: "st-label", children: children2 }), REVEAL_PAD = 12, px = (value2) => Number.parseFloat(value2) || 0;
 function zoomOf(element) {
   let own = element.currentCSSZoom;
   if (typeof own == "number" && own > 0)
@@ -13240,7 +13698,7 @@ function ToolButton({
   children: children2,
   className
 }) {
-  return /* @__PURE__ */ jsx17(
+  return /* @__PURE__ */ jsx18(
     "button",
     {
       type: "button",
@@ -13257,7 +13715,7 @@ function ToolButton({
 }
 var ZOOM_STEP = 1.2;
 function Toolbar(props) {
-  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope), barRef = useRef6(null), stripRef = useRef6(null), contents = [
+  let { zoomTo, getZoom } = useReactFlow(), { zoom: zoom3 } = useViewport(), clamp2 = (value2) => Math.min(props.maxZoom, Math.max(props.minZoom, value2)), scoped = props.projects.filter((project) => project.sessionIds.length > 0 || project.id === props.scope), barRef = useRef8(null), stripRef = useRef8(null), contents = [
     scoped.map((project) => `${project.id}\0${project.label}`).join(""),
     props.profiles.join(""),
     props.styles.map((style2) => style2.label).join(""),
@@ -13285,12 +13743,12 @@ function Toolbar(props) {
     };
   }, [contents]), useLayoutEffect4(() => {
     stripRef.current && revealSelected(stripRef.current);
-  }, [props.scope]), /* @__PURE__ */ jsxs15("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
-    /* @__PURE__ */ jsxs15("span", { className: "st-brand", title: "Session tree", children: [
-      /* @__PURE__ */ jsx17(Codicon10, { name: "type-hierarchy", size: 14 }),
-      /* @__PURE__ */ jsx17(Label, { children: "Session tree" })
+  }, [props.scope]), /* @__PURE__ */ jsxs16("div", { className: "st-bar", "data-testid": "session-tree-toolbar", ref: barRef, children: [
+    /* @__PURE__ */ jsxs16("span", { className: "st-brand", title: "Session tree", children: [
+      /* @__PURE__ */ jsx18(Codicon10, { name: "type-hierarchy", size: 14 }),
+      /* @__PURE__ */ jsx18(Label, { children: "Session tree" })
     ] }),
-    /* @__PURE__ */ jsx17("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs15(
+    /* @__PURE__ */ jsx18("div", { className: "st-scope-slot", children: /* @__PURE__ */ jsxs16(
       "div",
       {
         className: "st-scope",
@@ -13304,7 +13762,7 @@ function Toolbar(props) {
         },
         onScroll: (event) => applyFade(event.currentTarget),
         children: [
-          /* @__PURE__ */ jsx17(
+          /* @__PURE__ */ jsx18(
             "button",
             {
               type: "button",
@@ -13318,7 +13776,7 @@ function Toolbar(props) {
               children: "All"
             }
           ),
-          scoped.map((project) => /* @__PURE__ */ jsxs15(
+          scoped.map((project) => /* @__PURE__ */ jsxs16(
             "button",
             {
               type: "button",
@@ -13330,7 +13788,7 @@ function Toolbar(props) {
               onMouseDown: noFocus,
               onClick: () => props.onScope(project.id),
               children: [
-                /* @__PURE__ */ jsx17(ProjectGlyph, { project, size: 11 }),
+                /* @__PURE__ */ jsx18(ProjectGlyph, { project, size: 11 }),
                 project.label
               ]
             },
@@ -13339,9 +13797,9 @@ function Toolbar(props) {
         ]
       }
     ) }),
-    /* @__PURE__ */ jsxs15("label", { className: "st-profile", title: "Profile", children: [
-      /* @__PURE__ */ jsx17(Codicon10, { name: "account", size: 12 }),
-      /* @__PURE__ */ jsxs15(
+    /* @__PURE__ */ jsxs16("label", { className: "st-profile", title: "Profile", children: [
+      /* @__PURE__ */ jsx18(Codicon10, { name: "account", size: 12 }),
+      /* @__PURE__ */ jsxs16(
         "select",
         {
           "data-testid": "session-tree-profile",
@@ -13354,20 +13812,20 @@ function Toolbar(props) {
             event.key === "Escape" && event.currentTarget.blur();
           },
           children: [
-            props.profiles.map((name) => /* @__PURE__ */ jsx17("option", { value: name, children: name }, name)),
-            /* @__PURE__ */ jsx17("option", { value: ALL_PROFILES, children: "All profiles" })
+            props.profiles.map((name) => /* @__PURE__ */ jsx18("option", { value: name, children: name }, name)),
+            /* @__PURE__ */ jsx18("option", { value: ALL_PROFILES, children: "All profiles" })
           ]
         }
       )
     ] }),
-    /* @__PURE__ */ jsxs15(
+    /* @__PURE__ */ jsxs16(
       "label",
       {
         className: "st-profile st-style",
         title: props.styleSource === "device" ? "View style (this device only — Settings → Plugins → Session Tree)" : "View style (synced to every device)",
         children: [
-          /* @__PURE__ */ jsx17(Codicon10, { name: "layout", size: 12 }),
-          /* @__PURE__ */ jsx17(
+          /* @__PURE__ */ jsx18(Codicon10, { name: "layout", size: 12 }),
+          /* @__PURE__ */ jsx18(
             "select",
             {
               "data-testid": "session-tree-style",
@@ -13380,15 +13838,15 @@ function Toolbar(props) {
               onKeyDown: (event) => {
                 event.key === "Escape" && event.currentTarget.blur();
               },
-              children: props.styles.map((style2) => /* @__PURE__ */ jsx17("option", { value: style2.id, children: style2.label }, style2.id))
+              children: props.styles.map((style2) => /* @__PURE__ */ jsx18("option", { value: style2.id, children: style2.label }, style2.id))
             }
           )
         ]
       }
     ),
-    /* @__PURE__ */ jsxs15("div", { className: "st-tools", children: [
-      /* @__PURE__ */ jsxs15("span", { className: "st-tool-group", children: [
-        /* @__PURE__ */ jsxs15(
+    /* @__PURE__ */ jsxs16("div", { className: "st-tools", children: [
+      /* @__PURE__ */ jsxs16("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsxs16(
           ToolButton,
           {
             testId: "session-tree-show-all",
@@ -13396,12 +13854,12 @@ function Toolbar(props) {
             pressed: props.showAll,
             onClick: () => props.onShowAll(!props.showAll),
             children: [
-              /* @__PURE__ */ jsx17(Codicon10, { name: "list-flat", size: 13 }),
-              /* @__PURE__ */ jsx17(Label, { children: "Show all" })
+              /* @__PURE__ */ jsx18(Codicon10, { name: "list-flat", size: 13 }),
+              /* @__PURE__ */ jsx18(Label, { children: "Show all" })
             ]
           }
         ),
-        /* @__PURE__ */ jsxs15(
+        /* @__PURE__ */ jsxs16(
           ToolButton,
           {
             testId: "session-tree-show-archived",
@@ -13409,17 +13867,17 @@ function Toolbar(props) {
             pressed: props.showArchived,
             onClick: () => props.onShowArchived(!props.showArchived),
             children: [
-              /* @__PURE__ */ jsx17(Codicon10, { name: "archive", size: 13 }),
-              /* @__PURE__ */ jsx17(Label, { children: "Archived" })
+              /* @__PURE__ */ jsx18(Codicon10, { name: "archive", size: 13 }),
+              /* @__PURE__ */ jsx18(Label, { children: "Archived" })
             ]
           }
         ),
-        props.canRearrange !== !1 && /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout; asks first, and opens Layout history)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx17(Codicon10, { name: "refresh", size: 13 }) })
+        props.canRearrange !== !1 && /* @__PURE__ */ jsx18(ToolButton, { testId: "session-tree-rearrange", title: "Re-arrange (reset this layout; asks first, and opens Layout history)", onClick: props.onRearrange, children: /* @__PURE__ */ jsx18(Codicon10, { name: "refresh", size: 13 }) })
       ] }),
-      /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsx18("span", { className: "st-sep" }),
       props.snapUnavailable ? (
         // R12 (Swimlanes): no dragging, so no snapping; the toggle stays visible, disabled, with why.
-        /* @__PURE__ */ jsx17("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs15(
+        /* @__PURE__ */ jsx18("span", { className: "st-tb-wrap", title: props.snapUnavailable, "data-testid": "session-tree-snap-wrap", children: /* @__PURE__ */ jsxs16(
           "button",
           {
             type: "button",
@@ -13431,12 +13889,12 @@ function Toolbar(props) {
             disabled: !0,
             onMouseDown: noFocus,
             children: [
-              /* @__PURE__ */ jsx17(Codicon10, { name: "symbol-numeric", size: 13 }),
-              /* @__PURE__ */ jsx17(Label, { children: "Snap" })
+              /* @__PURE__ */ jsx18(Codicon10, { name: "symbol-numeric", size: 13 }),
+              /* @__PURE__ */ jsx18(Label, { children: "Snap" })
             ]
           }
         ) })
-      ) : /* @__PURE__ */ jsxs15(
+      ) : /* @__PURE__ */ jsxs16(
         ToolButton,
         {
           testId: "session-tree-snap",
@@ -13444,40 +13902,40 @@ function Toolbar(props) {
           pressed: props.snap,
           onClick: () => props.onSnap(!props.snap),
           children: [
-            /* @__PURE__ */ jsx17(Codicon10, { name: "symbol-numeric", size: 13 }),
-            /* @__PURE__ */ jsx17(Label, { children: "Snap" })
+            /* @__PURE__ */ jsx18(Codicon10, { name: "symbol-numeric", size: 13 }),
+            /* @__PURE__ */ jsx18(Label, { children: "Snap" })
           ]
         }
       ),
-      /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
-      /* @__PURE__ */ jsxs15("span", { className: "st-tool-group", children: [
-        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
+      /* @__PURE__ */ jsx18("span", { className: "st-sep" }),
+      /* @__PURE__ */ jsxs16("span", { className: "st-tool-group", children: [
+        /* @__PURE__ */ jsx18(ToolButton, { testId: "session-tree-zoom-out", title: "Zoom out", onClick: () => {
           zoomTo(clamp2(getZoom() / ZOOM_STEP));
         }, children: "−" }),
-        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
+        /* @__PURE__ */ jsx18(ToolButton, { testId: "session-tree-zoom-level", title: "Reset to 100%", onClick: () => {
           zoomTo(1);
-        }, className: "st-zoom", children: /* @__PURE__ */ jsxs15("span", { "data-testid": "session-tree-zoom", children: [
+        }, className: "st-zoom", children: /* @__PURE__ */ jsxs16("span", { "data-testid": "session-tree-zoom", children: [
           Math.round(zoom3 * 100),
           "%"
         ] }) }),
-        /* @__PURE__ */ jsx17(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
+        /* @__PURE__ */ jsx18(ToolButton, { testId: "session-tree-zoom-in", title: "Zoom in", onClick: () => {
           zoomTo(clamp2(getZoom() * ZOOM_STEP));
         }, children: "+" }),
-        /* @__PURE__ */ jsxs15(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
-          /* @__PURE__ */ jsx17(Codicon10, { name: "screen-full", size: 13 }),
-          /* @__PURE__ */ jsx17(Label, { children: "Fit" })
+        /* @__PURE__ */ jsxs16(ToolButton, { testId: "session-tree-fit", title: "Fit to view", onClick: props.onFit, children: [
+          /* @__PURE__ */ jsx18(Codicon10, { name: "screen-full", size: 13 }),
+          /* @__PURE__ */ jsx18(Label, { children: "Fit" })
         ] })
       ] }),
-      props.hasPanel && /* @__PURE__ */ jsxs15(Fragment11, { children: [
-        /* @__PURE__ */ jsx17("span", { className: "st-sep" }),
-        /* @__PURE__ */ jsx17(
+      props.hasPanel && /* @__PURE__ */ jsxs16(Fragment11, { children: [
+        /* @__PURE__ */ jsx18("span", { className: "st-sep" }),
+        /* @__PURE__ */ jsx18(
           ToolButton,
           {
             testId: "session-tree-panel",
             title: props.panelOpen ? "Hide the side panel" : "Show the side panel",
             pressed: props.panelOpen,
             onClick: () => props.onPanel(!props.panelOpen),
-            children: /* @__PURE__ */ jsx17(Codicon10, { name: "layout-sidebar-right", size: 13 })
+            children: /* @__PURE__ */ jsx18(Codicon10, { name: "layout-sidebar-right", size: 13 })
           }
         )
       ] })
@@ -13487,13 +13945,13 @@ function Toolbar(props) {
 
 // src/page/use-live-refresh.ts
 init_define_import_meta_env();
-import { useEffect as useEffect7, useRef as useRef7 } from "react";
+import { useEffect as useEffect9, useRef as useRef9 } from "react";
 var POLL_MS2 = 1e4;
 function useLiveRefresh(ctx, refresh) {
-  let latest = useRef7(refresh);
-  useEffect7(() => {
+  let latest = useRef9(refresh);
+  useEffect9(() => {
     latest.current = refresh;
-  }), useEffect7(() => {
+  }), useEffect9(() => {
     let offSessions = ctx.onEvent("sessions.changed", () => latest.current.sessions()), offProjects = ctx.onEvent("projects.changed", () => {
       latest.current.projects(), latest.current.sessions();
     }), offPoll = ctx.setInterval(() => {
@@ -13506,16 +13964,16 @@ function useLiveRefresh(ctx, refresh) {
 }
 
 // src/page/session-tree-page.tsx
-import { Fragment as Fragment12, jsx as jsx18, jsxs as jsxs16 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx19, jsxs as jsxs17 } from "react/jsx-runtime";
 var BACKEND_OFF_MESSAGE = "Session Tree's backend is off: enable the session-tree plugin for this profile and restart the gateway.", OFFLINE_MESSAGE = "offline: showing last saved layout", REFRESH_FAILED_MESSAGE = "Couldn’t refresh — showing the last data", UNDO_TOAST_MS = 1e4, FIT_OPTIONS = { padding: 0.08, maxZoom: 1.25, duration: 0 }, EMPTY_LAYOUT = { positions: /* @__PURE__ */ new Map(), labels: [] }, NO_NEEDS_INPUT = /* @__PURE__ */ new Set();
 function SessionTreePage({ ctx, services }) {
-  return /* @__PURE__ */ jsx18(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx18(ReactFlowProvider, { children: /* @__PURE__ */ jsx18(PageBody, { ctx, services }) }) });
+  return /* @__PURE__ */ jsx19(PluginCtx.Provider, { value: ctx, children: /* @__PURE__ */ jsx19(ReactFlowProvider, { children: /* @__PURE__ */ jsx19(PageBody, { ctx, services }) }) });
 }
 function PageBody({ ctx, services: { sync, prefs } }) {
-  let activeProfile = useValue(host4.state.profile) || "default", syncVersion = useSyncVersion(sync);
+  let activeProfile = useValue(host5.state.profile) || "default", syncVersion = useSyncVersion(sync);
   usePrefsVersion(prefs);
-  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, scopeChoice = prefs.scope(profile), [selectionChoice, setSelection] = useState8(EMPTY_SELECTION), [fitRequest, setFitRequest] = useState8(0), [nowMs, setNowMs] = useState8(() => Date.now()), [toast, setToast] = useState8(), [confirmRearrange, setConfirmRearrange] = useState8(!1), [historyOpen, setHistoryOpen] = useState8(!1), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
-  useEffect8(() => sync.watch(profile), [sync, profile]);
+  let device = prefs.get(), profile = device.profile ?? activeProfile, showAll = device.showAll, showArchived = device.showArchived, scopeChoice = prefs.scope(profile), [selectionChoice, setSelection] = useState9(EMPTY_SELECTION), [fitRequest, setFitRequest] = useState9(0), [nowMs, setNowMs] = useState9(() => Date.now()), [toast, setToast] = useState9(), [confirmRearrange, setConfirmRearrange] = useState9(!1), [historyOpen, setHistoryOpen] = useState9(!1), settings = sync.settings(profile), style2 = getStyle(resolveStyleId(device.styleOverride, settings.style)), snap = settings.snap && style2.draggable, flow = useReactFlow(), flowStore = useStoreApi();
+  useEffect10(() => sync.watch(profile), [sync, profile]);
   let health = useQuery2({
     queryKey: ["session-tree", "health", activeProfile],
     queryFn: () => fetchHealth(ctx, activeProfile),
@@ -13534,7 +13992,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === profile ? previous : void 0,
     retry: !1,
     refetchOnWindowFocus: !1
-  }), profileNames = useMemo9(() => {
+  }), profileNames = useMemo10(() => {
     let names = new Set(profiles.data?.profiles ?? []);
     return names.add(activeProfile), profile !== ALL_PROFILES && names.add(profile), [...names].sort((a, b) => a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b));
   }, [profiles.data, activeProfile, profile]), projectProfiles = profile === ALL_PROFILES ? profileNames : [profile], projects = useQuery2({
@@ -13552,23 +14010,25 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     projects: () => {
       projects.refetch();
     }
-  }), useEffect8(() => ctx.setInterval(() => setNowMs(Date.now()), 6e4), [ctx]);
-  let projectList = useMemo9(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo9(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo9(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), model = useMemo9(
-    () => buildGraph(rows, projectList, { profile, showArchived, scope }),
-    [rows, projectList, profile, showArchived, scope]
-  ), spec = useMemo9(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo9(() => layoutRef(profile, style2.id), [profile, style2]), keys = useMemo9(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo9(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState8(createFrameCache), frameLayout = useMemo9(
+  }), useEffect10(() => ctx.setInterval(() => setNowMs(Date.now()), 6e4), [ctx]);
+  let projectList = useMemo10(() => projects.data ?? [], [projects.data]), scope = scopeChoice === ALL_PROJECTS || projectList.some((project) => project.id === scopeChoice) ? scopeChoice : ALL_PROJECTS, serverRows = useMemo10(() => sessions.data?.sessions ?? [], [sessions.data]), [overrides, setOverrides] = useRowOverrides(serverRows), rows = useMemo10(() => applyOverrides(serverRows, overrides), [serverRows, overrides]), keptKeys = useMemo10(() => [...sync.kept(profile)].sort().join(`
+`), [sync, profile, syncVersion]), kept = useMemo10(() => new Set(keptKeys ? keptKeys.split(`
+`) : []), [keptKeys]), model = useMemo10(
+    () => buildGraph(rows, projectList, { profile, showArchived, scope, kept }),
+    [rows, projectList, profile, showArchived, scope, kept]
+  ), spec = useMemo10(() => style2.layoutSpec({ showAll }), [style2, showAll]), ref = useMemo10(() => layoutRef(profile, style2.id), [profile, style2]), keys = useMemo10(() => layoutKeysOf(model), [model]), ready = !!sessions.data && !projects.isPending && sync.settled(profile), collapsedLanes = device.collapsedLanes, collapsed = useMemo10(() => new Set(collapsedLanes), [collapsedLanes]), [frameCache] = useState9(createFrameCache), frameLayout = useMemo10(
     () => ready && style2.frame ? frameCache.get({ frame: style2.frame, model, showAll, collapsed, nowMs }) : void 0,
     [ready, style2, model, showAll, collapsed, nowMs, frameCache]
-  ), layout = useMemo9(
+  ), layout = useMemo10(
     // Without projects (`projects.tree` failed) the groups are wrong: draw them, but save nothing.
     () => style2.frame ? frameLayout ?? EMPTY_LAYOUT : ready ? sync.place(ref, (previous) => style2.layout(model, previous, spec), { save: style2.savesLayout && !projects.isError, keys }) : EMPTY_LAYOUT,
     // `syncVersion` re-runs the merge after a drop, a Re-arrange or another window's change.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the store's change signal
     [ready, sync, ref, style2, model, keys, spec, syncVersion, projects.isError, frameLayout]
-  ), busy = useValue(host4.state.busy), busyBySession = useValue(host4.state.busyBySession), focusedSessionId = useValue(host4.state.focusedSessionId), focusedStoredSessionId = useValue(host4.state.focusedStoredSessionId), [needsInput, setNeedsInput] = useState8(NO_NEEDS_INPUT);
-  useEffect8(() => {
+  ), busy = useValue(host5.state.busy), busyBySession = useValue(host5.state.busyBySession), focusedSessionId = useValue(host5.state.focusedSessionId), focusedStoredSessionId = useValue(host5.state.focusedStoredSessionId), [needsInput, setNeedsInput] = useState9(NO_NEEDS_INPUT);
+  useEffect10(() => {
   }, [ctx]);
-  let hostStatus = useMemo9(
+  let hostStatus = useMemo10(
     () => ({
       busy: !!busy,
       busyBySession: busyBySession ?? {},
@@ -13577,15 +14037,15 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       needsInput
     }),
     [busy, busyBySession, focusedSessionId, focusedStoredSessionId, needsInput]
-  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), canvasIds = useMemo9(
+  ), statusOf = useCallback6((node) => node.row ? liveStatus(node.row, hostStatus) : void 0, [hostStatus]), canvasIds = useMemo10(
     () => frameLayout?.shown ?? new Set(laidOutFamilies(model, spec).flatMap((family) => family.nodeIds)),
     [frameLayout, model, spec]
-  ), selectable = useCallback6((id2) => canvasSelectable(model, canvasIds, id2), [model, canvasIds]), plainSelectable = useCallback6((id2) => model.nodeById.get(id2)?.readOnly === !1, [model]), selectionKey = `${profile}\0${scope}\0${style2.id}`, [selectionFor, setSelectionFor] = useState8(selectionKey);
+  ), selectable = useCallback6((id2) => canvasSelectable(model, canvasIds, id2), [model, canvasIds]), plainSelectable = useCallback6((id2) => model.nodeById.get(id2)?.readOnly === !1, [model]), selectionKey = `${profile}\0${scope}\0${style2.id}`, [selectionFor, setSelectionFor] = useState9(selectionKey);
   selectionFor !== selectionKey && (setSelectionFor(selectionKey), setSelection(EMPTY_SELECTION));
-  let selection2 = useMemo9(() => keepShown(selectionChoice, selectable, plainSelectable), [selectionChoice, selectable, plainSelectable]), selectedId = singleSelected(selection2), onSelection = useCallback6(
+  let selection2 = useMemo10(() => keepShown(selectionChoice, selectable, plainSelectable), [selectionChoice, selectable, plainSelectable]), selectedId = singleSelected(selection2), onSelection = useCallback6(
     (action) => setSelection((previous) => reduceSelection(keepShown(previous, selectable, plainSelectable), action, selectable, plainSelectable)),
     [selectable, plainSelectable, setSelection]
-  ), scopeIds = useMemo9(() => style2.frame ? void 0 : scopeFrameIds(model, spec, scope), [scope, style2, model, spec]), fit = useCallback6(() => {
+  ), scopeIds = useMemo10(() => style2.frame ? void 0 : scopeFrameIds(model, spec, scope), [scope, style2, model, spec]), fit = useCallback6(() => {
     if (frameLayout) {
       let { width, height } = flowStore.getState();
       width > 0 && height > 0 && flow.setViewport(frameLayout.fit(width, height, MIN_ZOOM), { duration: 0 });
@@ -13593,7 +14053,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     }
     flow.fitView({ ...FIT_OPTIONS, ...style2.fitPadding ? { padding: style2.fitPadding } : {}, nodes: scopeIds?.map((id2) => ({ id: id2 })) });
   }, [flow, flowStore, frameLayout, scopeIds, style2]);
-  useEffect8(() => {
+  useEffect10(() => {
     fitRequest > 0 && fit();
   }, [fitRequest]);
   let requestFit = useCallback6(() => setFitRequest((count) => count + 1), [setFitRequest]), showsMap = useCallback6(
@@ -13604,8 +14064,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       return viewOnArrival(viewport, ids, layout.positions, style2.nodeSize, { width, height }) !== "fit";
     },
     [flowStore, layout, model, spec, style2, scopeIds]
-  ), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef8(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef8(null), appliedScope = useRef8(scope);
-  useEffect8(() => {
+  ), vpKey = viewportKey(style2.id, profile, scope), vpKeyRef = useRef10(vpKey), canvasShown = ready && model.nodes.length > 0 && !(sessions.isError && !sessions.data), appliedKey = useRef10(null), appliedScope = useRef10(scope);
+  useEffect10(() => {
     if (vpKeyRef.current = vpKey, !canvasShown) {
       appliedKey.current = null;
       return;
@@ -13624,7 +14084,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     }
   }, [vpKey, canvasShown, prefs, flow, fit, scope, style2, showsMap]);
   let onViewport = useCallback6((viewport) => prefs.setViewport(vpKeyRef.current, viewport), [prefs]);
-  useEffect8(() => {
+  useEffect10(() => {
     let scopes2 = [ALL_PROJECTS, ...projectList.map((project) => project.id)], names = [...profileNames, ALL_PROFILES];
     prefs.forgetLegacyViewports(
       registeredStyles().flatMap((each) => names.flatMap((name) => scopes2.map((projectScope) => viewportKey(each.id, name, projectScope))))
@@ -13646,8 +14106,8 @@ function PageBody({ ctx, services: { sync, prefs } }) {
   ), onMove = useCallback6(
     (moves) => sync.drop(ref, new Map([...moves].map(([id2, point]) => [keys.toStore(id2), point]))),
     [sync, ref, keys]
-  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), modelRef = useRef8(model);
-  useEffect8(() => {
+  ), onDragging = useCallback6((ids) => sync.setDragging(ids), [sync]), dismissToast = useCallback6(() => setToast(void 0), [setToast]), modelRef = useRef10(model);
+  useEffect10(() => {
     modelRef.current = model;
   });
   let onRearrange = useCallback6(() => {
@@ -13679,7 +14139,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
         sync.restore(ref, undoPositions(previous, then, blockProjects(modelRef.current))), setToast(void 0), requestFit();
       }
     });
-  }, [sync, ref, style2, scope, model, spec, keys, requestFit, setToast]), rearrangeCount = useMemo9(
+  }, [sync, ref, style2, scope, model, spec, keys, requestFit, setToast]), rearrangeCount = useMemo10(
     () => confirmRearrange && style2.savesLayout && scope !== ALL_PROJECTS ? projectReset(model, scope, style2.layout(model, void 0, spec), sync.positions(ref), keys).blocks : 0,
     [confirmRearrange, style2, scope, model, spec, sync, ref, keys]
   ), onRestoreBackup = useCallback6(
@@ -13697,24 +14157,24 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     },
     [sync, ref, requestFit, setToast]
   ), flushSync = useCallback6(() => sync.flush(), [sync]);
-  useEffect8(
+  useEffect10(
     () => sync.onReplaceRefused(
       (refusal) => setToast(
         (current) => current?.action === refusal.action && current.layout === refKey(refusal.ref) && current.project === refusal.project ? void 0 : current
       )
     ),
     [sync, setToast]
-  ), useEffect8(() => {
+  ), useEffect10(() => {
     if (toast)
       return ctx.setTimeout(() => setToast((current) => current?.id === toast.id ? void 0 : current), UNDO_TOAST_MS);
   }, [ctx, toast]);
   let onOpen = useCallback6(
     (node) => {
-      !node.row || node.readOnly || host4.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
+      !node.row || node.readOnly || host5.openSession(node.row.id, { intent: "tab", ...node.profile !== activeProfile ? { profile: node.profile } : {} });
     },
     [activeProfile]
-  ), [pendingSelect, setPendingSelect] = useState8(null), [reveal, setReveal] = useState8(null);
-  pendingSelect && model.nodeById.get(pendingSelect)?.readOnly === !1 && layout.positions.has(pendingSelect) && (setPendingSelect(null), setSelection({ ids: [pendingSelect], primary: pendingSelect }), setReveal({ id: pendingSelect })), useEffect8(() => {
+  ), [pendingSelect, setPendingSelect] = useState9(null), [reveal, setReveal] = useState9(null);
+  pendingSelect && model.nodeById.get(pendingSelect.id)?.readOnly === !1 && layout.positions.has(pendingSelect.id) && (setPendingSelect(null), setSelection({ ids: [pendingSelect.id], primary: pendingSelect.id }), pendingSelect.reveal && setReveal({ id: pendingSelect.id })), useEffect10(() => {
     let point = reveal ? layout.positions.get(reveal.id) : void 0;
     if (point) {
       let { zoom: zoom3 } = flow.getViewport();
@@ -13733,10 +14193,33 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     refreshProjects: () => {
       projects.refetch();
     },
-    onBranched: (id2) => setPendingSelect(id2),
+    onBranched: (id2) => setPendingSelect({ id: id2, reveal: !0 }),
     onMoved: (id2) => sync.forget(profile, keys.toStore(id2)),
     onRemoved: (id2) => setSelection((current) => current.ids.includes(id2) ? reduceSelection(current, { type: "toggle", id: id2 }, () => !1) : current)
-  }), visibleCount = useMemo9(() => visibleRows(rows).length, [rows]), onCanvas = useMemo9(
+  }), createProfile = profile === ALL_PROFILES ? activeProfile : profile, [createDraft, setCreateDraft] = useState9(null), newSession = useMemo10(
+    () => ({
+      draft: createDraft,
+      open: (point, projectId) => setCreateDraft({ point, projectId, phase: "menu" }),
+      choose: () => setCreateDraft((current) => current && { ...current, phase: "dialog" }),
+      dismiss: () => setCreateDraft((current) => current?.phase === "menu" ? null : current)
+    }),
+    [createDraft]
+  ), onCreated = useCallback6(
+    (outcome, draft, title) => {
+      let id2 = outcome.sessionId;
+      style2.savesLayout && !style2.frame && sync.drop(ref, /* @__PURE__ */ new Map([[id2, spotFor(draft.point, style2.nodeSize, snap, style2.grid)]])), sync.keep(profile, createProfile, [id2]), sessions.refetch(), (scope === ALL_PROJECTS || draft.projectId === scope) && setPendingSelect({ id: id2, reveal: !!style2.frame }), host5.notify({ kind: "success", message: `Created “${title}”`, durationMs: 2e3 }), outcome.release === "failed" && host5.notify({ kind: "error", title: "Session Tree", message: `“${title}” was created, but its runtime could not be released; it ends when the gateway closes it.` });
+    },
+    [style2, sync, ref, snap, profile, createProfile, sessions, scope]
+  ), createDialog = useCreateSession({
+    ctx,
+    model,
+    rows: serverRows,
+    profile: createProfile,
+    framed: !!style2.frame,
+    draft: createDraft,
+    setDraft: setCreateDraft,
+    onCreated
+  }), visibleCount = useMemo10(() => visibleRows(rows, (row) => isKept(kept, row)).length, [rows, kept]), onCanvas = useMemo10(
     () => frameLayout ? frameLayout.shown.size : laidOutFamilies(model, spec).reduce((sum, family) => sum + family.nodeIds.length, 0),
     [model, spec, frameLayout]
   ), onToggleLane = useCallback6((key) => prefs.toggleLane(key), [prefs]), Panel2 = style2.Panel, panelOpen = prefs.panelOpen(style2.id, style2.panelDefaultOpen ?? !0), onPanel = useCallback6((open) => prefs.setPanelOpen(style2.id, open), [prefs, style2]), sectionOpen = useCallback6((section) => prefs.sectionOpen(style2.id, section), [prefs, style2]), onSection = useCallback6((section, open) => prefs.setSectionOpen(style2.id, section, open), [prefs, style2]), profileSuffix = profile === ALL_PROFILES ? " · All profiles" : profile !== activeProfile ? ` · ${profile}` : "", scopeProjectLabel = scope === ALL_PROJECTS ? void 0 : projectList.find((project) => project.id === scope)?.label ?? scope, viewLabel = `${style2.label} · ${scopeProjectLabel ?? "All projects"}${profileSuffix}`, historyLabel = `${style2.label}${profileSuffix}`, projectLabel = useCallback6((id2) => projectList.find((project) => project.id === id2)?.label, [projectList]), offline = sync.offline(profile), refreshFailed = !!(sessions.isError && sessions.data || projects.isError && projects.data), onStyle = useCallback6(
@@ -13746,21 +14229,21 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     [prefs, sync, profile]
   );
   if (health.isError)
-    return /* @__PURE__ */ jsx18("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx18(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
+    return /* @__PURE__ */ jsx19("div", { className: "session-tree", "data-testid": "session-tree-page", "data-profile": activeProfile, children: /* @__PURE__ */ jsx19("div", { className: "session-tree__state", "data-testid": "session-tree-backend-off", children: /* @__PURE__ */ jsx19(EmptyState, { title: BACKEND_OFF_MESSAGE }) }) });
   let body, sessionsFailed = sessions.isError && !sessions.data, projectsFailed = projects.isError && !projects.data;
   if (sessionsFailed || projectsFailed) {
     let failed = sessionsFailed ? sessions : projects;
-    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessionsFailed ? "sessions" : "projects", children: /* @__PURE__ */ jsx18(ErrorState, { title: sessionsFailed ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx18(Button3, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
+    body = /* @__PURE__ */ jsx19("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": sessionsFailed ? "sessions" : "projects", children: /* @__PURE__ */ jsx19(ErrorState, { title: sessionsFailed ? "Could not load sessions" : "Could not load projects", description: errorText2(failed.error), children: /* @__PURE__ */ jsx19(Button4, { variant: "outline", "data-testid": "session-tree-retry", disabled: failed.isFetching, onClick: () => {
       failed.refetch();
     }, children: failed.isFetching ? "Retrying…" : "Retry" }) }) });
   } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile))
-    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx18(EmptyState, { title: "Loading sessions…" }) });
+    body = /* @__PURE__ */ jsx19("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx19(EmptyState, { title: "Loading sessions…" }) });
   else if (model.nodes.length === 0)
-    body = /* @__PURE__ */ jsx18("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx18(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
+    body = /* @__PURE__ */ jsx19("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx19(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
   else {
     let saved = prefs.viewport(vpKey);
-    body = /* @__PURE__ */ jsxs16(Fragment12, { children: [
-      /* @__PURE__ */ jsx18(
+    body = /* @__PURE__ */ jsxs17(Fragment12, { children: [
+      /* @__PURE__ */ jsx19(
         GraphCanvas,
         {
           style: style2,
@@ -13783,13 +14266,14 @@ function PageBody({ ctx, services: { sync, prefs } }) {
           frameLayout,
           onToggleLane,
           panelOpen,
-          onPanel
+          onPanel,
+          newSession
         }
       ),
-      onCanvas === 0 && /* @__PURE__ */ jsx18("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : style2.singles === "depot" ? "No branched sessions here — the sessions without branches are in the depot below." : "No branched sessions here — the sessions without branches are listed on the right." })
+      onCanvas === 0 && /* @__PURE__ */ jsx19("div", { className: "session-tree__hint", "data-testid": "session-tree-no-branches", children: style2.singles === "lane-chip" ? "No branched sessions here — the sessions without branches are in each lane's “no branches” chip." : style2.singles === "depot" ? "No branched sessions here — the sessions without branches are in the depot below." : "No branched sessions here — the sessions without branches are listed on the right." })
     ] });
   }
-  return /* @__PURE__ */ jsx18(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs16(
+  return /* @__PURE__ */ jsx19(SessionActionsCtx.Provider, { value: actions, children: /* @__PURE__ */ jsxs17(
     "div",
     {
       className: "session-tree",
@@ -13806,7 +14290,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
       "data-refresh-failed": refreshFailed ? "true" : void 0,
       title: projects.isError ? `projects.tree: ${errorText2(projects.error)}` : void 0,
       children: [
-        /* @__PURE__ */ jsx18(
+        /* @__PURE__ */ jsx19(
           Toolbar,
           {
             projects: projectList,
@@ -13841,14 +14325,14 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             onPanel: (open) => prefs.setPanelOpen(style2.id, open)
           }
         ),
-        offline && /* @__PURE__ */ jsx18("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
-        sync.storeReadOnly && /* @__PURE__ */ jsx18("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
-        /* @__PURE__ */ jsxs16("div", { className: "session-tree__main", children: [
-          /* @__PURE__ */ jsxs16("div", { className: "session-tree__stage", children: [
+        offline && /* @__PURE__ */ jsx19("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-offline", children: OFFLINE_MESSAGE }),
+        sync.storeReadOnly && /* @__PURE__ */ jsx19("div", { className: "session-tree__banner", role: "status", "data-testid": "session-tree-read-only", children: READ_ONLY_MESSAGE }),
+        /* @__PURE__ */ jsxs17("div", { className: "session-tree__main", children: [
+          /* @__PURE__ */ jsxs17("div", { className: "session-tree__stage", children: [
             body,
-            refreshFailed && /* @__PURE__ */ jsx18("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
+            refreshFailed && /* @__PURE__ */ jsx19("div", { className: "session-tree__note", role: "status", "data-testid": "session-tree-refresh-failed", children: REFRESH_FAILED_MESSAGE })
           ] }),
-          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx18(
+          Panel2 && panelOpen && sessions.data && /* @__PURE__ */ jsx19(
             Panel2,
             {
               model,
@@ -13863,14 +14347,15 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             }
           )
         ] }),
-        toast && /* @__PURE__ */ jsxs16("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
-          /* @__PURE__ */ jsx18("span", { children: toast.message }),
-          /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
-          toast.history && style2.savesLayout && /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-toast-history", onClick: () => setHistoryOpen(!0), children: "Layout history" }),
-          /* @__PURE__ */ jsx18("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
+        toast && /* @__PURE__ */ jsxs17("div", { className: "session-tree__toast", role: "status", "data-testid": "session-tree-toast", children: [
+          /* @__PURE__ */ jsx19("span", { children: toast.message }),
+          /* @__PURE__ */ jsx19("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-undo", onClick: toast.undo, children: "Undo" }),
+          toast.history && style2.savesLayout && /* @__PURE__ */ jsx19("button", { type: "button", className: "st-toast-btn", "data-testid": "session-tree-toast-history", onClick: () => setHistoryOpen(!0), children: "Layout history" }),
+          /* @__PURE__ */ jsx19("button", { type: "button", className: "st-toast-btn", "aria-label": "Dismiss", onClick: dismissToast, children: "×" })
         ] }),
         dialogs,
-        /* @__PURE__ */ jsx18(
+        createDialog,
+        /* @__PURE__ */ jsx19(
           RearrangeConfirm,
           {
             open: confirmRearrange && style2.savesLayout,
@@ -13881,7 +14366,7 @@ function PageBody({ ctx, services: { sync, prefs } }) {
             onHistory: () => setHistoryOpen(!0)
           }
         ),
-        historyOpen && style2.savesLayout && /* @__PURE__ */ jsx18(
+        historyOpen && style2.savesLayout && /* @__PURE__ */ jsx19(
           LayoutHistoryDialog,
           {
             ctx,
@@ -13907,31 +14392,31 @@ function errorText2(error) {
 
 // src/settings/settings-page.tsx
 init_define_import_meta_env();
-import { host as host5, ListRow, SegmentedControl, ToggleRow, useValue as useValue2 } from "@hermes/plugin-sdk";
-import { useEffect as useEffect9 } from "react";
-import { jsx as jsx19, jsxs as jsxs17 } from "react/jsx-runtime";
+import { host as host6, ListRow, SegmentedControl, ToggleRow, useValue as useValue2 } from "@hermes/plugin-sdk";
+import { useEffect as useEffect11 } from "react";
+import { jsx as jsx20, jsxs as jsxs18 } from "react/jsx-runtime";
 var USE_SYNCED = "synced";
 function SettingsPage({ services: { sync, prefs } }) {
-  let profile = useValue2(host5.state.profile) || "default";
-  useSyncVersion(sync), usePrefsVersion(prefs), useEffect9(() => sync.watch(profile), [sync, profile]);
+  let profile = useValue2(host6.state.profile) || "default";
+  useSyncVersion(sync), usePrefsVersion(prefs), useEffect11(() => sync.watch(profile), [sync, profile]);
   let styles = registeredStyles().map((style2) => ({ id: style2.id, label: style2.label })), settings = sync.settings(profile), synced = isRegisteredStyle(settings.style) ? settings.style : DEFAULT_STYLE_ID, override = prefs.get().styleOverride, device = isRegisteredStyle(override) ? override : USE_SYNCED, offline = sync.offline(profile);
-  return /* @__PURE__ */ jsxs17("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
-    /* @__PURE__ */ jsx19(
+  return /* @__PURE__ */ jsxs18("div", { className: "session-tree__settings", "data-testid": "session-tree-settings", "data-sync": sync.status(profile), children: [
+    /* @__PURE__ */ jsx20(
       ListRow,
       {
         id: "session-tree-view-style",
         title: "View style",
         description: "How the session graph is drawn, on every device that uses this Hermes.",
-        action: /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx19(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
+        action: /* @__PURE__ */ jsx20("div", { "data-testid": "session-tree-settings-style", "data-value": synced, children: /* @__PURE__ */ jsx20(SegmentedControl, { options: styles, value: synced, onChange: (id2) => sync.setSettings(profile, { style: id2 }) }) })
       }
     ),
-    /* @__PURE__ */ jsx19(
+    /* @__PURE__ */ jsx20(
       ListRow,
       {
         id: "session-tree-device-style",
         title: "On this device",
         description: "Use the synced style here, or pick one for this device only.",
-        action: /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx19(
+        action: /* @__PURE__ */ jsx20("div", { "data-testid": "session-tree-settings-device", "data-value": device, children: /* @__PURE__ */ jsx20(
           SegmentedControl,
           {
             options: [{ id: USE_SYNCED, label: "Use synced style" }, ...styles],
@@ -13941,7 +14426,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         ) })
       }
     ),
-    /* @__PURE__ */ jsx19("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx19(
+    /* @__PURE__ */ jsx20("div", { "data-testid": "session-tree-settings-snap", "data-value": settings.snap ? "on" : "off", children: /* @__PURE__ */ jsx20(
       ToggleRow,
       {
         id: "session-tree-snap-default",
@@ -13951,7 +14436,7 @@ function SettingsPage({ services: { sync, prefs } }) {
         onChange: (on) => sync.setSettings(profile, { snap: on })
       }
     ) }),
-    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx19("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
+    settingsNotes({ offline, readOnly: sync.storeReadOnly }).map((note) => /* @__PURE__ */ jsx20("p", { className: "session-tree__settings-note", "data-testid": `session-tree-settings-${note.id}`, children: note.text }, note.id))
   ] });
 }
 
@@ -14558,6 +15043,76 @@ g.is-dimmed {
   background: color-mix(in srgb, var(--ui-red) 10%, transparent);
   color: var(--ui-red);
   font-size: 12px;
+}
+
+/* --- card 11: a new session from a right-click on the canvas ---------------------------- */
+
+.st-new-session-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.st-new-session-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* The ghost block: where the new session goes, faint, in its project's colour. */
+.session-tree__ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--st-pc);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--st-pc) 14%, transparent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.st-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+}
+
+.st-create-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-left: 3px solid var(--st-pc);
+  border-radius: 6px;
+  background: var(--ui-bg-elevated);
+}
+
+.st-create-project select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 13px;
+  outline: 0;
+}
+
+.st-create-project option {
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-primary);
+}
+
+.st-create-note {
+  color: var(--ui-text-tertiary);
+  font-size: 11.5px;
 }
 
 .session-tree__canvas:focus {
@@ -16571,7 +17126,7 @@ var subway_default = `/* --- Subway map (card 7; mockup variants/subway-map/) --
 `;
 
 // src/plugin.tsx
-import { jsx as jsx20 } from "react/jsx-runtime";
+import { jsx as jsx21 } from "react/jsx-runtime";
 var PLUGIN_ID = "session-tree", ROUTE_PATH = "/session-tree";
 function injectStyles(ctx) {
   let style2 = document.createElement("style");
@@ -16591,7 +17146,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: ROUTE_PATH },
-        render: () => /* @__PURE__ */ jsx20(SessionTreePage, { ctx, services })
+        render: () => /* @__PURE__ */ jsx21(SessionTreePage, { ctx, services })
       },
       {
         id: "nav",
@@ -16605,14 +17160,14 @@ var plugin = {
           id: "session-tree.open",
           label: "Open Session Tree",
           keywords: ["session", "tree", "graph", "branches"],
-          run: () => host6.navigate(ROUTE_PATH)
+          run: () => host7.navigate(ROUTE_PATH)
         }
       }
     ]), ctx.registerSettingsPage?.({
       id: "settings",
       title: "Session Tree",
       icon: "type-hierarchy",
-      render: () => /* @__PURE__ */ jsx20(SettingsPage, { services })
+      render: () => /* @__PURE__ */ jsx21(SettingsPage, { services })
     });
   }
 }, plugin_default = plugin;

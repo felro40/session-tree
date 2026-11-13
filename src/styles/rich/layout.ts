@@ -123,6 +123,37 @@ export function freshRichLayout(model: GraphModel, spec: LayoutSpec): LayoutResu
   return { positions, labels }
 }
 
+/** One group's segment of the Rich shelves (a half-open box: `x ≤ cx < right`, `y ≤ cy < bottom`). */
+export interface ShelfSegment {
+  /** The group (`group:<project>`). */
+  key: string
+  x: number
+  y: number
+  right: number
+  bottom: number
+}
+
+/**
+ * The shelves partition the canvas into group segments (card 7, card-6 review r1 N1): a label's
+ * segment runs from it to the next label on its shelf row (or on to the right) and down to the
+ * next shelf row (or on down); a continuation label starts another segment of its group. The
+ * first segment of a shelf row also owns the room left of it; above every label is nobody's.
+ * Fresh objects (the merge narrows them as it adds continuation labels). Shared by the merge
+ * and card 11's `projectAt`.
+ */
+export function shelfSegments(entries: Iterable<readonly [string, Point]>): ShelfSegment[] {
+  const shelfLabels = [...entries].filter(([id]) => id.startsWith(GROUP_PREFIX)).map(([id, point]) => ({ key: labelGroup(id), x: point.x, y: point.y }))
+  const sameRow = (a: { y: number }, b: { y: number }) => Math.abs(a.y - b.y) < 1
+
+  return shelfLabels.map(label => ({
+    key: label.key,
+    x: shelfLabels.some(other => sameRow(other, label) && other.x < label.x) ? label.x : -Infinity,
+    y: label.y,
+    right: Math.min(Infinity, ...shelfLabels.filter(other => sameRow(other, label) && other.x > label.x).map(other => other.x)),
+    bottom: Math.min(Infinity, ...shelfLabels.filter(other => other.y > label.y + 1).map(other => other.y))
+  }))
+}
+
 /** Rectangles in buckets, for overlap queries in near-constant time (the 500-session fixture). */
 class RectIndex {
   private readonly buckets = new Map<string, Rect[]>()
@@ -188,22 +219,11 @@ export function mergeRichLayout(previous: ReadonlyMap<string, Point>, model: Gra
   }
 
   /**
-   * Card 7 (card-6 review r1 N1): the search stays inside its group. The shelves partition the
-   * canvas into group segments: a label's segment runs from it to the next label on its shelf
-   * row (or on to the right) and down to the next shelf row (or on down); a continuation label
-   * starts another segment of its group. A new card's centre may not lie in another group's
-   * segment (left of or above every label is nobody's). Nothing placed moves.
+   * Card 7 (card-6 review r1 N1): the search stays inside its group (`shelfSegments`). A new
+   * card's centre may not lie in another group's segment (left of or above every label is
+   * nobody's). Nothing placed moves.
    */
-  const shelfLabels = [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).map(([id, point]) => ({ key: labelGroup(id), x: point.x, y: point.y }))
-  const sameRow = (a: { y: number }, b: { y: number }) => Math.abs(a.y - b.y) < 1
-  // The first segment of a shelf row also owns the room left of it.
-  const segments = shelfLabels.map(label => ({
-    key: label.key,
-    x: shelfLabels.some(other => sameRow(other, label) && other.x < label.x) ? label.x : -Infinity,
-    y: label.y,
-    right: Math.min(Infinity, ...shelfLabels.filter(other => sameRow(other, label) && other.x > label.x).map(other => other.x)),
-    bottom: Math.min(Infinity, ...shelfLabels.filter(other => other.y > label.y + 1).map(other => other.y))
-  }))
+  const segments = shelfSegments(positions)
 
   const inOtherGroup = (point: Point, key: string) => {
     const cx = point.x + spec.nodeWidth / 2
