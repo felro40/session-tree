@@ -11,7 +11,7 @@ import { browserOffsetAt } from '../../page/frame-cache.ts'
 import { GroupLabel, projectColor } from '../shared.tsx'
 import type { FrameLayout, StyleDefinition, StyleFrame } from '../types.ts'
 import { SwimOver, SwimUnder } from './layers.tsx'
-import { fitSwimlanes, layoutSwimlanes } from './layout.ts'
+import { fitSwimlanes, layoutSwimlanes, swimAreas } from './layout.ts'
 import type { SwimFrameLayout } from './layout.ts'
 import { NO_DRAG_TIP, SWIM_GRID, SWIM_HEIGHT, SWIM_RESET_X, SWIM_WIDTH, swimLayoutSpec, swimPorts } from './spec.ts'
 import { CHIP_PREFIX, SwimBlock, SwimChip, SwimLink, SwimStandin } from './swim-flow.tsx'
@@ -47,7 +47,8 @@ export const swimFrame: StyleFrame = {
   },
 
   Under: SwimUnder,
-  Over: SwimOver
+  Over: SwimOver,
+  lanes: frameLayout => swimAreas(frameLayout as SwimFrameLayout)
 }
 
 export const swimlanesStyle: StyleDefinition = {

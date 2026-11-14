@@ -181,6 +181,26 @@ its spot, and every compaction leaves exactly one entry.
   server cannot tell that they came from a backup of the same style; the page checks it
   (`layout-history.tsx`), and a mismatched `PUT` is no worse than any other `PUT`. A separate
   file, so `state.json` keeps its schema and an older Session Tree reads it as before.
+- **Kept on the canvas (`kept.json`, card 11, its own schema 1):** `{"schema": 1, "kept":
+  {<owner profile>: {<session id>: {"created_at": <server time>}}}}`. The sessions made from a
+  canvas right-click, which stay on the canvas in every style even with Show all off, in every
+  window and device of the gateway (D3). Keyed like positions (B2): by the profile that owns the
+  session (never `*`: a marker shows in that profile's view and in All profiles) and the session's
+  compression lineage root id, so a compaction keeps it. Checked as strictly as `state.json` (the
+  exact keys, profile names, session ids `[A-Za-z0-9][A-Za-z0-9._:-]{0,199}`, finite stamps); caps:
+  100 ids per request, 5000 per profile, 64 profiles, 4 MiB. Written under the store's locks,
+  atomically (temp file, fsync, `os.replace`), **before** `state.json`, whose only change is its
+  `rev` (so the existing push and poll carry the change): **`state.json` keeps the schema-1 shape
+  byte for byte**, and a Session Tree that predates the file never reads it (pytest runs the base
+  commit's `layout_store.py` on a copy after marker writes: it loads `state.json` unchanged and
+  moves nothing aside). A corrupt `kept.json` is moved to `kept.json.corrupt-<time>-<random>.bak`
+  (it reads as empty); a newer-schema one reads as empty and a keep answers 409 `kept_newer: …`.
+  **Prune:** `GET /state` drops the markers of sessions that no longer exist (deleted, or removed
+  by Settings' "Delete empty sessions", D6) and moves one keyed by a lineage member to the root's
+  key, in the same pass and with the same existence check as the positions (for the view's own
+  profile, or every owner in All profiles); nothing when a profile's store cannot be read, or while
+  `state.json` or `kept.json` is read-only. A marker lives until its session is gone (A7: no
+  "send back to the singles list").
 
 ## Endpoints (`dashboard/plugin_api.py`)
 
@@ -199,6 +219,7 @@ Every write answers `epoch` too.
 | `GET /state/backups?style=[&scope=]` | Layout history of one style (one list whatever the scope; an older page's `scope` is ignored), newest first → `{ok, backups: [{id, created_at, reason, project, count}], read_only}`. |
 | `GET /state/backups/{id}` | One backup of the profile → `{ok, id, style, scope, project, created_at, reason, positions: [{id, x, y}]}` (404 for another profile's or an unknown id; 400 for a malformed id). |
 | `POST /state/forget` `{ids}` | A session moved to another project: its blocks leave every layout of the profile (so each layout places it anew in its new band). |
+| `POST /state/kept` `{ids}` | Card 11: keep these sessions of `session_profile` (a named profile, not `*`: 400) on the canvas → `{ok, epoch, rev, changed, added}`. Each id must be a stored session of that profile (404 otherwise); 1–100 ids (400 / 413), extra body keys a 422. Already kept: `changed: false`, no new revision, no push. Pushed as `kind: "kept"` with `profile: "*"` (every view that shows the owner). `GET /state` then answers `kept: {<owner>: [ids]}` (absent when there is none). |
 
 None of them touches `state.db`.
 
@@ -287,6 +308,16 @@ None of them touches `state.db`.
   (synced), On this device (Use synced style, or a style) and Snap grid default (synced; the
   toolbar's Snap toggle is the same setting). A style with `savesLayout: false` (Swimlanes, card 5)
   saves nothing.
+- **Kept on the canvas (card 11):** `LayoutSync.keep(view, owner, ids)` queues a `keep` op (shown
+  at once: `kept(view)` is the snapshot's `kept` plus this window's unsent keeps), sent as
+  `POST /state/kept?session_profile=<owner>`; the snapshot of the view gets the ids on the answer.
+  An older build that adopts a slot holding a `keep` op drops it (its op check knows no such
+  kind). The page builds the graph with the kept set (`buildGraph(…, {kept})`): a kept row with no
+  messages becomes a block (`isHiddenRow` hides every other empty row), and a kept single is laid
+  out with Show all off (`laidOutFamilies`, the Swimlanes axis) and is in no singles container
+  (`model.singles`). Order of a create: the row exists and the runtime is released, then the spot
+  is dropped for the style on screen (`drop`, its layout key = the new id), then the marker is
+  kept, then the rows are refetched; the other styles place the block with their auto-layout.
 
 ## The test-only style
 

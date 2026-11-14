@@ -23,7 +23,7 @@ import {
 import { NO_PROJECT_ID, projectIndex } from './projects.ts'
 import type { LayoutKeys } from './layout-sync.ts'
 import type { ProjectInfo } from './projects.ts'
-import { compactedCount, displayTitle, isHiddenRow } from './sessions.ts'
+import { compactedCount, displayTitle, isHiddenRow, keptKey, lineageRootOf } from './sessions.ts'
 import type { SessionRow } from './sessions.ts'
 
 export const ALL_PROJECTS = 'all'
@@ -35,6 +35,12 @@ export interface GraphOptions {
   showArchived: boolean
   /** `all`, or a project id from `projects.tree`. */
   scope: string
+  /**
+   * Card 11: the sessions kept on the canvas (`keptKey(profile, lineage root)`): a kept row with
+   * no messages still becomes a block, and a kept single stays on the canvas with Show all off
+   * (it leaves the style's singles container).
+   */
+  kept?: ReadonlySet<string>
 }
 
 export type NodeKind = 'session' | 'standin'
@@ -69,6 +75,8 @@ export interface GraphNode {
   readOnly: boolean
   familyId: string
   single: boolean
+  /** Card 11: kept on the canvas (made from a canvas right-click). */
+  kept: boolean
   /** Stand-in only: the id the children name. */
   missingId?: string
 }
@@ -90,6 +98,8 @@ export interface Family {
   /** At least one session member is in scope. */
   inScope: boolean
   lastActive: number
+  /** Card 11: a member is kept on the canvas: on the canvas with Show all off too. */
+  kept?: boolean
 }
 
 export interface GraphModel {
@@ -106,7 +116,7 @@ export interface GraphModel {
   continuedAs: Map<string, string[]>
   continuedFrom: Map<string, string>
   projects: ProjectInfo[]
-  /** Single nodes (no relations), most recent first. */
+  /** Single nodes (no relations), most recent first; not the kept ones (card 11: on the canvas). */
   singles: GraphNode[]
 }
 
@@ -119,11 +129,18 @@ const byCreated = (model: { nodeById: Map<string, GraphNode> }) => (a: string, b
   return (na?.createdAt ?? 0) - (nb?.createdAt ?? 0) || a.localeCompare(b)
 }
 
+/** Card 11: whether `row` is kept on the canvas (`kept` holds `keptKey(profile, lineage root)`). */
+export function isKept(kept: ReadonlySet<string> | undefined, row: SessionRow): boolean {
+  return Boolean(kept && kept.size > 0 && (kept.has(keptKey(profileKey(row), lineageRootOf(row))) || kept.has(keptKey(profileKey(row), row.id))))
+}
+
 /** The rows that become blocks, before the compression collapse. */
-export function filterRows(rows: readonly SessionRow[], options: Pick<GraphOptions, 'profile' | 'showArchived'>): SessionRow[] {
+export function filterRows(rows: readonly SessionRow[], options: Pick<GraphOptions, 'kept' | 'profile' | 'showArchived'>): SessionRow[] {
+  const kept = (row: SessionRow) => isKept(options.kept, row)
+
   return rows.filter(
     row =>
-      !isHiddenRow(row) &&
+      !isHiddenRow(row, kept) &&
       (options.showArchived || !row.archived) &&
       (options.profile === ALL_PROFILES || profileKey(row) === options.profile)
   )
@@ -179,7 +196,8 @@ export function buildGraph(rows: readonly SessionRow[], projects: readonly Proje
       outOfScope: false,
       readOnly: false,
       familyId: id,
-      single: true
+      single: true,
+      kept: isKept(options.kept, row)
     }
 
     nodes.push(node)
@@ -220,6 +238,7 @@ export function buildGraph(rows: readonly SessionRow[], projects: readonly Proje
           readOnly: true,
           familyId: source,
           single: false,
+          kept: false,
           missingId: resolved.parentId
         }
 
@@ -332,6 +351,10 @@ function assignFamilies(model: GraphModel): void {
 
     family.projectId = lead ? model.nodeById.get(lead)?.projectId : undefined
 
+    if (ids.some(id => model.nodeById.get(id)?.kept)) {
+      family.kept = true
+    }
+
     for (const id of ids) {
       const node = model.nodeById.get(id)!
 
@@ -343,8 +366,9 @@ function assignFamilies(model: GraphModel): void {
   }
 
   model.families.sort((a, b) => b.lastActive - a.lastActive || a.id.localeCompare(b.id))
+  // Card 11: a kept single is on the canvas, not in the style's singles container.
   model.singles = model.families
-    .filter(family => family.nodeIds.length === 1)
+    .filter(family => family.nodeIds.length === 1 && !family.kept)
     .map(family => model.nodeById.get(family.nodeIds[0])!)
 }
 

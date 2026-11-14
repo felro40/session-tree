@@ -13,12 +13,14 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
-  useStoreApi
+  useStoreApi,
+  ViewportPortal
 } from '@xyflow/react'
 import type { Edge, Node, NodeChange, NodeMouseHandler, OnNodeDrag, Viewport } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
+import { projectAt, spotFor } from '../model/create.ts'
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import { lineageOf } from '../model/graph.ts'
 import { GROUP_PREFIX, LABEL_WIDTH } from '../model/layout.ts'
@@ -27,14 +29,17 @@ import { boxOf, canvasSelectable, fullyInside, groupPositions, singleSelected } 
 import type { Selection, SelectionAction } from '../model/selection.ts'
 import type { LiveStatus } from '../model/status.ts'
 import { registeredStyles } from '../styles/registry.ts'
-import { blockHandles } from '../styles/shared.tsx'
+import { blockHandles, projectColor } from '../styles/shared.tsx'
 import type { BlockData, FrameLayout, GroupLabelData, LinkData, StyleDefinition } from '../styles/types.ts'
 import { createCanvasRouting } from './canvas-routing.ts'
+import { canvasAreas, projectInfoOf, projectLabelOf } from './canvas-areas.ts'
+import type { CreateDraft } from './create-session.tsx'
 import { FrameUiCtx } from './frame-context.ts'
 import type { FrameUi } from './frame-context.ts'
 import { usePluginCtx } from './plugin-context.ts'
 import { useSessionActions } from './session-actions-context.ts'
 import { SessionMenu } from './session-menu.tsx'
+import type { CanvasMenuTarget } from './session-menu.tsx'
 
 export const MIN_ZOOM = 0.3
 export const MAX_ZOOM = 2.5
@@ -84,6 +89,18 @@ export interface GraphCanvasProps {
   /** The style's panel / drawer open on this device, and its toggle (card 6: the Rich drawer). */
   panelOpen?: boolean
   onPanel?(open: boolean): void
+  /**
+   * Card 11: a new session from a right-click on the canvas. `draft`: the one in the making (its
+   * ghost block is drawn while the menu or the dialog is open); `open`: the canvas menu opened at
+   * `point` (flow coordinates) for `projectId`; `choose`: its item was picked (the dialog opens);
+   * `dismiss`: it closed without a choice. Absent: no canvas menu.
+   */
+  newSession?: {
+    draft: CreateDraft | null
+    open(point: Point, projectId: string): void
+    choose(): void
+    dismiss(): void
+  }
 }
 
 interface Tooltip {
@@ -132,7 +149,7 @@ function StyleProviders({ model, children }: { model: GraphModel; children: Reac
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
-  const { style, spec, model, positions, labels, selection, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel } = props
+  const { style, spec, model, positions, labels, selection, onSelection, onSelect, onMove, onDragging, onOpen, statusOf, snap, nowMs, initialViewport, fitIds, onViewport, frameLayout, onToggleLane, panelOpen = false, onPanel, newSession } = props
   // Read once: the canvas frames itself (or restores this view) on mount only.
   const [mountViewport] = useState(initialViewport)
   const [mountFit] = useState(() => ({
@@ -543,6 +560,55 @@ export function GraphCanvas(props: GraphCanvasProps) {
     return () => actions?.setMenuHost(null)
   }, [actions])
 
+  // Card 11: a right-click on the canvas offers a new session in the project there (D4/D5).
+  const newSessionRef = useRef(newSession)
+
+  useEffect(() => {
+    newSessionRef.current = newSession
+  })
+
+  const areas = useMemo(() => canvasAreas(style, positions, labels, frame ? frameLayout : undefined), [style, positions, labels, frame, frameLayout])
+  const onCanvasMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>): CanvasMenuTarget | null => {
+      const create = newSessionRef.current
+
+      if (!create) {
+        return null
+      }
+
+      hideTooltip()
+
+      const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false })
+      const blocks = [...rects].map(([id, rect]) => ({ projectId: model.nodeById.get(id)?.projectId, rect }))
+      const projectId = projectAt({ areas, point, blocks, scope: model.options.scope })
+
+      create.open(point, projectId)
+
+      return { projectId, label: projectLabelOf(model, projectId, Boolean(frame)), project: projectInfoOf(model, projectId) }
+    },
+    [areas, flow, frame, hideTooltip, model, rects]
+  )
+  const onCanvasMenuChosen = useCallback(() => newSessionRef.current?.choose(), [])
+  const onCanvasMenuDismissed = useCallback(() => newSessionRef.current?.dismiss(), [])
+
+  // The ghost block (D5): where the new session will go, in its project's colour. Swimlanes
+  // places a session by its time: at "now", in the project's lane (A4).
+  const draft = newSession?.draft ?? null
+  const ghost = useMemo(() => {
+    if (!draft) {
+      return null
+    }
+
+    const { width, height } = style.nodeSize
+    const framed = frame && frameLayout ? frame.lanes?.(frameLayout) : undefined
+    const lane = framed ? (framed.lanes.find(each => each.key === draft.projectId) ?? framed.lanes.find(each => draft.point.y >= each.top && draft.point.y < each.top + each.height)) : undefined
+    const spot = frame
+      ? { x: framed?.nowX ?? draft.point.x, y: lane ? lane.top + (lane.height - height) / 2 : draft.point.y - height / 2 }
+      : spotFor(draft.point, style.nodeSize, snap, style.grid)
+
+    return { ...spot, width, height, projectId: draft.projectId, color: projectColor(projectInfoOf(model, draft.projectId)) }
+  }, [draft, frame, frameLayout, model, snap, style])
+
   const onNodeMouseEnter = useCallback<NodeMouseHandler<FlowNode>>(
     (event, flowNode) => {
       const node = graphNode(flowNode)
@@ -707,7 +773,14 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const Layer = style.Layer
 
   return (
-    <SessionMenu model={model} onOpenFor={onMenuOpen} onRestoreFocus={restoreFocus}>
+    <SessionMenu
+      model={model}
+      onOpenFor={onMenuOpen}
+      onRestoreFocus={restoreFocus}
+      onCanvasMenu={newSession ? onCanvasMenu : undefined}
+      onCanvasMenuChosen={onCanvasMenuChosen}
+      onCanvasMenuDismissed={onCanvasMenuDismissed}
+    >
       <div
         ref={wrapper}
         tabIndex={-1}
@@ -772,6 +845,19 @@ export function GraphCanvas(props: GraphCanvasProps) {
             proOptions={{ hideAttribution: true }}
           >
             {snap && <Background variant={BackgroundVariant.Dots} gap={style.grid} size={1.3} />}
+            {ghost && (
+              <ViewportPortal>
+                <div
+                  className="session-tree__ghost"
+                  data-testid="session-tree-create-ghost"
+                  data-project-id={ghost.projectId}
+                  data-x={ghost.x}
+                  data-y={ghost.y}
+                  aria-hidden="true"
+                  style={{ transform: `translate(${ghost.x}px, ${ghost.y}px)`, width: ghost.width, height: ghost.height, '--st-pc': ghost.color } as CSSProperties}
+                />
+              </ViewportPortal>
+            )}
             {Layer && (
               <Layer
                 model={model}

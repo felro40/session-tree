@@ -22,8 +22,8 @@
  *   all off again, the bands the singles filled are empty and their labels go (`drawnLabels`).
  */
 import type { Family, GraphModel } from '../../model/graph.ts'
-import { GROUP_PREFIX, LABEL_WIDTH, blockGroups, drawnLabels, groupKey, groupOrder, labelGroup, laidOutFamilies } from '../../model/layout.ts'
-import type { GroupLabel, LayoutResult, LayoutSpec, Point, Rect } from '../../model/layout.ts'
+import { GROUP_PREFIX, LABEL_WIDTH, blockGroups, drawnLabels, groupKey, groupOrder, labelSpans, laidOutFamilies } from '../../model/layout.ts'
+import type { GroupLabel, LabelSpan, LayoutResult, LayoutSpec, Point, Rect } from '../../model/layout.ts'
 import { NO_PROJECT_ID } from '../../model/projects.ts'
 import { subwayPlan } from './plan.ts'
 import { COLUMN, FAMILY_STEP, GROUP_LABEL_H, GROUP_STEP, GROUP_TOP, LABEL_GAP, LABEL_H, LABEL_W, ROW, SINGLES_COLUMNS, STATION_H, STATION_W } from './spec.ts'
@@ -182,35 +182,24 @@ export function mergeSubwayLayout(previous: ReadonlyMap<string, Point>, model: G
     bottom = Math.max(bottom, rect.y + rect.height)
   }
 
-  const labelsSorted = () => [...positions].filter(([id]) => id.startsWith(GROUP_PREFIX)).sort(([a, p], [b, q]) => p.y - q.y || (a < b ? -1 : 1))
+  const bySubwayOrder = ([a, p]: readonly [string, Point], [b, q]: readonly [string, Point]) => p.y - q.y || (a < b ? -1 : 1)
+  const bandBelow = (span: LabelSpan): Band => ({ top: span.y + GROUP_LABEL_H, bottom: span.next })
 
   /** The band of group `key` holding `anchorY` (its lowest label at or above it, else its first). */
   const bandOf = (key: string, anchorY?: number): Band | undefined => {
-    const all = labelsSorted()
-    const own = all.filter(([id]) => labelGroup(id) === key)
+    const own = labelSpans(positions, bySubwayOrder).filter(span => span.key === key)
 
     if (own.length === 0) {
       return undefined
     }
 
-    const pick = anchorY === undefined ? own[0] : (own.filter(([, point]) => point.y <= anchorY).pop() ?? own[0])
-    const next = all.find(([, point]) => point.y > pick[1].y)
+    const pick = anchorY === undefined ? own[0] : (own.filter(span => span.y <= anchorY).pop() ?? own[0])
 
-    return { top: pick[1].y + GROUP_LABEL_H, bottom: next ? next[1].y : Infinity }
+    return bandBelow(pick)
   }
 
   /** Every band of group `key`, top to bottom: its label's, then its continuation labels'. */
-  const bandsOf = (key: string): Band[] => {
-    const all = labelsSorted()
-
-    return all
-      .filter(([id]) => labelGroup(id) === key)
-      .map(([, point]) => {
-        const next = all.find(([, other]) => other.y > point.y)
-
-        return { top: point.y + GROUP_LABEL_H, bottom: next ? next[1].y : Infinity }
-      })
-  }
+  const bandsOf = (key: string): Band[] => labelSpans(positions, bySubwayOrder).filter(span => span.key === key).map(bandBelow)
 
   const inBand = (point: Point, band: Band) => footprint(point).y >= band.top && point.y + STATION_H + LABEL_GAP <= band.bottom
   const free = (point: Point) => index.hits(footprint(point)).length === 0
