@@ -772,7 +772,7 @@ async function main(): Promise<void> {
         assert(!at.hit, `the now pill covers today's label at zoom ${at.zoom}: pill ${at.pill}, label ${at.label}`)
         // It stays next to the line: at most just right of today's label.
         assert(at.pill[0] <= Math.max(at.line, at.label[1]) + 8, `the pill strayed from the line at zoom ${at.zoom}: ${JSON.stringify(at)}`)
-        assert(at.heads.length >= 3 && at.heads.every(head => head.inside && head.text?.startsWith(`${head.sessions} session`) && / tok$/.test(head.text)), `headers at zoom ${at.zoom}: ${JSON.stringify(at.heads)}`)
+        assert(at.heads.length >= 3 && at.heads.every(head => head.inside && head.text?.startsWith(`${head.sessions} session`) && / used$/.test(head.text)), `headers at zoom ${at.zoom}: ${JSON.stringify(at.heads)}`)
       }
 
       // At the minimum zoom a day column (42 px) is narrower than the label and the pill: the

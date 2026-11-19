@@ -21,6 +21,8 @@ import { join } from 'node:path'
 import type { Page, Request } from 'playwright-core'
 
 import type { StateSnapshot } from '../src/model/layout-sync.ts'
+import { contextFigure } from '../src/model/context.ts'
+import type { ContextAnswer } from '../src/model/context.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
@@ -90,6 +92,17 @@ async function rowsOf(s: Session, profile = 'default'): Promise<SessionRow[]> {
 interface Details {
   days: string[]
   details: Record<string, { excerpt: null | string; excerpt_role: null | string; activity: number[] }>
+}
+
+/** Card 12: the backend's context estimates (`POST /sessions/context`, ≤ 100 ids a request). */
+async function backendContexts(s: Session, ids: string[], profile = 'default'): Promise<ContextAnswer['contexts']> {
+  const out: ContextAnswer['contexts'] = {}
+
+  for (let i = 0; i < ids.length; i += 100) {
+    Object.assign(out, (await api<ContextAnswer>(s, '/api/plugins/session-tree/sessions/context', { method: 'POST', body: { profile, ids: ids.slice(i, i + 100) } })).contexts)
+  }
+
+  return out
 }
 
 async function backendDetails(s: Session, ids: string[], profile = 'default'): Promise<Details> {
@@ -601,7 +614,7 @@ async function setDrawer(page: Page, open: boolean): Promise<void> {
 async function tokenBarContrast(page: Page) {
   const raw = await page.evaluate(() => {
     const bars = [...document.querySelectorAll('[data-testid="session-tree-block"]')]
-      .filter(card => card.getAttribute('data-out-of-scope') !== 'true' && Number(card.getAttribute('data-tokens')) > 0)
+      .filter(card => card.getAttribute('data-out-of-scope') !== 'true' && Number(card.getAttribute('data-context')) > 0)
       .map(card => {
         const fill = card.querySelector('[data-testid="session-tree-token-bar"]') as HTMLElement
         const track = fill.parentElement as HTMLElement
@@ -727,6 +740,10 @@ async function main(): Promise<void> {
   const rich = seedFixtures(t, ['--rich']) as { created?: boolean; tool_prompt?: string }
 
   assert(rich.created === true, `the Rich fixtures were not created: ${JSON.stringify(rich)}`)
+  // Card 12: the context family (one hermes-plugins tree, no single), so some bars are filled.
+  const contextFixtures = seedFixtures(t, ['--context']) as { created?: boolean }
+
+  assert(contextFixtures.created === true, `the context fixtures were not created: ${JSON.stringify(contextFixtures)}`)
   const s = await launch({ colorScheme: 'light' })
   const { page } = s
   const log = backendLog(page)
@@ -877,11 +894,16 @@ async function main(): Promise<void> {
       return facts.noJump
     })
 
-    await check('the token bar width is tokens / the largest session in scope (± 2 px), labelled with the value; scoped to a project the scale is that project\'s', async () => {
+    await check('card 12 (A2): the bar shows the context — its width is the context / the largest context in scope (± 2 px; no window is known), labelled `… ctx` from the backend\'s figure; data-tokens stays the lifetime figure; scoped to a project the scale is that project\'s', async () => {
       const visible = visibleRows(rows)
-      const max = Math.max(...visible.map(tokensOf))
+      const answer = await backendContexts(s, visible.map(row => row.id))
+      const figures = new Map(
+        visible.map(row => [row.id, contextFigure(row, answer[row.id] ? { status: 'loaded', sig: '', estimate: answer[row.id].estimate, window: answer[row.id].context_window } : undefined)])
+      )
       const measure = async () => {
         const v = await viewport(page)
+
+        await page.waitForFunction(() => ![...document.querySelectorAll('[data-testid="session-tree-block"]')].some(el => el.getAttribute('data-context-kind') === 'loading'), undefined, { timeout: 20_000 })
 
         return page.$$eval(
           '[data-testid="session-tree-block"]',
@@ -891,29 +913,34 @@ async function main(): Promise<void> {
               .map(element => ({
                 id: element.getAttribute('data-session-id')!,
                 tokens: Number(element.getAttribute('data-tokens')),
+                context: Number(element.getAttribute('data-context')) || 0,
                 max: Number(element.getAttribute('data-token-max')),
+                scale: element.getAttribute('data-context-scale'),
                 width: element.querySelector('[data-testid="session-tree-token-bar"]')!.getBoundingClientRect().width / zoom,
-                label: element.querySelector('[data-field="tokens"]')!.textContent
+                label: element.querySelector('[data-field="context"]')!.textContent
               })),
           v.zoom
         )
       }
       const all = await measure()
-      const off = all.filter(bar => Math.abs(bar.width - (TOKEN_BAR * bar.tokens) / max) > 2 || bar.max !== max)
-      const sample = all.find(bar => bar.id === 'st-sys-tip')!
+      const max = Math.max(...all.map(bar => bar.context))
+      const off = all.filter(bar => bar.scale !== 'scope' || bar.max !== max || Math.abs(bar.width - (TOKEN_BAR * bar.context) / max) > 2)
+      const sample = all.find(bar => bar.id === 'st-ctx-measured')!
       const tokensById = new Map(visible.map(row => [row.id, tokensOf(row)]))
+      const wrongLabel = all.filter(bar => figures.get(bar.id)?.label !== bar.label)
 
-      assert(all.length > 10 && off.length === 0, `bars off: ${JSON.stringify(off.slice(0, 3))} (max ${max})`)
-      assert(all.every(bar => tokensById.get(bar.id) === bar.tokens), 'a card\'s tokens differ from its row')
-      assert(sample.label === `${(sample.tokens / 1e6).toFixed(1)}M` || /k$|M$|^\d+$/.test(sample.label ?? ''), `label ${sample.label}`)
+      assert(all.length > 10 && max === Math.max(...all.map(bar => figures.get(bar.id)?.tokens ?? 0)) && max > 0 && off.length === 0, `bars off: ${JSON.stringify(off.slice(0, 3))} (max ${max})`)
+      assert(all.every(bar => tokensById.get(bar.id) === bar.tokens), 'a card\'s data-tokens differ from its row\'s lifetime tokens')
+      assert(wrongLabel.length === 0, `labels off: ${JSON.stringify(wrongLabel.slice(0, 3).map(bar => [bar.id, bar.label, figures.get(bar.id)?.label]))}`)
+      assert(sample.label === '155k ctx' && Math.abs(sample.width - TOKEN_BAR) <= 2, `sample ${JSON.stringify(sample)}`)
       await setScope(page, 'mdesign')
       const scoped = await measure()
-      const scopedMax = Math.max(...scoped.map(bar => bar.tokens))
-      const scopedOff = scoped.filter(bar => bar.max !== scopedMax || Math.abs(bar.width - (TOKEN_BAR * bar.tokens) / scopedMax) > 2)
+      const scopedMax = Math.max(...scoped.map(bar => bar.context))
+      const scopedOff = scoped.filter(bar => bar.max !== scopedMax || (scopedMax > 0 ? Math.abs(bar.width - (TOKEN_BAR * bar.context) / scopedMax) > 2 : bar.width !== 0))
 
       await setScope(page, 'All')
       assert(scopedMax < max && scopedOff.length === 0, `scoped scale ${scopedMax} vs ${max}: ${JSON.stringify(scopedOff.slice(0, 3))}`)
-      facts.tokens = { max, bars: all.length, scopedMax, sample: { tokens: sample.tokens, width: sample.width, label: sample.label } }
+      facts.tokens = { max, bars: all.length, scopedMax, sample: { context: sample.context, width: sample.width, label: sample.label } }
 
       return facts.tokens
     })
