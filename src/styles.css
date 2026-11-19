@@ -555,6 +555,8 @@ g.is-dimmed {
   color: var(--ui-text-primary);
   font-size: 11.5px;
   pointer-events: none;
+  /* Card 12: a session block's tooltip lists its context, lifetime tokens and cache state. */
+  white-space: pre-line;
 }
 
 /* The menu itself is the SDK's ContextMenu (UI kit styles). Ours: the reason a disabled item
@@ -897,6 +899,57 @@ g.is-dimmed {
 .st-none {
   color: var(--ui-text-tertiary);
   font-size: 11px;
+}
+
+/* Card 12: the inspector's Context section (the figure, its source, the cache state, the
+   estimate's categories). */
+.st-ctx-fig b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.st-ctx-fig span {
+  color: var(--ui-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.st-ctx-src,
+.st-ctx-cache {
+  margin-top: 3px;
+  color: var(--ui-text-secondary);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.st-ctx-cache[data-state='warm'] {
+  color: var(--ui-text-primary);
+}
+
+.st-ctx-cats {
+  margin-top: 6px;
+  color: var(--ui-text-secondary);
+  font-size: 10.5px;
+}
+
+.st-ctx-cats small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+}
+
+.st-ctx-cats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.st-ctx-cats .st-ctx-total {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+  color: var(--ui-text-primary);
 }
 
 .st-standin-note {
@@ -1519,6 +1572,17 @@ g.is-dimmed {
   opacity: 0.5;
 }
 
+/* Card 12: the context figure is always drawn whole; the message count gives way first. */
+.st-swim-meta [data-field='messages'] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.st-swim-meta [data-field='context'] {
+  flex: none;
+}
+
 .st-swim-meta .st-run {
   color: var(--ui-green);
 }
@@ -1936,7 +2000,7 @@ g.is-dimmed {
 .st-rc-ft {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   margin-top: 11px;
   color: var(--ui-text-tertiary);
   font-size: 11px;
@@ -1945,9 +2009,11 @@ g.is-dimmed {
 }
 
 .st-rc-model {
-  flex: none;
+  /* Card 12: the chip gives way first when the footer is full (its title names the model). */
+  flex: 0 1 auto;
+  min-width: 28px;
   max-width: 80px;
-  padding: 1px 7px;
+  padding: 1px 6px;
   overflow: hidden;
   border: 1px solid var(--ui-stroke-secondary);
   border-radius: 6px;
@@ -1961,12 +2027,12 @@ g.is-dimmed {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-left: auto;
 }
 
 /* Card 8 (F4): the bar's full extent is a 1 px outline in the tertiary text colour (≥ 3:1 against
-   the card, light and dark; drawn outside the box, so the 54 px width is unchanged), over a clear
+   the card, light and dark; drawn outside the box, so the bar width is unchanged; 32 px since card 12), over a clear
    track, and the fill is the full accent (≥ 3:1 against that track). */
 .st-rc-bar {
   display: block;

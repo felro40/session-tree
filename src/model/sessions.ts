@@ -8,6 +8,7 @@
  * (`_reset_from`) never nests; otherwise `_branched_from`, else
  * `parent_session_id`. Kept free of React and the SDK so node:test can run it.
  */
+import type { CacheWindowRow, ContextMeasured } from './context.ts'
 
 export interface SessionRow {
   id: string
@@ -43,6 +44,14 @@ export interface SessionRow {
   is_active?: boolean
   /** `compression` on a row the core list projected onto its live tip. */
   continuation_kind?: null | string
+  /** Bumped by Hermes on every in-place transcript rewrite (a prune, a micro-compaction). */
+  transcript_revision?: null | number
+  /** Card 12: the stored prompt-cache clock's figure (absent from an older backend). */
+  context_measured?: ContextMeasured | null
+  /** Card 12: why that figure no longer holds (`compacted`, `route_changed`, …), or null. */
+  context_invalid_reason?: null | string
+  /** Card 12: the cold-session cache window, or null with no clock. */
+  cache_window?: CacheWindowRow | null
 }
 
 export interface SessionsResponse {

@@ -1,22 +1,27 @@
 /**
- * The Rich cards canvas context: the details store (excerpts, activity) and the token scale. Its
- * `Provider` wraps the canvas (StyleDefinition.Provider), so cards read it without any of it going
- * through the graph model, the block data or the routing chain: details arriving re-render the
- * card that asked, never the canvas, the layout or the links.
+ * The Rich cards canvas context: the details store (excerpts, activity) and the context bar's
+ * scale. Its `Provider` wraps the canvas (StyleDefinition.Provider), so cards read it without any
+ * of it going through the graph model, the block data or the routing chain: details arriving
+ * re-render the card that asked, never the canvas, the layout or the links.
  */
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 
 import { fetchDetails } from '../../api.ts'
+import { contextFigure } from '../../model/context.ts'
 import type { GraphModel } from '../../model/graph.ts'
+import { useContextStore, useContextVersion } from '../../page/context-env.tsx'
 import { usePluginCtx } from '../../page/plugin-context.ts'
 import { DetailsStore } from './details.ts'
 import type { DetailsEntry } from './details.ts'
-import { maxTokensInScope } from './spec.ts'
+import { maxContextInScope } from './spec.ts'
 
 export interface RichEnv {
   store: DetailsStore
-  /** The largest session's tokens in the current scope (the token bars' scale). */
+  /**
+   * Card 12 (A2): the largest context figure in the current scope (the context bars' scale when
+   * the model's window is unknown). It follows the estimates as they arrive.
+   */
   maxTokens: number
 }
 
@@ -54,7 +59,14 @@ export function RichProvider({ model, children }: { model: GraphModel; children:
         () => localOffsetMinutes()
       )
   )
-  const maxTokens = useMemo(() => maxTokensInScope(model), [model])
+  const contexts = useContextStore()
+  const version = useContextVersion()
+  const maxTokens = useMemo(
+    () => maxContextInScope(model, node => (node.row ? contextFigure(node.row, contexts?.get(node.id)).tokens : null)),
+    // The version is the context store's change signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, contexts, version]
+  )
   const value = useMemo<RichEnv>(() => ({ store, maxTokens }), [store, maxTokens])
 
   useEffect(() => {

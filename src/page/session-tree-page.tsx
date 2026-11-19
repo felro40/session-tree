@@ -38,6 +38,7 @@ import { visibleRows } from '../model/sessions.ts'
 import { liveStatus } from '../model/status.ts'
 import type { HostStatusSnapshot } from '../model/status.ts'
 import { getStyle, registeredStyles, resolveStyleId } from '../styles/registry.ts'
+import { ContextEstimates } from './context-env.tsx'
 import { useCreateSession } from './create-session.tsx'
 import type { CreateDraft } from './create-session.tsx'
 import { createFrameCache } from './frame-cache.ts'
@@ -761,6 +762,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
 
   return (
     <SessionActionsCtx.Provider value={actions}>
+      <ContextEstimates model={sessions.data ? model : undefined}>
       <div
         className="session-tree"
         data-testid="session-tree-page"
@@ -887,6 +889,7 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
           />
         )}
       </div>
+      </ContextEstimates>
     </SessionActionsCtx.Provider>
   )
 }

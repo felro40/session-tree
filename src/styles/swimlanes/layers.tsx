@@ -20,7 +20,7 @@ import { ProjectGlyph, projectColor } from '../shared.tsx'
 import type { FrameLayerProps, FrameLayout } from '../types.ts'
 import { swimNowX } from './layout.ts'
 import type { SwimFrameLayout, SwimLayout } from './layout.ts'
-import { AXIS_HEIGHT, HEADER_WIDTH, popoverPlacement, SWIM_HEIGHT, tokenLabel } from './spec.ts'
+import { AXIS_HEIGHT, HEADER_WIDTH, laneTotalsLabel, popoverPlacement, SWIM_HEIGHT } from './spec.ts'
 import { CHIP_PREFIX } from './swim-flow.tsx'
 
 /** The layout this style's frame computed (`frame.compute` returns a `SwimLayout`). */
@@ -288,7 +288,7 @@ export function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLa
               {!lane.collapsed && height >= SWIM_HEIGHT && (
                 <>
                   <div className="st-swim-lh-meta" data-field="totals">
-                    {lane.sessions} session{lane.sessions === 1 ? '' : 's'} · {tokenLabel(lane.tokens)} tok
+                    {laneTotalsLabel(lane.sessions, lane.tokens)}
                   </div>
                   <div className="st-swim-lh-meta is-sub" data-field="split">
                     {lane.inTrees} in trees · {lane.singles} single{lane.singles === 1 ? '' : 's'}
@@ -298,7 +298,7 @@ export function SwimOver({ layout: frameLayout, model, nowMs, onOpen, onToggleLa
               {/* NB3 (card-5 review): a short lane (the default fit) keeps a one-line count + tokens. */}
               {!lane.collapsed && height < SWIM_HEIGHT && (
                 <div className="st-swim-lh-meta is-compact" data-field="totals" data-compact="true">
-                  {lane.sessions} session{lane.sessions === 1 ? '' : 's'} · {tokenLabel(lane.tokens)} tok
+                  {laneTotalsLabel(lane.sessions, lane.tokens)}
                 </div>
               )}
             </div>

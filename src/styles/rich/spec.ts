@@ -20,7 +20,7 @@ export const LABEL_BAND = 44
 export const LABEL_HEIGHT = 26
 export const RICH_GRID = 20
 /** The token bar's full width (px) and the ghost cards' offset per compacted layer. */
-export const TOKEN_BAR = 54
+export const TOKEN_BAR = 32
 export const GHOST_STEP = 9
 export const MAX_GHOSTS = 2
 /** x offset where a (rare) vertical "continued as" handle sits. */
@@ -75,6 +75,29 @@ export function maxTokensInScope(model: GraphModel): number {
 /** The bar's filled width in px: tokens / max of `TOKEN_BAR`. */
 export function tokenBarWidth(tokens: number, max: number): number {
   return max > 0 ? (TOKEN_BAR * Math.min(tokens, max)) / max : 0
+}
+
+/**
+ * Card 12 (A2): the bar shows the context. Filled against the model's context window when that is
+ * known, else against the largest context in the scope (`max`, the old token bar's rule).
+ */
+export function contextBar(tokens: null | number, window: null | number, max: number): { width: number; scale: 'scope' | 'window'; of: number } {
+  const value = tokens ?? 0
+
+  return window && window > 0 ? { width: tokenBarWidth(value, window), scale: 'window', of: window } : { width: tokenBarWidth(value, max), scale: 'scope', of: max }
+}
+
+/** The largest context figure of the in-scope sessions (`figureOf`: the card's `contextFigure`). */
+export function maxContextInScope(model: GraphModel, figureOf: (node: GraphNode) => null | number): number {
+  let max = 0
+
+  for (const node of model.nodes) {
+    if (node.kind === 'session' && !node.outOfScope) {
+      max = Math.max(max, figureOf(node) ?? 0)
+    }
+  }
+
+  return max
 }
 
 /** `claude-opus-4.1` → `opus-4.1`; `anthropic/claude-sonnet-5` → `sonnet-5`. */
