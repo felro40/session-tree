@@ -67,7 +67,7 @@ flow). Two small, optional additions to the style contract (`src/styles/types.ts
 ## Labels (`labels.ts`)
 
 - A label is 168 × 46: the title (bold, at most 2 lines, clamped) and a muted meta line (last used ·
-  messages · tokens; "running" / "needs input" / "archived" pills; the ⋯ menu on hover). The model
+  messages · context, card 12; "running" / "needs input" / "archived" pills; the ⋯ menu on hover). The model
   and cost are in its tooltip. Pinned adds a pin glyph before the title, unread an accent dot after
   it (and a bolder title).
 - Placement: stations top to bottom, left to right (ties by id); each label takes the first of

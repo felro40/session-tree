@@ -36,7 +36,7 @@ The style contract (`src/styles/types.ts`) got one optional part, `frame`:
   The order of the rows never reaches the router: the backend sorts rows by `last_active`, so a
   chat turn moves that row (and, for a branched session, its edge) to the front; that reorder
   alone, or any other reorder of the same rows, re-routes nothing. A refetch that changes only
-  block content (message count, tokens, last used, title, status) redraws those blocks and
+  block content (message count, context figure, last used, title, status) redraws those blocks and
   re-routes nothing, whichever session it was in (a root or a branched child); a structural
   change (a session added, removed, archived or moved to another lane, a new link, a change of
   the set of lanes, a local midnight, an offset change) re-routes once.
@@ -81,9 +81,9 @@ column and the axis).
   gets no lane unless it is the scope. Collapse state is keyed by lane, so it is unaffected.
 - **Header column.** Fixed in screen x (a horizontal pan does not move it), follows the lanes
   vertically, matches their heights at every zoom, 168 px wide at every zoom. Swatch (the project's
-  colour or icon), name, `N sessions · T tok`, `I in trees · S singles`. When the lane is shorter
+  colour or icon), name, `N sessions · T used`, `I in trees · S singles`. When the lane is shorter
   on screen than a block (54 px; the default fit), the header keeps one compact line,
-  `N sessions · T tok` (card-5 review NB3). Counts are every session
+  `N sessions · T used` (card-5 review NB3; `used` since card 12, was `tok`). Counts are every session
   block of the lane under the current filters, singles included; tokens are `input_tokens +
   output_tokens` of those blocks (a compacted conversation counts once, with its tip row's tokens).
 - **Collapse.** A header click collapses or expands the lane on this device (`ctx.storage`,
