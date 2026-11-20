@@ -208,9 +208,6 @@ for the old per-scope positions).
     card 12 P2).
   - "compacted ×N" still counts rotated compression chains only: an in-place compaction (the
     default) keeps no durable count.
-  - A second prune of a session already shown as estimated is picked up through the row's
-    transcript revision, last activity or message count; one that moves none of them waits for the
-    next change.
 
 ## Source map
 
