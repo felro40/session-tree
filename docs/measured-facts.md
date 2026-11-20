@@ -2412,3 +2412,26 @@ footer was already full: the bar is now **32 px** (`TOKEN_BAR`, was 54), the foo
 asserts every card's figure ends inside the card body. In Swimlanes the 170 px block's meta line
 reads `6m ago · 155k ctx · 10 msgs`: the context before the message count, which takes the
 ellipsis when the line is full (`textContent` unchanged).
+
+## Environment change during the card: the Webapp's "Update ready" toast
+
+Between full run 1 and run 2 (2026-11-19) the test Webapp's update check (GitHub API, a network
+fact) began reporting upstream commits; its persistent "Update ready" notification sits over the
+toolbar's scope chips and intercepted real clicks (run 2: core-dense 29/30, actions 20/30, toolbar
+14/17, shared 10/23, every failure "… intercepts pointer events" / "Update ready"; the same code
+passed in run 1). `scripts/e2e/browser.ts` now starts every test browser context with the
+Webapp's own snooze key (`hermes:update-toast-snooze-until`, what dismissing the toast stores),
+tolerant of `about:blank`.
+
+## Bundle and gates (code `9e401cf`)
+
+- **`desktop/plugin.js`: 800 952 bytes** (was 780 401 at `a6b5e520`: +20 551), sha256
+  `6aa175697a8901cb…`, 93 esbuild inputs; `npm run build` reproduces it byte for byte (`git status`
+  clean). Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external (the guards).
+- lint exit 0; build exit 0; `npm test` exit 0, **481/481** (was 453: `context.test.ts` +28);
+  `npm run test:py` exit 0, **404 passed** (was 381: `test_context_api.py` +23).
+- `npm run test:e2e` run 3 on `854183c`: foundation 19, core-dense 30, actions 30, sync 25,
+  swimlanes 28, rich 23, subway 19, toolbar 17, final 14, select 35, shared 23 — all green; create
+  29/30 and context 14/15, each failing only "no page errors" on the first snooze script throwing on
+  `about:blank`; fixed in `9e401cf`, then create **30/30** and context **15/15** re-run alone.
+  Split total **308/308** (baseline 293 + context 15).
