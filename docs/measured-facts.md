@@ -2511,3 +2511,21 @@ tolerant of `about:blank`.
 
 - **`desktop/plugin.js`: 802 359 bytes** (+1 407 on `da1fd44`'s 800 952), sha256
   `2f4679bcd777b7db…`; `npm run build` reproduces it byte for byte.
+
+### Gates (code `d26b24d`; `815eb2f` and later change only docs)
+
+- lint exit 0; build exit 0 (byte-identical, tree clean); `npm test` exit 0, **491/491**;
+  `npm run test:py` exit 0, **404 passed**.
+- `e2e-context` alone, 5 consecutive runs on `1180b63`: 16/16 each.
+- Full `npm run test:e2e`, run 1 on `1180b63` (exit 1, 308/309): foundation 19, core-dense 30,
+  actions 30, sync 25, swimlanes 28, rich **22/23**, subway 19, toolbar 17, final 14, select 35,
+  shared 23, create 30, context 16. The rich failure was this fix's own test (the bar check's
+  expected figures had `sig: ''`, so D4 made them loading); fixed in `d26b24d`, rich **23/23** alone.
+- Full run 2 on `815eb2f` (exit 1, 308/309): foundation 19, core-dense 30, actions 30, sync 25,
+  swimlanes **27/28**, rich 23, subway 19, toolbar 17, final 14, select 35, shared 23, create 30,
+  context 16. The swimlanes failure, "B1-r3 … st-scale-0007 is not drawn at the default view",
+  started when the local clock passed midnight (the run reached swimlanes ≈ 00:00 EST,
+  2026-11-20): run alone afterwards it fails the same way on this head, on `da1fd44` and on the
+  base `a6b5e520` (exports via `git archive`), so it is a time-of-day dependence of that check's
+  500-row fixture, not this fix (the fix changes no Swimlanes code; run 1, before midnight, passed
+  28/28). Not fixed here (outside B1/B2).
