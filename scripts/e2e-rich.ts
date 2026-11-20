@@ -23,6 +23,7 @@ import type { Page, Request } from 'playwright-core'
 import type { StateSnapshot } from '../src/model/layout-sync.ts'
 import { contextFigure } from '../src/model/context.ts'
 import type { ContextAnswer } from '../src/model/context.ts'
+import { TOKEN_BAR as RICH_TOKEN_BAR } from '../src/styles/rich/spec.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { addContext, close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
 import type { Session } from './e2e/browser.ts'
@@ -40,7 +41,8 @@ const facts: Record<string, unknown> = {}
 const HIDDEN_SOURCES = new Set(['acp', 'cron', 'kanban', 'oneshot', 'subagent', 'tool'])
 const CARD_W = 280
 const CARD_H = 164
-const TOKEN_BAR = 54
+/** Card 12: the context bar's width, from the page's own constant (32 px; was a local 54). */
+const TOKEN_BAR = RICH_TOKEN_BAR
 /** The page asks for the cards within half a viewport of the view (layer.tsx / details.ts). */
 const NEAR_MARGIN = 0.5
 
@@ -740,10 +742,6 @@ async function main(): Promise<void> {
   const rich = seedFixtures(t, ['--rich']) as { created?: boolean; tool_prompt?: string }
 
   assert(rich.created === true, `the Rich fixtures were not created: ${JSON.stringify(rich)}`)
-  // Card 12: the context family (one hermes-plugins tree, no single), so some bars are filled.
-  const contextFixtures = seedFixtures(t, ['--context']) as { created?: boolean }
-
-  assert(contextFixtures.created === true, `the context fixtures were not created: ${JSON.stringify(contextFixtures)}`)
   const s = await launch({ colorScheme: 'light' })
   const { page } = s
   const log = backendLog(page)
@@ -925,14 +923,15 @@ async function main(): Promise<void> {
       const all = await measure()
       const max = Math.max(...all.map(bar => bar.context))
       const off = all.filter(bar => bar.scale !== 'scope' || bar.max !== max || Math.abs(bar.width - (TOKEN_BAR * bar.context) / max) > 2)
-      const sample = all.find(bar => bar.id === 'st-ctx-measured')!
+      const sample = all.reduce((best, bar) => (bar.context > best.context ? bar : best), all[0])
       const tokensById = new Map(visible.map(row => [row.id, tokensOf(row)]))
       const wrongLabel = all.filter(bar => figures.get(bar.id)?.label !== bar.label)
 
       assert(all.length > 10 && max === Math.max(...all.map(bar => figures.get(bar.id)?.tokens ?? 0)) && max > 0 && off.length === 0, `bars off: ${JSON.stringify(off.slice(0, 3))} (max ${max})`)
       assert(all.every(bar => tokensById.get(bar.id) === bar.tokens), 'a card\'s data-tokens differ from its row\'s lifetime tokens')
       assert(wrongLabel.length === 0, `labels off: ${JSON.stringify(wrongLabel.slice(0, 3).map(bar => [bar.id, bar.label, figures.get(bar.id)?.label]))}`)
-      assert(sample.label === '155k ctx' && Math.abs(sample.width - TOKEN_BAR) <= 2, `sample ${JSON.stringify(sample)}`)
+      // The Rich fixtures store a system prompt (the root's 4× the children's): estimates, `~…`.
+      assert(sample.id === 'st-rich-root' && /^~\d+k ctx$/.test(sample.label ?? '') && Math.abs(sample.width - TOKEN_BAR) <= 2, `sample ${JSON.stringify(sample)}`)
       await setScope(page, 'mdesign')
       const scoped = await measure()
       const scopedMax = Math.max(...scoped.map(bar => bar.context))

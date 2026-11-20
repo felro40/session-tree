@@ -353,6 +353,13 @@ def seed_rich(db: SessionDB, *, age_h: float = 30) -> dict:
         db.append_message("st-rich-toolrun", "tool", f"ok {i}", tool_call_id=call, tool_name="terminal", timestamp=stamp + 2 + 2 * i)
     out["children"]["st-rich-toolrun"] = "Long tool run"
     out["tool_prompt"] = RICH_TOOL_PROMPT
+    # Card 12: a stored system prompt and tool pin (what an agent's first build stores), so the Rich
+    # cards' context bars have estimates to show: the root's prompt four times the children's, so
+    # the bars differ (the e2e's bar width and contrast checks). No row, title or count changes.
+    for sid in [root, *out["children"]]:
+        db.update_system_prompt(sid, CONTEXT_PROMPT * (4 if sid == root else 1))
+        db.update_session_tool_names(sid, CONTEXT_PIN)
+    out["prompts"] = {"root": len(CONTEXT_PROMPT) * 4, "children": len(CONTEXT_PROMPT)}
     return out
 
 
