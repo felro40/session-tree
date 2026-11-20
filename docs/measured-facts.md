@@ -2435,3 +2435,79 @@ tolerant of `about:blank`.
   29/30 and context 14/15, each failing only "no page errors" on the first snooze script throwing on
   `about:blank`; fixed in `9e401cf`, then create **30/30** and context **15/15** re-run alone.
   Split total **308/308** (baseline 293 + context 15).
+
+## Review r1 fixes (B1, B2; fix start `da1fd44`)
+
+### B1 — the Rich context bar's scale over the whole scope
+
+- **The rule** (`src/styles/rich/spec.ts` `contextScaleInScope`, `ScopeScaleMemory`; used by
+  `src/styles/rich/context.tsx`): the bars' denominator is the largest context figure over the
+  rows `maxTokensInScope` read at the base commit (every in-scope session node; measured → its
+  tokens, estimated → `estimate.total`, none / failed / an older backend's row → 0). It is
+  **pending** until every one of them has settled once; then a row that is refetching (loading
+  again) keeps its last settled value until the new figure lands. Pending: every scope-scaled bar
+  is unfilled and the card carries `data-context-scale="pending"`, `data-context-of=""`,
+  `data-token-max=""` (the attribute stays, empty). A window-scaled bar (never today, P2) does not
+  wait for the scope.
+- **The data** (`src/page/context-env.tsx` `ContextDriver wholeScope`, `inScopeWanted` in
+  `src/model/context.ts`): in Rich cards the driver asks for every in-scope row without a usable
+  measurement, plus the viewport-near ones (dimmed out-of-scope cards, as before); the other styles
+  ask for the viewport-near blocks only. The store batches ≤ 100 ids a request (unchanged).
+- **The reviewer's probe as e2e** (`e2e-context` "Rich cards (fix r1, B1) …", real wheel and the
+  toolbar's Fit): `--rich` seeded after the live checks (`st-ctx-measured` already archived, so
+  every card is estimated), wheel-zoomed to 2.5 on `st-rich-code`, reloaded (zoom 2.5 kept; on
+  screen: `st-hp-mockup`, `st-rich-html`, `st-rich-code`; the largest, `st-rich-root` 14 085, off
+  screen), waited for a settled scale: `data-context-of` 14 085, fill 0.4048 (5 703 / 14 085);
+  after Fit: 14 085 and 0.4048 — r1 read 6 482 (≈ 88 %) and 14 085 (≈ 40 %). The page's estimate
+  requests in the whole suite: at most 52 ids each.
+- **Mutation check:** with the driver's `wholeScope` off and the pending state ignored, the same
+  suite fails this check (`scale 0 vs the largest in-scope card st-rich-root 14085`) and the Fit bar
+  check; restored, it passes.
+- **Batching on the 500-row scale fixture** (`e2e-rich` "500-session fixture (Show all) …", Rich,
+  All projects): **5 requests of 100 ids** (500 distinct ids), **102 ms** from the first request to
+  the last answer (full run on `1180b63`), against 143 viewport-near ids asked for details at
+  open. The 2 s pan stayed at 61.8 fps. A unit test also batches a 250-row scope as 100 + 100 + 50.
+
+### B2 — a stale estimate is never the current figure
+
+- **The rule** (`src/model/context.ts` `contextFigure`): an entry whose `sig` differs from the
+  row's `contextSignature` is `loading` (`… ctx`, tooltip "Context: estimating…"); the Dense
+  inspector lists the estimate's categories only for an entry under the row's signature. Measured
+  rows are unaffected. A failure holds back a retry (30 s) only under the signature it failed
+  under, so a stale failed entry is asked for again at once.
+- **The e2e** (`e2e-context`): the archive check fetches the backend's estimate under the new
+  signature itself (`?e2e=direct` on the suite's own requests, so they never count as the page's),
+  waits for the block to show exactly that figure (`~7k ctx`) and for the page's refetch response
+  to finish (one request, `["st-ctx-measured"]`); only then does the append check open its window,
+  and it asserts the append refetched `["st-ctx-estimate"]` alone. No sleep was added; the old
+  `sleep(800)` went (the check waits for the backend's new figure instead). Before the tagging, the
+  suite's own direct estimate calls appeared in the window (the first try failed on them).
+- **5 consecutive runs alone** on `1180b63`: 16/16, 16/16, 16/16, 16/16, 16/16.
+
+### Changed assertions (old → new)
+
+- `scripts/e2e-context.ts` `entryOf(answer, id)` → `entryOf(answer, row)`: the expected entry
+  carries the row's signature (`sig: ''` → `contextSignature(row)`), used by the figures, tooltip,
+  flip and append checks.
+- `scripts/e2e-context.ts` archive check: "flips to an estimate" (`kind === 'estimated'`) → the
+  block equals the backend's figure under the new signature **and** the page's refetch for it
+  finished.
+- `scripts/e2e-context.ts` append check: the request window opens after the archive refetch; the
+  `sleep(800)` → a wait for the backend's new figure on the block; `asked.every(id => id ===
+  ESTIMATE)` → `asked.length > 0 && …`, counting the page's requests only.
+- `scripts/e2e-context.ts` Rich bar check and `scripts/e2e-rich.ts` bar check: they also wait
+  until no card's scale is pending.
+- `scripts/e2e-rich.ts` bar check: the expected figures' `sig: ''` → `contextSignature(row)`
+  (full run on `1180b63` failed it: every expected figure was loading, `bars off: [] (max 14085)`).
+- `scripts/e2e-rich.ts` 500-row check: also asserts every in-scope id asked for its context
+  estimate, ≤ 100 ids a request.
+- New: `e2e-context` "Rich cards (fix r1, B1) …" (suite 15 → 16 checks).
+- Unit (`tests/js/context.test.ts`, 481 → 491 in `npm test`): the stale-entry rule (3), the scope
+  scale (pending, order independence, 0 for failed / none / old rows, refetch keeps the last value,
+  in-scope only), the pending bar, the whole-scope want and its batches, a failure under an older
+  signature; `maxContextInScope` (replaced by `contextScaleInScope`) and its test are gone.
+
+### Bundle (code `1180b63`)
+
+- **`desktop/plugin.js`: 802 359 bytes** (+1 407 on `da1fd44`'s 800 952), sha256
+  `2f4679bcd777b7db…`; `npm run build` reproduces it byte for byte.

@@ -29,8 +29,12 @@ user (below).
   unchanged), when and how the context figure was made, and the **cache state**: *warm until
   14:07* (certainly cached), *may be warm until 15:02*, *expired 3h ago*, or *unknown* (with why:
   compacted, the model or provider changed, or the cache's confidence is unknown). The Rich cards
-  bar shows the context against the largest one in the scope; a Swimlanes lane header keeps the
-  lifetime sum (`12 sessions · 645k used`). The Dense inspector has a **Context** section (the
+  bar shows the context against the largest one among every session in the scope, wherever you
+  have panned or zoomed (the bars stay unfilled for the moment until every figure in the scope has
+  arrived); a Swimlanes lane header keeps the
+  lifetime sum (`12 sessions · 645k used`). While a session's estimate is being refreshed (a new
+  message, a compaction) its block reads `… ctx`: an earlier estimate is never shown as current.
+  The Dense inspector has a **Context** section (the
   figure, measured at <time> or estimated, the cache state, the estimate by category: system
   prompt, tools, skills, subagent definitions, conversation) and a **Tokens used (lifetime)**
   section (input uncached, output, cache read, cache write, cost).
@@ -223,7 +227,7 @@ for the old per-scope positions).
 | `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
 | `src/model/create.ts`, `src/page/canvas-areas.ts`, `src/page/create-session.tsx` | Card 11: a new session from a canvas right-click — which project (`projectAt` over each style's own areas: `labelSpans`, `shelfSegments`, the Swimlanes lanes), the name (Hermes' title rules), the spot, the create (create → title → release the runtime; a refused name deletes its untitled row), one submit = one session; the canvas menu (`session-menu.tsx`), the ghost (`graph-canvas.tsx`) and the dialog. |
 | `src/model/selection.ts` | Card 9: the selection (a set with one primary block) and its rules — click, Shift toggle, box (full containment), Shift + box, Esc, Ctrl/⌘+A, the never-selectable blocks, what a refresh keeps — and the group offset of a multi-block drag (with Snap, by the grabbed block's snapped spot). |
-| `src/model/context.ts`, `src/page/context-env.tsx` | Card 12: the context figure every style uses (`contextFigure`: measured, `~` estimated, `—`), the tooltip lines, the cache state, the lifetime label, and the page's estimate store (batched ≤ 100 ids, per profile, refetched when the row's signature moves) with its viewport driver (every style) and React hooks. |
+| `src/model/context.ts`, `src/page/context-env.tsx` | Card 12: the context figure every style uses (`contextFigure`: measured, `~` estimated, `—`), the tooltip lines, the cache state, the lifetime label, and the page's estimate store (batched ≤ 100 ids, per profile, refetched when the row's signature moves; an entry under another signature shows as loading) with its driver (every style: the viewport-near blocks; Rich cards: also every in-scope session, for the bars' scope scale) and React hooks. |
 | `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`), the Subway map style (`subway/`: the track plan `plan.ts`, metro layout `layout.ts`, label placement `labels.ts`, geometry `spec.ts`, stations/tracks `subway-flow.tsx`, label driver + map key + depot `layer.tsx`, `subway.css`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
 | `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`, with a framed style's layers), toolbar (with the style switcher; its narrow-width layout is the pure `toolbar-layout.ts`), the Re-arrange confirm and Layout history dialog (`layout-history.tsx`, its row and confirm text `history-labels.ts`), the block menu (`session-menu.tsx`, SDK ContextMenu), the actions controller with its dialogs (`session-actions.tsx`) and the shared services (`services.ts`: layout store, device prefs, push + poll). |
 
