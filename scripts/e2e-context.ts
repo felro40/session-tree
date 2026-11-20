@@ -45,7 +45,7 @@ import {
 } from './e2e/common.ts'
 import { buildTestPackage, isolatedEnv, PLUGIN_ID, REPO, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
-import { contextFigure, contextTooltip, fullNumber, usedLabel, lifetimeTokens, cacheState } from '../src/model/context.ts'
+import { contextFigure, contextSignature, contextTooltip, fullNumber, usedLabel, lifetimeTokens, cacheState } from '../src/model/context.ts'
 import type { ContextAnswer, ContextEntry } from '../src/model/context.ts'
 import type { SessionRow } from '../src/model/sessions.ts'
 import { TOKEN_BAR } from '../src/styles/rich/spec.ts'
@@ -66,16 +66,26 @@ const IDS = [MEASURED, UNKNOWN, COMPACTED, ROUTE, ESTIMATE, NEVER]
 const STYLES = ['subway', 'swimlanes', 'rich'] as const
 const INSPECTOR = '[data-testid="session-tree-inspector"]'
 
+/** The suite's own direct estimate requests carry this query (the page's requests never do). */
+const DIRECT = 'e2e=direct'
+
 async function estimates(s: Parameters<typeof rowsOf>[0], ids: string[]): Promise<ContextAnswer['contexts']> {
-  return (await api<ContextAnswer>(s, '/api/plugins/session-tree/sessions/context', { method: 'POST', body: { profile: 'default', ids } })).contexts
+  return (await api<ContextAnswer>(s, `/api/plugins/session-tree/sessions/context?${DIRECT}`, { method: 'POST', body: { profile: 'default', ids } })).contexts
 }
 
-const entryOf = (answer: ContextAnswer['contexts'], id: string): ContextEntry | undefined =>
-  answer[id] ? { status: 'loaded', sig: '', estimate: answer[id].estimate, window: answer[id].context_window } : undefined
+/** The backend's answer as the page's entry for `row` as it is now (its current signature, D4). */
+const entryOf = (answer: ContextAnswer['contexts'], row: SessionRow): ContextEntry | undefined =>
+  answer[row.id] ? { status: 'loaded', sig: contextSignature(row), estimate: answer[row.id].estimate, window: answer[row.id].context_window } : undefined
 
 /** What each fixture's block must read, from the backend's own row and estimate. */
 function expectedLabels(rows: SessionRow[], answer: ContextAnswer['contexts']): Record<string, string> {
-  return Object.fromEntries(IDS.map(id => [id, contextFigure(rows.find(row => row.id === id)!, entryOf(answer, id)).label]))
+  return Object.fromEntries(
+    IDS.map(id => {
+      const row = rows.find(each => each.id === id)!
+
+      return [id, contextFigure(row, entryOf(answer, row)).label]
+    })
+  )
 }
 
 /** Each fixture block's figure on screen (null: not drawn). */
@@ -204,7 +214,17 @@ async function main(): Promise<void> {
   const { page } = s
   const stacks: string[] = []
   const log = backendLog(page)
+  /** Every finished POST /sessions/context of the page (its estimate requests, the response read). */
+  const answered: { at: number; ids: string[] }[] = []
   let failures = 0
+
+  page.on('requestfinished', request => {
+    const url = new URL(request.url())
+
+    if (request.method() === 'POST' && url.pathname.endsWith('/api/plugins/session-tree/sessions/context') && !url.search.includes(DIRECT)) {
+      answered.push({ at: Date.now(), ids: (JSON.parse(request.postData() ?? '{}') as { ids?: string[] }).ids ?? [] })
+    }
+  })
 
   page.on('pageerror', error => stacks.push(`${error.message}\n${error.stack ?? ''}`))
   onFailure(
@@ -320,7 +340,7 @@ async function main(): Promise<void> {
         for (const id of [MEASURED, COMPACTED, NEVER]) {
           const row = rows.find(each => each.id === id)!
           const tip = await tooltipOf(page, id)
-          const want = [row.title, ...contextTooltip(row, entryOf(answer, id), Date.now())].join('\n')
+          const want = [row.title, ...contextTooltip(row, entryOf(answer, row), Date.now())].join('\n')
 
           assert(tip === want, `${id} tooltip:\n${tip}\n--- wanted ---\n${want}`)
           tips[id] = tip
@@ -346,6 +366,8 @@ async function main(): Promise<void> {
       await switchStyle(page, 'rich')
       await fit(page)
       await settledLabels(page)
+      // Fix r1 (D3): until every in-scope figure settled the scale is pending (unfilled bars, `of` "").
+      await page.waitForFunction(() => !document.querySelector('[data-testid="session-tree-block"][data-context-scale="pending"]'), undefined, { timeout: 20_000 })
       const zoom = (await viewport(page)).zoom
       const bars = await page.$$eval(
         '[data-testid="session-tree-block"]',
@@ -485,48 +507,109 @@ async function main(): Promise<void> {
       await fit(page)
       await settledLabels(page)
       const before = (await shownLabels(page))[MEASURED]
+      const rowsBefore = await rowsOf(s)
+      const from = Date.now()
       const archived = seedFixtures(t, ['--archive', MEASURED]) as { how: string; generation: number; generation_before: number }
 
       assert(archived.how === 'prune' && archived.generation === archived.generation_before + 1, JSON.stringify(archived))
-      const after = await waitFor('the measured block flips to an estimate', () => shownLabels(page), labels => labels[MEASURED]?.kind === 'estimated', 30_000)
-
-      rows = await rowsOf(s)
+      // Fix r1 (D5): the backend's own figure under the new signature (the clock now names
+      // `compacted`), fetched directly; the block must show exactly that, and the page's refetch
+      // for the session must have completed — a stale estimate (loaded earlier by the inspector)
+      // never passes for it (D4).
+      rows = await waitFor('the listing names the archive', () => rowsOf(s), list => list.find(each => each.id === MEASURED)?.context_invalid_reason === 'compacted', 30_000)
       answer = await estimates(s, IDS)
       const row = rows.find(each => each.id === MEASURED)!
+      const want = contextFigure(row, entryOf(answer, row)).label
 
-      assert(row.context_invalid_reason === 'compacted', `reason ${row.context_invalid_reason}`)
-      assert(after[MEASURED]?.text === contextFigure(row, entryOf(answer, MEASURED)).label, `${after[MEASURED]?.text} vs ${contextFigure(row, entryOf(answer, MEASURED)).label}`)
+      assert(/^~\d/.test(want), `the backend's figure ${want}`)
+      const sigsMoved = IDS.filter(id => contextSignature(rows.find(each => each.id === id)!) !== contextSignature(rowsBefore.find(each => each.id === id)!))
+      const after = await waitFor('the measured block shows the backend\'s new estimate', () => shownLabels(page), labels => labels[MEASURED]?.kind === 'estimated' && labels[MEASURED]?.text === want, 30_000)
+      const refetch = await waitFor('the page\'s refetch for the archived session completed', async () => answered.filter(entry => entry.at >= from && entry.ids.includes(MEASURED)), list => list.length > 0, 30_000)
 
-      return { before, after: after[MEASURED], archived }
+      return { before, after: after[MEASURED], want, refetches: refetch.map(entry => entry.ids), sigsMoved, archived }
     })
 
     await check('live: an appended message makes the estimate refetch (that session only) and the figure follows (the tooltip\'s full number)', async () => {
       const before = (await shownLabels(page))[ESTIMATE]
       const oldTotal = answer[ESTIMATE]?.estimate?.total ?? 0
+      // Fix r1 (D5): the window opens only after the archive's refetch has completed (above).
       const from = Date.now()
+      const askedSince = () =>
+        log
+          .filter(entry => entry.at >= from && entry.method === 'POST' && entry.path.startsWith('/sessions/context') && !entry.path.includes(DIRECT))
+          .flatMap(entry => (JSON.parse(entry.body ?? '{}') as { ids?: string[] }).ids ?? [])
 
       seedFixtures(t, ['--append', ESTIMATE])
-      const asked = await waitFor(
-        'a context request for the appended session',
-        async () => log.filter(entry => entry.at >= from && entry.method === 'POST' && entry.path.startsWith('/sessions/context')).flatMap(entry => (JSON.parse(entry.body ?? '{}') as { ids?: string[] }).ids ?? []),
-        ids => ids.includes(ESTIMATE),
-        30_000
-      )
-
-      await sleep(800)
-      rows = await rowsOf(s)
+      rows = await waitFor('the listing has the appended message', () => rowsOf(s), list => contextSignature(list.find(each => each.id === ESTIMATE)!) !== contextSignature(rows.find(each => each.id === ESTIMATE)!), 30_000)
       answer = await estimates(s, IDS)
       const newTotal = answer[ESTIMATE]?.estimate?.total ?? 0
-      const want = contextFigure(rows.find(row => row.id === ESTIMATE)!, entryOf(answer, ESTIMATE)).label
-      const after = (await shownLabels(page))[ESTIMATE]
+      const row = rows.find(each => each.id === ESTIMATE)!
+      const want = contextFigure(row, entryOf(answer, row)).label
+      const after = (await waitFor('the block shows the backend\'s new estimate', () => shownLabels(page), labels => labels[ESTIMATE]?.kind === 'estimated' && labels[ESTIMATE]?.text === want, 30_000))[ESTIMATE]
+
+      await waitFor('the page\'s refetch for the appended session completed', async () => answered.filter(entry => entry.at >= from && entry.ids.includes(ESTIMATE)), list => list.length > 0, 30_000)
       const tip = await tooltipOf(page, ESTIMATE)
+      const asked = askedSince()
 
       assert(newTotal > oldTotal, `estimate ${oldTotal} → ${newTotal}`)
-      assert(after?.text === want, `${after?.text} vs ${want}`)
       assert(tip.includes(`Context: ~${fullNumber(newTotal)} tokens`), tip)
-      assert(asked.every(id => id === ESTIMATE), `asked for ${JSON.stringify(asked)}`)
+      assert(asked.length > 0 && asked.every(id => id === ESTIMATE), `asked for ${JSON.stringify(asked)}; timeline ${JSON.stringify(log.filter(entry => entry.at >= from).map(entry => `${entry.at - from} ${entry.method} ${entry.path.split('?')[0]} ${entry.body ?? ''}`))}`)
 
       return { before: before?.text, after: after?.text, total: [oldTotal, newTotal], asked }
+    })
+
+    await check('Rich cards (fix r1, B1): the bar\'s scale is the whole scope\'s, whatever the viewport — zoomed in on a card far from the largest and reloaded, then Fit: the same data-context-of and the same fill (± 1 px); no estimate request over 100 ids', async () => {
+      const FAR = 'st-rich-code'
+      const rich = seedFixtures(t, ['--rich']) as { created?: boolean }
+
+      assert(rich.created === true, `the Rich fixtures were not created: ${JSON.stringify(rich)}`)
+      await switchStyle(page, 'rich')
+      await reloadTree(t, s)
+      await page.locator(BLOCK(FAR)).first().waitFor({ timeout: 20_000 })
+      await fit(page)
+      await zoomTo(page, FAR, 12)
+      const zoomed = await viewport(page)
+
+      assert(zoomed.zoom > 2.4, `zoom ${zoomed.zoom}`)
+      await reloadTree(t, s)
+      await page.locator(BLOCK(FAR)).first().waitFor({ timeout: 20_000 })
+      const read = () =>
+        page.$eval(BLOCK(FAR), element => {
+          const bar = element.querySelector('[data-testid="session-tree-token-bar"]')!.getBoundingClientRect()
+          const track = element.querySelector('.st-rc-bar')!.getBoundingClientRect()
+
+          return { of: element.getAttribute('data-context-of'), scale: element.getAttribute('data-context-scale'), context: element.getAttribute('data-context'), fill: bar.width / track.width }
+        })
+      const first = await read()
+      const atZoom = await waitFor('the scale is not pending', read, value => value.scale === 'scope' && value.of !== '', 30_000)
+      const reloaded = await viewport(page)
+      /** Which in-scope cards are on screen now (the largest is not among the far card's neighbours). */
+      const onScreen = await page.$$eval('[data-testid="session-tree-block"]', elements =>
+        elements
+          .filter(element => {
+            const r = element.getBoundingClientRect()
+
+            return r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight
+          })
+          .map(element => element.getAttribute('data-session-id'))
+      )
+
+      await fit(page)
+      const atFit = await read()
+      const cards = await page.$$eval('[data-testid="session-tree-block"]', elements =>
+        elements.filter(element => element.getAttribute('data-out-of-scope') !== 'true').map(element => ({ id: element.getAttribute('data-session-id'), context: Number(element.getAttribute('data-context')) || 0 }))
+      )
+      const largest = cards.reduce((best, card) => (card.context > best.context ? card : best), cards[0])
+      const oversize = log.filter(entry => entry.method === 'POST' && entry.path.startsWith('/sessions/context') && !entry.path.includes(DIRECT)).map(entry => ((JSON.parse(entry.body ?? '{}') as { ids?: string[] }).ids ?? []).length)
+
+      assert(reloaded.zoom > 2.4, `the reload did not keep the zoom: ${reloaded.zoom}`)
+      assert(Number(atZoom.context) > 0, `the far card has no figure: ${JSON.stringify(atZoom)}`)
+      assert(atFit.of === atZoom.of && atFit.scale === 'scope', `data-context-of ${atZoom.of} at zoom vs ${atFit.of} at Fit`)
+      assert(Math.abs(atFit.fill - atZoom.fill) * TOKEN_BAR <= 1, `fill ${atZoom.fill} at zoom vs ${atFit.fill} at Fit`)
+      assert(Number(atFit.of) === largest.context, `scale ${atFit.of} vs the largest in-scope card ${largest.id} ${largest.context}`)
+      assert(oversize.every(n => n <= 100), `a request asked for ${Math.max(...oversize)} ids`)
+
+      return { far: FAR, firstRead: first, atZoom, atFit, zoom: reloaded.zoom, largest, onScreen, largestOnScreen: onScreen.includes(largest.id), requests: oversize.length, maxIds: Math.max(...oversize) }
     })
 
     await check('no page errors from the plugin', () => {

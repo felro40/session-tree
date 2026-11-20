@@ -901,7 +901,7 @@ async function main(): Promise<void> {
       const measure = async () => {
         const v = await viewport(page)
 
-        await page.waitForFunction(() => ![...document.querySelectorAll('[data-testid="session-tree-block"]')].some(el => el.getAttribute('data-context-kind') === 'loading'), undefined, { timeout: 20_000 })
+        await page.waitForFunction(() => ![...document.querySelectorAll('[data-testid="session-tree-block"]')].some(el => el.getAttribute('data-context-kind') === 'loading' || el.getAttribute('data-context-scale') === 'pending'), undefined, { timeout: 20_000 })
 
         return page.$$eval(
           '[data-testid="session-tree-block"]',
@@ -1509,10 +1509,20 @@ async function main(): Promise<void> {
       return facts.pathological
     })
 
-    await check('500-session fixture (Show all): time to first render, a scripted 2 s middle-drag pan at ≥ 30 fps; only viewport-near ids asked for', async () => {
+    await check('500-session fixture (Show all): time to first render, a scripted 2 s middle-drag pan at ≥ 30 fps; only viewport-near ids asked for details; every in-scope id asked for its context estimate, ≤ 100 ids a request (fix r1, D2)', async () => {
       await clickToolbar(page, 'session-tree-show-all')
       const started = Date.now()
+      /** Fix r1 (D2): the context estimate requests of the scale profile, with when each finished. */
+      const finished: { at: number; ids: string[] }[] = []
+      const onFinished = (request: Request) => {
+        const body = request.postData()
 
+        if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/sessions/context') && body?.includes('"scale"')) {
+          finished.push({ at: Date.now(), ids: (JSON.parse(body) as { ids?: string[] }).ids ?? [] })
+        }
+      }
+
+      page.on('requestfinished', onFinished)
       await setProfile(page, 'scale')
       await page.waitForFunction(() => document.querySelector('[data-testid="session-tree-page"]')?.getAttribute('data-canvas-count') === '500', undefined, { timeout: 60_000 })
       await page.locator('[data-testid="session-tree-block"][data-session-id^="st-scale-"]').first().waitFor({ timeout: 60_000 })
@@ -1520,6 +1530,18 @@ async function main(): Promise<void> {
 
       await sleep(1500)
       const asked = new Set(detailsRequests(log, started).filter(request => request.profile === 'scale').flatMap(request => request.ids))
+      const contextAsked = () => log.filter(entry => entry.at >= started && entry.method === 'POST' && entry.path.startsWith('/sessions/context') && (entry.body ?? '').includes('"scale"'))
+
+      await waitFor('every scale context request answered and the scale settled', async () => ({
+        asked: contextAsked().length,
+        finished: finished.length,
+        pending: await page.locator('[data-testid="session-tree-block"][data-context-scale="pending"]').count()
+      }), state => state.asked > 0 && state.finished === state.asked && state.pending === 0, 60_000)
+      page.off('requestfinished', onFinished)
+      const contextRequests = contextAsked()
+      const contextIds = new Set(contextRequests.flatMap(entry => (JSON.parse(entry.body ?? '{}') as { ids?: string[] }).ids ?? []))
+      const perRequest = contextRequests.map(entry => ((JSON.parse(entry.body ?? '{}') as { ids?: string[] }).ids ?? []).length)
+      const estimates = { batches: contextRequests.length, ids: contextIds.size, perRequest, totalMs: Math.max(...finished.map(each => each.at)) - Math.min(...contextRequests.map(entry => entry.at)) }
       const pan = await panFps(page)
 
       await page.screenshot({ path: join(shots, 'rich-scale.png') })
@@ -1530,7 +1552,8 @@ async function main(): Promise<void> {
       assert(pan.moved, 'the pan did not move the view')
       assert(pan.fps >= 30, `${pan.fps} fps`)
       assert(asked.size > 0 && asked.size < 500, `asked for ${asked.size} of 500 scale cards`)
-      facts.scale = { firstRenderMs, ...pan, zoom: v.zoom, askedAtOpen: asked.size }
+      assert(contextIds.size === 500 && perRequest.every(n => n <= 100), `context estimates: ${JSON.stringify(estimates)}`)
+      facts.scale = { firstRenderMs, ...pan, zoom: v.zoom, askedAtOpen: asked.size, contextEstimates: estimates }
 
       return facts.scale
     })
