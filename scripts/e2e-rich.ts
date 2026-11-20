@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import type { Page, Request } from 'playwright-core'
 
 import type { StateSnapshot } from '../src/model/layout-sync.ts'
-import { contextFigure } from '../src/model/context.ts'
+import { contextFigure, contextSignature } from '../src/model/context.ts'
 import type { ContextAnswer } from '../src/model/context.ts'
 import { TOKEN_BAR as RICH_TOKEN_BAR } from '../src/styles/rich/spec.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
@@ -896,7 +896,7 @@ async function main(): Promise<void> {
       const visible = visibleRows(rows)
       const answer = await backendContexts(s, visible.map(row => row.id))
       const figures = new Map(
-        visible.map(row => [row.id, contextFigure(row, answer[row.id] ? { status: 'loaded', sig: '', estimate: answer[row.id].estimate, window: answer[row.id].context_window } : undefined)])
+        visible.map(row => [row.id, contextFigure(row, answer[row.id] ? { status: 'loaded', sig: contextSignature(row), estimate: answer[row.id].estimate, window: answer[row.id].context_window } : undefined)])
       )
       const measure = async () => {
         const v = await viewport(page)
