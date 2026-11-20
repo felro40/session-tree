@@ -24,7 +24,13 @@ export interface Session {
  * dismissing that toast stores (`apps/desktop/src/store/updates.ts` `snoozeUpdateToast`).
  */
 async function snoozeUpdateToast(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => window.localStorage.setItem('hermes:update-toast-snooze-until', String(Date.now() + 7 * 86_400_000)))
+  await context.addInitScript(() => {
+    try {
+      window.localStorage.setItem('hermes:update-toast-snooze-until', String(Date.now() + 7 * 86_400_000))
+    } catch {
+      // about:blank and other opaque origins have no localStorage: nothing to snooze there.
+    }
+  })
 }
 
 export async function launch({ colorScheme = 'light' }: { colorScheme?: 'dark' | 'light' } = {}): Promise<Session> {
