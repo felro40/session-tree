@@ -5,7 +5,8 @@
  * - `ContextEstimates` creates the store and keeps only the loaded data's blocks in it.
  * - `ContextDriver` (inside the flow, for every style) asks for the blocks in or near the
  *   viewport that have no usable measurement, after every pan / zoom (throttled) and every data
- *   change; only what is not current goes out, batched (≤ 100 ids per request).
+ *   change; in Rich cards also every in-scope session (fix r1, D2: the bars' scope scale). Only
+ *   what is not current goes out, batched (≤ 100 ids per request).
  * - `useContextFigure(node)` is a block's figure (`contextFigure`); it re-renders that block only.
  * - `useWantContext(node)` asks for one node's estimate whatever its measurement (the inspector
  *   lists the estimate's categories for the selected session).
@@ -15,7 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, us
 import type { ReactNode } from 'react'
 
 import { fetchContext } from '../api.ts'
-import { ContextStore, contextFigure, needsEstimate, wantedOf } from '../model/context.ts'
+import { ContextStore, contextFigure, inScopeWanted, needsEstimate, wantedOf } from '../model/context.ts'
 import type { ContextEntry, ContextFigure } from '../model/context.ts'
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import type { Point } from '../model/layout.ts'
@@ -95,12 +96,15 @@ export function ContextDriver({
   model,
   positions,
   shown,
-  nodeSize
+  nodeSize,
+  wholeScope = false
 }: {
   model: GraphModel
   positions: ReadonlyMap<string, Point>
   shown: ReadonlySet<string>
   nodeSize: { width: number; height: number }
+  /** Rich cards (fix r1, D2): ask for every in-scope session, not only the viewport's. */
+  wholeScope?: boolean
 }) {
   const store = useContextStore()
   const ctx = usePluginCtx()
@@ -129,8 +133,12 @@ export function ContextDriver({
       }
     }
 
-    store.want(nearIds(rects, { x: transform[0], y: transform[1], zoom: transform[2] }, width, height).map(id => wantedOf(model.nodeById.get(id)!)))
-  }, [store, flow])
+    // Fix r1 (D2): in Rich cards every in-scope session is asked for (the bars' scope scale needs
+    // them all, A5: each is a shown card); other styles ask for the viewport-near blocks only.
+    const near = nearIds(rects, { x: transform[0], y: transform[1], zoom: transform[2] }, width, height).map(id => wantedOf(model.nodeById.get(id)!))
+
+    store.want(wholeScope ? [...inScopeWanted(model.nodes), ...near] : near)
+  }, [store, flow, wholeScope])
 
   const schedule = useCallback(
     (ms: number) => {

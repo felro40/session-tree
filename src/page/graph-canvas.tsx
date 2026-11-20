@@ -870,7 +870,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
                 />
               </ViewportPortal>
             )}
-            <ContextDriver model={model} positions={positions} shown={shown} nodeSize={style.nodeSize} />
+            <ContextDriver model={model} positions={positions} shown={shown} nodeSize={style.nodeSize} wholeScope={style.id === 'rich'} />
             {Layer && (
               <Layer
                 model={model}

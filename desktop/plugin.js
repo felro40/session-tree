@@ -9849,7 +9849,7 @@ function contextFigure(row, entry) {
   if (!reportsContext(row))
     return none2(null, ["Context: not reported by this Hermes backend"]);
   let why = notMeasuredReason(row);
-  if (!entry)
+  if (!entry || entry.sig !== contextSignature(row))
     return { kind: "loading", tokens: null, value: "…", label: "… ctx", window: null, percent: null, notMeasured: why, lines: ["Context: estimating…", `Not measured: ${why}.`] };
   if (entry.status === "failed")
     return none2(why, ["Context: the estimate could not be loaded", `Not measured: ${why}.`]);
@@ -9908,6 +9908,12 @@ var MAX_BATCH = 100, BATCH_MS = 60, RETRY_AFTER_MS = 3e4, MAX_ENTRIES = 2e3, LOG
 function wantedOf(node) {
   return node.row ? { key: node.id, id: node.row.id, profile: node.profile, sig: contextSignature(node.row) } : void 0;
 }
+function inScopeWanted(nodes) {
+  let out = [];
+  for (let node of nodes)
+    node.kind === "session" && !node.outOfScope && node.row && needsEstimate(node.row) && out.push(wantedOf(node));
+  return out;
+}
 var ContextStore = class {
   fetchContext;
   timers;
@@ -9941,7 +9947,7 @@ var ContextStore = class {
       if (!item)
         continue;
       let entry = this.entries.get(item.key), failed = this.failedAt.get(item.key);
-      entry?.status === "loaded" && entry.sig === item.sig || this.inflight.get(item.key) === item.sig || failed !== void 0 && now2 - failed < RETRY_AFTER_MS || this.pending.set(item.key, item);
+      entry?.status === "loaded" && entry.sig === item.sig || this.inflight.get(item.key) === item.sig || failed !== void 0 && entry?.sig === item.sig && now2 - failed < RETRY_AFTER_MS || this.pending.set(item.key, item);
     }
     this.pending.size > 0 && !this.cancelTimer && (this.cancelTimer = this.timers.setTimeout(() => this.flush(), BATCH_MS));
   }
@@ -10191,7 +10197,8 @@ function ContextDriver({
   model,
   positions,
   shown,
-  nodeSize
+  nodeSize,
+  wholeScope = !1
 }) {
   let store = useContextStore(), ctx = usePluginCtx(), flow = useStoreApi(), latest = useRef2({ model, positions, shown, nodeSize }), timer2 = useRef2(void 0), run = useCallback2(() => {
     if (timer2.current = void 0, !store)
@@ -10201,8 +10208,9 @@ function ContextDriver({
       let point = positions2.get(id2), node = model2.nodeById.get(id2);
       point && node?.kind === "session" && node.row && needsEstimate(node.row) && rects.push([id2, { x: point.x, y: point.y, width: nodeSize2.width, height: nodeSize2.height }]);
     }
-    store.want(nearIds(rects, { x: transform2[0], y: transform2[1], zoom: transform2[2] }, width, height).map((id2) => wantedOf(model2.nodeById.get(id2))));
-  }, [store, flow]), schedule2 = useCallback2(
+    let near = nearIds(rects, { x: transform2[0], y: transform2[1], zoom: transform2[2] }, width, height).map((id2) => wantedOf(model2.nodeById.get(id2)));
+    store.want(wholeScope ? [...inScopeWanted(model2.nodes), ...near] : near);
+  }, [store, flow, wholeScope]), schedule2 = useCallback2(
     (ms) => {
       timer2.current || (timer2.current = ctx.setTimeout(run, ms));
     },
@@ -10389,7 +10397,7 @@ function Actions({ node, onOpen }) {
   ] });
 }
 function ContextSection({ node, nowMs }) {
-  let row = node.row, entry = useContextEntry(node.id), figure = contextFigure(row, entry), cache2 = cacheState(row.cache_window, nowMs), estimate = entry?.status === "loaded" ? entry.estimate : null, measured = figure.kind === "measured" ? row.context_measured : null;
+  let row = node.row, entry = useContextEntry(node.id), figure = contextFigure(row, entry), cache2 = cacheState(row.cache_window, nowMs), estimate = entry?.status === "loaded" && entry.sig === contextSignature(row) ? entry.estimate : null, measured = figure.kind === "measured" ? row.context_measured : null;
   return useWantContext(node), /* @__PURE__ */ jsxs4("div", { className: "st-sec st-ctx", "data-testid": "session-tree-inspector-context", "data-kind": figure.kind, children: [
     /* @__PURE__ */ jsxs4("div", { className: "st-sh", children: [
       /* @__PURE__ */ jsx5("span", { children: "Context" }),
@@ -10595,16 +10603,29 @@ var cardTokens = (node) => Math.max(0, Number(node.row?.input_tokens) || 0) + Ma
 function tokenBarWidth(tokens, max) {
   return max > 0 ? 32 * Math.min(tokens, max) / max : 0;
 }
-function contextBar(tokens, window2, max) {
-  let value2 = tokens ?? 0;
-  return window2 && window2 > 0 ? { width: tokenBarWidth(value2, window2), scale: "window", of: window2 } : { width: tokenBarWidth(value2, max), scale: "scope", of: max };
+function contextBar(tokens, window2, scale) {
+  let value2 = tokens ?? 0, { max, pending } = typeof scale == "number" ? { max: scale, pending: !1 } : scale;
+  return window2 && window2 > 0 ? { width: tokenBarWidth(value2, window2), scale: "window", of: window2 } : pending ? { width: 0, scale: "pending", of: null } : { width: tokenBarWidth(value2, max), scale: "scope", of: max };
 }
-function maxContextInScope(model, figureOf) {
-  let max = 0;
+function scaleTokens(figure) {
+  return figure ? figure.kind === "loading" ? null : figure.kind === "none" ? 0 : Math.max(0, figure.tokens ?? 0) : 0;
+}
+function contextScaleInScope(model, figureOf, previous = /* @__PURE__ */ new Map()) {
+  let settled = /* @__PURE__ */ new Map(), max = 0, pending = !1;
   for (let node of model.nodes)
-    node.kind === "session" && !node.outOfScope && (max = Math.max(max, figureOf(node) ?? 0));
-  return max;
+    if (node.kind === "session" && !node.outOfScope) {
+      let value2 = scaleTokens(figureOf(node)) ?? previous.get(node.id);
+      value2 === void 0 ? pending = !0 : (settled.set(node.id, value2), max = Math.max(max, value2));
+    }
+  return { pending, max: pending ? 0 : max, settled };
 }
+var ScopeScaleMemory = class {
+  settled = /* @__PURE__ */ new Map();
+  update(model, figureOf) {
+    let next = contextScaleInScope(model, figureOf, this.settled);
+    return this.settled = next.settled, next;
+  }
+};
 function shortModel(model) {
   return ((model ?? "").trim().split("/").pop() ?? "").replace(/^claude-/, "") || "—";
 }
@@ -10646,12 +10667,12 @@ function RichProvider({ model, children: children2 }) {
       { setTimeout: (fn, ms) => ctx.setTimeout(fn, ms), now: () => Date.now() },
       () => localOffsetMinutes()
     )
-  ), contexts = useContextStore(), version = useContextVersion(), maxTokens = useMemo3(
-    () => maxContextInScope(model, (node) => node.row ? contextFigure(node.row, contexts?.get(node.id)).tokens : null),
+  ), contexts = useContextStore(), version = useContextVersion(), [memory] = useState3(() => new ScopeScaleMemory()), scale = useMemo3(
+    () => memory.update(model, (node) => node.row ? contextFigure(node.row, contexts?.get(node.id)) : void 0),
     // The version is the context store's change signal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, contexts, version]
-  ), value2 = useMemo3(() => ({ store, maxTokens }), [store, maxTokens]);
+    [memory, model, contexts, version]
+  ), pending = scale.pending, maxTokens = scale.max, value2 = useMemo3(() => ({ store, maxTokens, pending }), [store, maxTokens, pending]);
   return useEffect3(() => (store.resume(), () => store.dispose()), [store]), useEffect3(() => {
     store.retain(model.nodes.filter((node) => node.kind === "session").map((node) => node.id));
   }, [store, model]), /* @__PURE__ */ jsx6(RichEnvCtx.Provider, { value: value2, children: children2 });
@@ -10715,7 +10736,7 @@ function Excerpt({ node, entry }) {
   ] }) : /* @__PURE__ */ jsx7("span", { className: "st-rc-none", children: "No messages to show" }) });
 }
 var RichCard = memo4(function({ data, selected: selected2 }) {
-  let { node, status, project } = data, actions = useSessionActions(), env = useRichEnv(), row = node.row, entry = useDetails(node.id), figure = useContextFigure(node), tokens = cardTokens(node), max = env?.maxTokens ?? 0, bar = contextBar(figure?.tokens ?? null, figure?.window ?? null, max), ghosts = Math.min(node.compacted, 2);
+  let { node, status, project } = data, actions = useSessionActions(), env = useRichEnv(), row = node.row, entry = useDetails(node.id), figure = useContextFigure(node), tokens = cardTokens(node), max = env?.maxTokens ?? 0, bar = contextBar(figure?.tokens ?? null, figure?.window ?? null, { max, pending: env?.pending ?? !1 }), ghosts = Math.min(node.compacted, 2);
   return /* @__PURE__ */ jsxs5(
     "div",
     {
@@ -10735,11 +10756,11 @@ var RichCard = memo4(function({ data, selected: selected2 }) {
       "data-lineage": data.inLineage ? "true" : void 0,
       "data-ghosts": ghosts,
       "data-tokens": tokens,
-      "data-token-max": max,
+      "data-token-max": env?.pending ? "" : max,
       "data-context": figure?.tokens ?? "",
       "data-context-kind": figure?.kind,
       "data-context-scale": bar.scale,
-      "data-context-of": bar.of,
+      "data-context-of": bar.of ?? "",
       "data-details": entry ? entry.details ? "loaded" : "missing" : "loading",
       style: { width: 280, height: 164, "--st-pc": projectColor(project) },
       children: [
@@ -13437,7 +13458,7 @@ function GraphCanvas(props) {
                         style: { transform: `translate(${ghost.x}px, ${ghost.y}px)`, width: ghost.width, height: ghost.height, "--st-pc": ghost.color }
                       }
                     ) }),
-                    /* @__PURE__ */ jsx16(ContextDriver, { model, positions, shown, nodeSize: style2.nodeSize }),
+                    /* @__PURE__ */ jsx16(ContextDriver, { model, positions, shown, nodeSize: style2.nodeSize, wholeScope: style2.id === "rich" }),
                     Layer && /* @__PURE__ */ jsx16(
                       Layer,
                       {

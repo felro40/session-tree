@@ -6,7 +6,7 @@ import { Codicon } from '@hermes/plugin-sdk'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { agoLabel, compactNumber, costLabel, dateTimeLabel, shortAge } from '../../model/format.ts'
-import { cacheState, contextFigure, fullNumber, lifetimeLine, lifetimeTokens, usedLabel } from '../../model/context.ts'
+import { cacheState, contextFigure, contextSignature, fullNumber, lifetimeLine, lifetimeTokens, usedLabel } from '../../model/context.ts'
 import { singlesInScope } from '../../model/graph.ts'
 import type { GraphModel, GraphNode } from '../../model/graph.ts'
 import type { LiveStatus } from '../../model/status.ts'
@@ -189,7 +189,8 @@ function ContextSection({ node, nowMs }: { node: GraphNode; nowMs: number }) {
   const entry = useContextEntry(node.id)
   const figure = contextFigure(row, entry)
   const cache = cacheState(row.cache_window, nowMs)
-  const estimate = entry?.status === 'loaded' ? entry.estimate : null
+  // Fix r1 (D4): the categories of an estimate fetched under another signature are not shown.
+  const estimate = entry?.status === 'loaded' && entry.sig === contextSignature(row) ? entry.estimate : null
   const measured = figure.kind === 'measured' ? row.context_measured : null
 
   useWantContext(node)

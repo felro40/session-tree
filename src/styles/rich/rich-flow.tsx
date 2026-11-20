@@ -142,7 +142,8 @@ export const RichCard = memo(function RichCard({ data, selected }: NodeProps<Ric
   // figure show the context.
   const tokens = cardTokens(node)
   const max = env?.maxTokens ?? 0
-  const bar = contextBar(figure?.tokens ?? null, figure?.window ?? null, max)
+  // Fix r1 (D3): while the scope scale is pending the bar is unfilled and `data-context-of` is "".
+  const bar = contextBar(figure?.tokens ?? null, figure?.window ?? null, { max, pending: env?.pending ?? false })
   const ghosts = Math.min(node.compacted, MAX_GHOSTS)
 
   return (
@@ -163,11 +164,11 @@ export const RichCard = memo(function RichCard({ data, selected }: NodeProps<Ric
       data-lineage={data.inLineage ? 'true' : undefined}
       data-ghosts={ghosts}
       data-tokens={tokens}
-      data-token-max={max}
+      data-token-max={env?.pending ? '' : max}
       data-context={figure?.tokens ?? ''}
       data-context-kind={figure?.kind}
       data-context-scale={bar.scale}
-      data-context-of={bar.of}
+      data-context-of={bar.of ?? ''}
       data-details={entry ? (entry.details ? 'loaded' : 'missing') : 'loading'}
       style={{ width: RICH_WIDTH, height: RICH_HEIGHT, '--st-pc': projectColor(project) } as CSSProperties}
     >

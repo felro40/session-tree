@@ -19,6 +19,7 @@ import {
   contextSignature,
   contextTooltip,
   fullNumber,
+  inScopeWanted,
   lifetimeLine,
   needsEstimate,
   usableMeasurement,
@@ -28,9 +29,9 @@ import {
 import type { ContextAnswer, ContextEntry } from '../../src/model/context.ts'
 import { dateTimeLabel } from '../../src/model/format.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
-import { TOKEN_BAR, contextBar, maxContextInScope } from '../../src/styles/rich/spec.ts'
+import { ScopeScaleMemory, TOKEN_BAR, contextBar, contextScaleInScope, scaleTokens } from '../../src/styles/rich/spec.ts'
 import { laneTotalsLabel } from '../../src/styles/swimlanes/spec.ts'
-import { row } from './fixtures.ts'
+import { project, row } from './fixtures.ts'
 
 const SENT = 1_800_000_000
 /** A row from a card-12 backend: the three fields present (null with no clock). */
@@ -43,10 +44,49 @@ const loaded = (total: null | number, window: null | number = null): ContextEntr
   estimate: total === null ? null : { total, categories: [{ id: 'conversation', label: 'Conversation', tokens: total }] },
   window
 })
+/** The figure for an entry fetched under the row's current signature (fix r1, D4). */
+const fig = (r: SessionRow, entry: ContextEntry | undefined) => contextFigure(r, entry && { ...entry, sig: contextSignature(r) })
+
+describe('contextFigure: a stale estimate is never the current figure (fix r1, D4)', () => {
+  it('an entry fetched under another signature is loading; under the current one, estimated', () => {
+    const before = ctxRow('a', { last_active: 5, message_count: 3 })
+    const after = { ...before, message_count: 4 }
+    const entry: ContextEntry = { ...loaded(4142), sig: contextSignature(before) }
+
+    assert.equal(contextFigure(before, entry).kind, 'estimated')
+    assert.equal(contextFigure(before, entry).label, '~4k ctx')
+    const stale = contextFigure(after, entry)
+
+    assert.equal(stale.kind, 'loading')
+    assert.equal(stale.tokens, null)
+    assert.equal(stale.label, '… ctx')
+    assert.equal(stale.lines[0], 'Context: estimating…')
+    assert.deepEqual(contextTooltip(after, entry, SENT * 1000).slice(0, 1), ['Context: estimating…'])
+  })
+
+  it('a compaction (the clock no longer holds) makes the earlier estimate stale; a failed entry too', () => {
+    const measured = ctxRow('a', { context_measured: clock(154789) })
+    const compacted = { ...measured, context_invalid_reason: 'compacted' }
+    const earlier: ContextEntry = { ...loaded(107998), sig: contextSignature(measured) }
+
+    assert.equal(contextFigure(compacted, earlier).kind, 'loading')
+    assert.equal(contextFigure(compacted, { status: 'failed', sig: contextSignature(measured) }).kind, 'loading')
+    assert.equal(contextFigure(compacted, { ...earlier, sig: contextSignature(compacted) }).kind, 'estimated')
+  })
+
+  it('measured rows are unaffected by a stale entry', () => {
+    const r = ctxRow('a', { context_measured: clock(150000) })
+    const figure = contextFigure(r, { ...loaded(90000, 200000), sig: 'another' })
+
+    assert.equal(figure.kind, 'measured')
+    assert.equal(figure.tokens, 150000)
+    assert.equal(figure.window, 200000)
+  })
+})
 
 describe('contextFigure: the one rule', () => {
   it('a valid measurement with a known confidence is measured: the exact figure, `155k ctx`', () => {
-    const figure = contextFigure(ctxRow('a', { context_measured: clock(154789) }), undefined)
+    const figure = fig(ctxRow('a', { context_measured: clock(154789) }), undefined)
 
     assert.equal(figure.kind, 'measured')
     assert.equal(figure.tokens, 154789)
@@ -60,7 +100,7 @@ describe('contextFigure: the one rule', () => {
   })
 
   it('the measurement wins over a loaded estimate; a window adds the share', () => {
-    const figure = contextFigure(ctxRow('a', { context_measured: clock(150000) }), loaded(90000, 200000))
+    const figure = fig(ctxRow('a', { context_measured: clock(150000) }), loaded(90000, 200000))
 
     assert.equal(figure.kind, 'measured')
     assert.equal(figure.tokens, 150000)
@@ -70,7 +110,7 @@ describe('contextFigure: the one rule', () => {
   })
 
   it('a measured 0 is a measurement (`0 ctx`), not a missing one', () => {
-    const figure = contextFigure(ctxRow('a', { context_measured: clock(0) }), undefined)
+    const figure = fig(ctxRow('a', { context_measured: clock(0) }), undefined)
 
     assert.equal(figure.kind, 'measured')
     assert.equal(figure.tokens, 0)
@@ -83,7 +123,7 @@ describe('contextFigure: the one rule', () => {
 
       assert.equal(usableMeasurement(r), undefined)
       assert.equal(needsEstimate(r), true)
-      const figure = contextFigure(r, loaded(107998))
+      const figure = fig(r, loaded(107998))
 
       assert.equal(figure.kind, 'estimated')
       assert.equal(figure.tokens, 107998)
@@ -97,12 +137,12 @@ describe('contextFigure: the one rule', () => {
   }
 
   it('an unknown reason string is still named, verbatim', () => {
-    assert.match(contextFigure(ctxRow('a', { context_measured: clock(5), context_invalid_reason: 'brand_new' }), loaded(9)).notMeasured ?? '', /brand_new$/)
+    assert.match(fig(ctxRow('a', { context_measured: clock(5), context_invalid_reason: 'brand_new' }), loaded(9)).notMeasured ?? '', /brand_new$/)
   })
 
   it('confidence unknown (an implicit cache) is not used: the estimate', () => {
     const r = ctxRow('a', { context_measured: clock(83456, 'unknown') })
-    const figure = contextFigure(r, loaded(101702))
+    const figure = fig(r, loaded(101702))
 
     assert.equal(needsEstimate(r), true)
     assert.equal(figure.kind, 'estimated')
@@ -111,7 +151,7 @@ describe('contextFigure: the one rule', () => {
   })
 
   it('no clock: the estimate, "no prompt-cache call is stored"', () => {
-    const figure = contextFigure(ctxRow('a'), loaded(4142))
+    const figure = fig(ctxRow('a'), loaded(4142))
 
     assert.equal(figure.kind, 'estimated')
     assert.equal(figure.label, '~4k ctx')
@@ -119,7 +159,7 @@ describe('contextFigure: the one rule', () => {
   })
 
   it('no stored prompt (never ran): `— ctx`', () => {
-    const figure = contextFigure(ctxRow('a'), loaded(null))
+    const figure = fig(ctxRow('a'), loaded(null))
 
     assert.equal(figure.kind, 'none')
     assert.equal(figure.tokens, null)
@@ -128,12 +168,12 @@ describe('contextFigure: the one rule', () => {
   })
 
   it('the estimate loading: `… ctx`; failed: `— ctx` with the failure in the tooltip', () => {
-    const loading = contextFigure(ctxRow('a'), undefined)
+    const loading = fig(ctxRow('a'), undefined)
 
     assert.equal(loading.kind, 'loading')
     assert.equal(loading.label, '… ctx')
     assert.equal(loading.lines[0], 'Context: estimating…')
-    const failed = contextFigure(ctxRow('a'), { status: 'failed', sig: 's' })
+    const failed = fig(ctxRow('a'), { status: 'failed', sig: 's' })
 
     assert.equal(failed.kind, 'none')
     assert.equal(failed.label, '— ctx')
@@ -144,7 +184,7 @@ describe('contextFigure: the one rule', () => {
     const old = row('a', { input_tokens: 10, output_tokens: 5 })
 
     assert.equal(needsEstimate(old), false)
-    const figure = contextFigure(old, undefined)
+    const figure = fig(old, undefined)
 
     assert.equal(figure.kind, 'none')
     assert.equal(figure.label, '— ctx')
@@ -229,11 +269,110 @@ describe('the Rich context bar', () => {
     assert.equal(contextBar(10, null, 0).width, 0)
   })
 
-  it('the scope max reads each in-scope session\'s figure', () => {
-    const model = buildGraph([ctxRow('a'), ctxRow('b'), ctxRow('c')], [], { profile: 'default', showArchived: false, scope: ALL_PROJECTS })
-    const figures: Record<string, null | number> = { a: 10, b: 30, c: null }
+  it('while the scope scale is pending: unfilled, no `of`; the window path does not wait (fix r1, D3)', () => {
+    assert.deepEqual(contextBar(50, null, { max: 0, pending: true }), { width: 0, scale: 'pending', of: null })
+    assert.deepEqual(contextBar(50, null, { max: 200, pending: false }), { width: TOKEN_BAR / 4, scale: 'scope', of: 200 })
+    assert.deepEqual(contextBar(100000, 200000, { max: 0, pending: true }), { width: TOKEN_BAR / 2, scale: 'window', of: 200000 })
+  })
+})
 
-    assert.equal(maxContextInScope(model, node => figures[node.id] ?? null), 30)
+describe('the Rich bars\' scope scale (fix r1, D1/D3)', () => {
+  const rows = [ctxRow('a', { context_measured: clock(5000) }), ctxRow('b'), ctxRow('c'), ctxRow('d'), ctxRow('e'), row('old', { input_tokens: 9, output_tokens: 9 })]
+  const model = buildGraph(rows, [], { profile: 'default', showArchived: false, scope: ALL_PROJECTS })
+  const byId = new Map(rows.map(r => [r.id, r]))
+  /** Every estimate the backend would give: b 9000, c failed, d never ran, e 2000. */
+  const full: Record<string, ContextEntry> = {
+    b: { ...loaded(9000), sig: contextSignature(byId.get('b')!) },
+    c: { status: 'failed', sig: contextSignature(byId.get('c')!) },
+    d: { ...loaded(null), sig: contextSignature(byId.get('d')!) },
+    e: { ...loaded(2000), sig: contextSignature(byId.get('e')!) }
+  }
+  const scaleWith = (entries: Record<string, ContextEntry>, previous?: ReadonlyMap<string, number>, m = model) =>
+    contextScaleInScope(m, node => (node.row ? contextFigure(node.row, entries[node.id]) : undefined), previous)
+
+  it('pending until every in-scope figure settled, never a partial max', () => {
+    assert.deepEqual([scaleWith({}).pending, scaleWith({}).max], [true, 0])
+    assert.deepEqual([scaleWith({ b: full.b }).pending, scaleWith({ b: full.b }).max], [true, 0])
+    const done = scaleWith(full)
+
+    assert.equal(done.pending, false)
+    assert.equal(done.max, 9000)
+  })
+
+  it('the same value whatever subset was asked for first (the viewport\'s "near" history)', () => {
+    const orders = [
+      ['b', 'c', 'd', 'e'],
+      ['e', 'd'],
+      ['c'],
+      []
+    ]
+
+    for (const first of orders) {
+      const partial = Object.fromEntries(first.map(id => [id, full[id]]))
+      const previous = scaleWith(partial).settled
+      const scale = scaleWith(full, previous)
+
+      assert.deepEqual([scale.pending, scale.max], [false, 9000], JSON.stringify(first))
+    }
+  })
+
+  it('failed and never-ran figures count 0; an older backend\'s row counts 0; measured counts its tokens', () => {
+    const settled = scaleWith(full).settled
+
+    assert.equal(settled.get('a'), 5000)
+    assert.equal(settled.get('c'), 0)
+    assert.equal(settled.get('d'), 0)
+    assert.equal(settled.get('old'), 0)
+    assert.equal(scaleTokens(undefined), 0)
+    assert.equal(scaleTokens({ kind: 'loading', tokens: null }), null)
+  })
+
+  it('after the first settle, a row being refetched keeps its last settled value until the new one lands', () => {
+    const first = scaleWith(full)
+    const grown = rows.map(r => (r.id === 'b' ? { ...r, message_count: 99 } : r))
+    const regrown = buildGraph(grown, [], { profile: 'default', showArchived: false, scope: ALL_PROJECTS })
+    const refetching = scaleWith(full, first.settled, regrown)
+
+    assert.deepEqual([refetching.pending, refetching.max], [false, 9000], 'the stale b keeps 9000 meanwhile')
+    const landed = scaleWith({ ...full, b: { ...loaded(1000), sig: contextSignature(grown.find(r => r.id === 'b')!) } }, refetching.settled, regrown)
+
+    assert.deepEqual([landed.pending, landed.max], [false, 5000])
+    // The canvas's memory does the same between renders.
+    const memory = new ScopeScaleMemory()
+    const figureOf = (entries: Record<string, ContextEntry>) => (node: { id: string; row?: SessionRow }) => (node.row ? contextFigure(node.row, entries[node.id]) : undefined)
+
+    assert.equal(memory.update(model, figureOf({})).pending, true)
+    assert.equal(memory.update(model, figureOf(full)).max, 9000)
+    assert.deepEqual([memory.update(regrown, figureOf(full)).pending, memory.update(regrown, figureOf(full)).max], [false, 9000])
+  })
+
+  it('reads only in-scope sessions (the rows maxTokensInScope reads)', () => {
+    const scoped = buildGraph(rows, [project('mine', ['a', 'c', 'd', 'e', 'old']), project('other', ['b'])], { profile: 'default', showArchived: false, scope: 'mine' })
+    const outIds = scoped.nodes.filter(node => node.kind === 'session' && node.outOfScope).map(node => node.id)
+    // b (the largest, 9000) is out of scope, and so not even needed for the scale to settle.
+    const scale = scaleWith({ c: full.c, d: full.d, e: full.e }, undefined, scoped)
+
+    assert.deepEqual(outIds, ['b'])
+    assert.deepEqual([scale.pending, scale.max], [false, 5000])
+  })
+})
+
+describe('Rich cards ask for every in-scope session (fix r1, D2)', () => {
+  it('every in-scope row without a usable measurement, whatever the viewport; a 250-row scope goes out in requests of ≤ 100 ids', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => ctxRow(`r${i}`))
+    const model = buildGraph([...many, ctxRow('m', { context_measured: clock(5) }), row('old')], [], { profile: 'default', showArchived: false, scope: ALL_PROJECTS })
+    const wanted = inScopeWanted(model.nodes)
+
+    assert.equal(wanted.length, 250)
+    assert.ok(!wanted.some(item => item.id === 'm' || item.id === 'old'))
+    const h = harness()
+
+    h.store.want(wanted)
+    h.advance(BATCH_MS)
+    assert.deepEqual(
+      h.calls.map(call => call.ids.length),
+      [100, 100, 50]
+    )
   })
 })
 
@@ -343,18 +482,29 @@ describe('the context estimate store', () => {
   it('a failure shows as failed (`—`) and is retried only after RETRY_AFTER_MS', async () => {
     const h = harness(() => new Error('404'))
 
-    h.store.want([want('a')])
+    h.store.want([want('a', contextSignature(ctxRow('a')))])
     h.advance(BATCH_MS)
     await h.answerAll()
-    assert.deepEqual(h.store.get('a'), { status: 'failed', sig: 's1' })
+    assert.deepEqual(h.store.get('a'), { status: 'failed', sig: contextSignature(ctxRow('a')) })
     assert.equal(contextFigure(ctxRow('a'), h.store.get('a')).label, '— ctx')
-    h.store.want([want('a')])
+    h.store.want([want('a', contextSignature(ctxRow('a')))])
     h.advance(BATCH_MS)
     assert.equal(h.calls.length, 1)
     h.advance(RETRY_AFTER_MS)
-    h.store.want([want('a')])
+    h.store.want([want('a', contextSignature(ctxRow('a')))])
     h.advance(BATCH_MS)
     assert.equal(h.calls.length, 2)
+  })
+
+  it('a failure under an older signature does not hold back the new one (fix r1, D4: it shows as loading)', async () => {
+    const h = harness(() => new Error('404'))
+
+    h.store.want([want('a', 's1')])
+    h.advance(BATCH_MS)
+    await h.answerAll()
+    h.store.want([want('a', 's2')])
+    h.advance(BATCH_MS)
+    assert.deepEqual(h.calls.map(call => call.ids), [['a'], ['a']])
   })
 
   it('malformed answers are cleaned; retain forgets other blocks; dispose stops requests', async () => {

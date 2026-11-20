@@ -11,7 +11,8 @@
  *   no usable measurement. Shown as `~108k ctx`.
  * - **None**: no stored system prompt (the session never ran), the estimate failed, or an older
  *   backend that reports no context at all: `— ctx`.
- * - **Loading**: the estimate is on its way: `… ctx`.
+ * - **Loading**: the estimate is on its way, or the one loaded was fetched under another
+ *   signature (stale: never shown as current): `… ctx`.
  *
  * The estimate is fetched lazily (`ContextStore`: batched, ≤ 100 ids per request, per profile,
  * cached per block) and again when the row's last activity, message count, transcript revision or
@@ -175,7 +176,10 @@ export function contextFigure(row: SessionRow, entry: ContextEntry | undefined):
 
   const why = notMeasuredReason(row)
 
-  if (!entry) {
+  // Card 12 fix r1 (D4): an entry fetched under another signature (the row moved on: a new message,
+  // a compaction, the clock's validity) is never shown as the current figure, in any style, the
+  // tooltip or the inspector: it is loading until the estimate for the row as it is now lands.
+  if (!entry || entry.sig !== contextSignature(row)) {
     return { kind: 'loading', tokens: null, value: '…', label: '… ctx', window: null, percent: null, notMeasured: why, lines: ['Context: estimating…', `Not measured: ${why}.`] }
   }
 
@@ -310,6 +314,22 @@ export function wantedOf(node: { id: string; profile: string; row?: SessionRow }
   return node.row ? { key: node.id, id: node.row.id, profile: node.profile, sig: contextSignature(node.row) } : undefined
 }
 
+/**
+ * Fix r1 (D2): what Rich cards ask for — every in-scope session without a usable measurement,
+ * wherever it is (the scope scale needs them all; the store batches ≤ `MAX_BATCH` ids a request).
+ */
+export function inScopeWanted(nodes: Iterable<{ id: string; kind: string; profile: string; outOfScope?: boolean; row?: SessionRow }>): ContextWanted[] {
+  const out: ContextWanted[] = []
+
+  for (const node of nodes) {
+    if (node.kind === 'session' && !node.outOfScope && node.row && needsEstimate(node.row)) {
+      out.push(wantedOf(node)!)
+    }
+  }
+
+  return out
+}
+
 export class ContextStore {
   private readonly fetchContext: FetchContext
   private readonly timers: ContextTimers
@@ -355,7 +375,13 @@ export class ContextStore {
       const entry = this.entries.get(item.key)
       const failed = this.failedAt.get(item.key)
 
-      if ((entry?.status === 'loaded' && entry.sig === item.sig) || this.inflight.get(item.key) === item.sig || (failed !== undefined && now - failed < RETRY_AFTER_MS)) {
+      // A failure waits RETRY_AFTER_MS only for the signature it failed under (a stale failed entry
+      // shows as loading, D4, so a new signature is asked for at once).
+      if (
+        (entry?.status === 'loaded' && entry.sig === item.sig) ||
+        this.inflight.get(item.key) === item.sig ||
+        (failed !== undefined && entry?.sig === item.sig && now - failed < RETRY_AFTER_MS)
+      ) {
         continue
       }
 
