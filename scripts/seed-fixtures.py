@@ -6,10 +6,13 @@ Usage (the harness runs it; see scripts/e2e/harness.ts ``seedFixtures``)::
     HERMES_HOME=<test home> HERMES_AGENT_DIR=<hermes checkout> SESSION_TREE_PROJECTS_DIR=<dir> \\
         <hermes venv python> scripts/seed-fixtures.py [--touch]
 
-Rows are created through Hermes's own ``SessionDB`` API (``create_session`` with the same
+Rows are created through Hermes's own write API, behind ``scripts/fixture_store.py``: on Hermes
+v0.23.3+ the storage interface (``persistence_assembly.open_persistence``: ``sessions``,
+``messages``, ``usage``), on v0.23.2 and earlier ``hermes_state.SessionDB``, picked by capability
+(never by version). The calls keep the old ``SessionDB`` names (``create_session`` with the same
 ``model_config`` markers the real code paths write, ``append_message``, ``update_token_counts``,
 ``end_session``, ``set_session_title``, ``set_session_archived``, ``set_session_pinned``,
-``delete_session``), so they carry real lineage markers:
+``delete_session``), so the rows are the same on both and carry real lineage markers:
 
 * ``/branch`` child:  ``model_config={'_branched_from': parent}`` + ``parent_session_id``
   (``hermes_state_mutation_branch.branch_in_transaction``).
@@ -19,7 +22,8 @@ Rows are created through Hermes's own ``SessionDB`` API (``create_session`` with
 * delegate child:     ``model_config={'_delegate_from': parent}`` + ``parent_session_id``.
 
 DIRECT SQL is used only on this isolated fixture DB, and only for fields no API sets: backdating
-``started_at`` / ``last_activity_at`` / ``ended_at`` so rows have realistic ages.
+``started_at`` / ``last_activity_at`` / ``ended_at`` so rows have realistic ages (the full list:
+``scripts/fixture_store.py``'s docstring; each statement is marked ``# fixture-only:``).
 
 ``--touch`` renames one fixture through ``set_session_title`` (a real state.db change, used by the
 e2e to provoke ``sessions.changed``). ``--branch NEW_ID PARENT_ID [TITLE]`` adds a ``/branch`` child
@@ -62,8 +66,9 @@ HOME = Path(os.environ["HERMES_HOME"]).resolve()
 if HOME == (Path.home() / ".hermes").resolve() or "/.hermes" in str(HOME):
     sys.exit("refusing to seed a home under ~/.hermes")
 sys.path.insert(0, os.environ.get("HERMES_AGENT_DIR", str(Path.home() / ".hermes" / "hermes-agent")))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hermes_state import SessionDB  # noqa: E402
+from fixture_store import FixtureStore, open_store  # noqa: E402
 from gateway.owner_identity import host_owner_subject  # noqa: E402
 
 #: The owner stamp a session created from a signed-in Webapp tab carries
@@ -98,18 +103,19 @@ def ensure_repos() -> None:
 
 
 class Seeder:
-    def __init__(self, db: SessionDB, profile: str):
+    def __init__(self, db: FixtureStore, profile: str):
         self.db = db
         self.profile = profile
         self.created: list[str] = []
 
     def _backdate(self, sid: str, started: float, last: float, ended: float | None) -> None:
-        # Fixture-only direct SQL: no SessionDB API sets historical timestamps.
         def write(conn):
+            # fixture-only: sessions.started_at / last_activity_at — no API of either Hermes sets a historical timestamp.
             conn.execute("UPDATE sessions SET started_at=?, last_activity_at=? WHERE id=?", (started, last, sid))
             if ended is not None:
+                # fixture-only: sessions.ended_at — end_session stamps now; a fixture's end lies in the past.
                 conn.execute("UPDATE sessions SET ended_at=? WHERE id=?", (ended, sid))
-        self.db._execute_write(write)
+        self.db.fixture_sql(write)
 
     def session(self, sid: str, title: str, *, project: str | None, age_h: float, span_h: float = 1.0,
                 messages: int = 6, source: str = "desktop", model: str = "claude-opus-4.1",
@@ -141,7 +147,7 @@ class Seeder:
         return self.session(sid, title, parent=parent, marker={"_branched_from": parent}, **kw)
 
 
-def seed_default(db: SessionDB) -> dict:
+def seed_default(db: FixtureStore) -> dict:
     s = Seeder(db, "default")
     m: dict = {"profile": "default", "hidden": [], "archived": [], "branch_links": [], "reset_links": []}
 
@@ -293,7 +299,7 @@ LEADING_EXCERPT = {
 }
 
 
-def seed_pathological(db: SessionDB, prefix: str = "st-patho", copies: int = 1) -> dict:
+def seed_pathological(db: FixtureStore, prefix: str = "st-patho", copies: int = 1) -> dict:
     """``--pathological``: one session per ``PATHOLOGICAL`` body (``copies`` of each), the body its
     last (assistant) message. Through ``create_session`` / ``append_message``."""
     ids: dict[str, str] = {}
@@ -316,7 +322,7 @@ def seed_pathological(db: SessionDB, prefix: str = "st-patho", copies: int = 1) 
     return ids
 
 
-def seed_rich(db: SessionDB, *, age_h: float = 30) -> dict:
+def seed_rich(db: FixtureStore, *, age_h: float = 30) -> dict:
     """``--rich``: one hermes-plugins family whose children end with Markdown, a code block, HTML-
     looking text, a very long message, a tool call with text and a long tool run (no text in the
     newest messages: the card falls back to the first prompt). Through ``append_message``."""
@@ -368,7 +374,7 @@ MORE_PROJECTS = ("momentless-dynamics", "session-tree", "sandbox", "mdesign-elem
                  "lumen-notes")
 
 
-def seed_more_projects(db: SessionDB) -> dict:
+def seed_more_projects(db: FixtureStore) -> dict:
     """``--more-projects``: one ``/branch`` pair in each of ``MORE_PROJECTS`` (real git repos, so
     ``projects.tree`` lists them), the toolbar e2e's long scope strip."""
     s = Seeder(db, "default")
@@ -433,9 +439,9 @@ def _clock_json(sid: str, read: int, write: int, *, generation: int, confidence:
         estimated_until=sent + HOUR if known else None, session_id=sid, generation=generation))
 
 
-def archive_one(db: SessionDB, sid: str) -> dict:
+def archive_one(db: FixtureStore, sid: str) -> dict:
     """Archive one more row of *sid* the way a tool-result prune commits it
-    (``SessionDB.rewrite_pruned_rows``: the row keeps its id with the pruned content, and one archived
+    (``rewrite_pruned_rows``: the row keeps its id with the pruned content, and one archived
     twin ``active = 0, compacted = 1`` of its old self), so ``prompt_cache_generation`` grows by one.
     With no unpruned tool result left it falls back to an in-place compaction of the whole transcript
     (``archive_and_compact`` with the same messages re-inserted)."""
@@ -452,9 +458,9 @@ def archive_one(db: SessionDB, sid: str) -> dict:
     return {"archived": sid, "how": how, "generation_before": before, "generation": db.prompt_cache_generation(sid)}
 
 
-def seed_context(db: SessionDB) -> dict:
+def seed_context(db: FixtureStore) -> dict:
     """``--context``: one hermes-plugins family (a root and five ``/branch`` children, so no single
-    is added) covering every context figure. Through ``SessionDB``: ``create_session`` with the
+    is added) covering every context figure. Through ``fixture_store``: ``create_session`` with the
     route in ``model_config``, ``append_message`` (a few turns and tool rounds),
     ``update_system_prompt`` + ``update_session_tool_names`` (what an agent's first build stores),
     ``update_token_counts(prompt_cache_clock=event_to_json(CacheEvent(...)))`` (what every token
@@ -517,7 +523,7 @@ def seed_profile(name: str, count: int, *, families: int = 0) -> dict:
     home = HOME / "profiles" / name
     if not home.is_dir():
         sys.exit(f"profile {name} does not exist; the harness creates it with `hermes profile create`")
-    db = SessionDB(db_path=home / "state.db")
+    db = open_store(home / "state.db")
     try:
         s = Seeder(db, name)
         for i in range(count):
@@ -533,7 +539,7 @@ def seed_profile(name: str, count: int, *, families: int = 0) -> dict:
 
 
 def touch() -> dict:
-    db = SessionDB(db_path=HOME / "state.db")
+    db = open_store(HOME / "state.db")
     try:
         current = db.get_session_title("st-single-03")
         title = "Weekly review" if current != "Weekly review" else "Weekly review (renamed)"
@@ -549,7 +555,7 @@ def add_branch(new_id: str, parent: str, title: str, *, owned: bool = True, cost
     Webapp login's edits of it (``permission_denied``), the actions e2e's real refusal. ``cost``
     is its ``estimated_cost_usd`` (``--whole-cost-branch``: ``2.0``, a whole-number float the
     core export writes as ``2.0``, the byte-exact export check)."""
-    db = SessionDB(db_path=HOME / "state.db")
+    db = open_store(HOME / "state.db")
     try:
         if db.get_session(parent) is None:
             sys.exit(f"no session {parent}")
@@ -567,29 +573,31 @@ def add_branch(new_id: str, parent: str, title: str, *, owned: bool = True, cost
 
 def activate(sid: str) -> dict:
     """Re-open *sid* with its last activity now. Fixture-only direct SQL (timestamps have no API)."""
-    db = SessionDB(db_path=HOME / "state.db")
+    db = open_store(HOME / "state.db")
     try:
         if db.get_session(sid) is None:
             sys.exit(f"no session {sid}")
         now = time.time()
 
         def write(conn):
+            # fixture-only: sessions.ended_at / end_reason / last_activity_at — the re-open API also retires
+            # queued prompts, freezes reset children and un-archives; the fixture changes these cells only.
             conn.execute("UPDATE sessions SET ended_at=NULL, end_reason=NULL, last_activity_at=? WHERE id=?", (now, sid))
-        db._execute_write(write)
+        db.fixture_sql(write)
         return {"activated": sid, "at": now}
     finally:
         db.close()
 
 
-def compact(sid: str, new_id: str | None = None, *, db: SessionDB | None = None) -> dict:
+def compact(sid: str, new_id: str | None = None, *, db: FixtureStore | None = None) -> dict:
     """Compact the conversation *sid* names (its root, a segment or its live tip) once more, the
-    way a real compaction leaves it in ``state.db`` (``SessionDB`` API): the live tip ends with
+    way a real compaction leaves it in ``state.db`` (Hermes's write API): the live tip ends with
     ``compression`` and a continuation row takes over (``parent_session_id`` = the old tip, no
     fork marker), with one message. The lineage root stays; the listing's tip id changes (the
     card-4 review B2 check: a placed block must stay put). Fixture-only direct SQL re-opens a tip
     that is already ended (``end_session`` keeps a first end), like ``--activate``."""
     own = db is None
-    db = db or SessionDB(db_path=HOME / "state.db")
+    db = db or open_store(HOME / "state.db")
     try:
         if db.get_session(sid) is None:
             sys.exit(f"no session {sid}")
@@ -601,8 +609,10 @@ def compact(sid: str, new_id: str | None = None, *, db: SessionDB | None = None)
         row = db.get_session(tip) or {}
 
         def reopen(conn):
+            # fixture-only: sessions.ended_at / end_reason — cleared so end_session can stamp ``compression``
+            # (the first end wins); the re-open API would also retire queued prompts and un-archive.
             conn.execute("UPDATE sessions SET ended_at=NULL, end_reason=NULL WHERE id=?", (tip,))
-        db._execute_write(reopen)
+        db.fixture_sql(reopen)
         db.end_session(tip, "compression")
         db.create_session(new_id, row.get("source") or "desktop", model=row.get("model"), parent_session_id=tip,
                           cwd=row.get("cwd"), git_repo_root=row.get("git_repo_root"), user_id=OWNER)
@@ -618,7 +628,7 @@ def append_turn(sid: str, profile: str | None = None) -> dict:
     """One user/assistant message pair in *sid* (``append_message``, as a chat turn writes it):
     a content-only change, the swimlanes e2e's no-re-route check (card-5 review r2, B1-r2)."""
     home = HOME / "profiles" / profile if profile and profile != "default" else HOME
-    db = SessionDB(db_path=home / "state.db")
+    db = open_store(home / "state.db")
     try:
         before = db.get_session(sid)
         if before is None:
@@ -639,7 +649,7 @@ def main() -> None:
             sys.exit("usage: --archive ID [PROFILE]")
         profile = (args[1] if len(args) > 1 else None) if flag == "--archive" else (args[0] if args else None)
         home = HOME / "profiles" / profile if profile and profile != "default" else HOME
-        db = SessionDB(db_path=home / "state.db")
+        db = open_store(home / "state.db")
         try:
             if flag == "--archive":
                 if db.get_session(args[0]) is None:
@@ -653,7 +663,7 @@ def main() -> None:
             db.close()
         return
     if "--rich" in sys.argv:
-        db = SessionDB(db_path=HOME / "state.db")
+        db = open_store(HOME / "state.db")
         try:
             if db.get_session("st-rich-root") is not None:
                 print(json.dumps({"rich": "st-rich-root", "created": False}))
@@ -663,7 +673,7 @@ def main() -> None:
             db.close()
         return
     if "--more-projects" in sys.argv:
-        db = SessionDB(db_path=HOME / "state.db")
+        db = open_store(HOME / "state.db")
         try:
             if db.get_session("st-more-0") is not None:
                 print(json.dumps({"more_projects": list(MORE_PROJECTS), "created": False}))
@@ -676,7 +686,7 @@ def main() -> None:
         args = sys.argv[sys.argv.index("--pathological") + 1:]
         profile = args[0] if args else None
         home = HOME / "profiles" / profile if profile and profile != "default" else HOME
-        db = SessionDB(db_path=home / "state.db")
+        db = open_store(home / "state.db")
         try:
             print(json.dumps({"profile": profile or "default", "ids": seed_pathological(db)}))
         finally:
@@ -710,7 +720,7 @@ def main() -> None:
         args = sys.argv[sys.argv.index("--delete") + 1:]
         if not args:
             sys.exit("usage: --delete ID")
-        db = SessionDB(db_path=HOME / "state.db")
+        db = open_store(HOME / "state.db")
         try:
             print(json.dumps({"deleted": args[0], "ok": bool(db.delete_session(args[0]))}))
         finally:
@@ -724,7 +734,7 @@ def main() -> None:
         return
     ensure_repos()
     manifest_file = HOME.parent / "fixtures-manifest.json"
-    db = SessionDB(db_path=HOME / "state.db")
+    db = open_store(HOME / "state.db")
     try:
         if db.get_session("st-sys-root") is not None:
             if not manifest_file.exists():
