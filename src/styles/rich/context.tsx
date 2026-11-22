@@ -1,23 +1,30 @@
 /**
- * The Rich cards canvas context: the details store (excerpts, activity) and the token scale. Its
- * `Provider` wraps the canvas (StyleDefinition.Provider), so cards read it without any of it going
- * through the graph model, the block data or the routing chain: details arriving re-render the
- * card that asked, never the canvas, the layout or the links.
+ * The Rich cards canvas context: the details store (excerpts, activity) and the context bar's
+ * scale. Its `Provider` wraps the canvas (StyleDefinition.Provider), so cards read it without any
+ * of it going through the graph model, the block data or the routing chain: details arriving
+ * re-render the card that asked, never the canvas, the layout or the links.
  */
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 
 import { fetchDetails } from '../../api.ts'
+import { contextFigure } from '../../model/context.ts'
 import type { GraphModel } from '../../model/graph.ts'
+import { useContextStore, useContextVersion } from '../../page/context-env.tsx'
 import { usePluginCtx } from '../../page/plugin-context.ts'
 import { DetailsStore } from './details.ts'
 import type { DetailsEntry } from './details.ts'
-import { maxTokensInScope } from './spec.ts'
+import { ScopeScaleMemory } from './spec.ts'
 
 export interface RichEnv {
   store: DetailsStore
-  /** The largest session's tokens in the current scope (the token bars' scale). */
+  /**
+   * Card 12 (A2), fix r1 (D1): the largest context figure over every in-scope session (the
+   * context bars' scale when the model's window is unknown), whatever is in the viewport.
+   */
   maxTokens: number
+  /** Fix r1 (D3): not every in-scope figure has settled yet; the scope-scaled bars are unfilled. */
+  pending: boolean
 }
 
 const RichEnvCtx = createContext<null | RichEnv>(null)
@@ -54,8 +61,19 @@ export function RichProvider({ model, children }: { model: GraphModel; children:
         () => localOffsetMinutes()
       )
   )
-  const maxTokens = useMemo(() => maxTokensInScope(model), [model])
-  const value = useMemo<RichEnv>(() => ({ store, maxTokens }), [store, maxTokens])
+  const contexts = useContextStore()
+  const version = useContextVersion()
+  // Fix r1 (D3): the last settled contributions, so a row being refetched keeps its old value.
+  const [memory] = useState(() => new ScopeScaleMemory())
+  const scale = useMemo(
+    () => memory.update(model, node => (node.row ? contextFigure(node.row, contexts?.get(node.id)) : undefined)),
+    // The version is the context store's change signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [memory, model, contexts, version]
+  )
+  const pending = scale.pending
+  const maxTokens = scale.max
+  const value = useMemo<RichEnv>(() => ({ store, maxTokens, pending }), [store, maxTokens, pending])
 
   useEffect(() => {
     store.resume()

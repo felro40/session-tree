@@ -6,9 +6,11 @@ import { Codicon } from '@hermes/plugin-sdk'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { agoLabel, compactNumber, costLabel, dateTimeLabel, shortAge } from '../../model/format.ts'
+import { cacheState, contextFigure, contextSignature, fullNumber, lifetimeLine, lifetimeTokens, usedLabel } from '../../model/context.ts'
 import { singlesInScope } from '../../model/graph.ts'
 import type { GraphModel, GraphNode } from '../../model/graph.ts'
 import type { LiveStatus } from '../../model/status.ts'
+import { useContextEntry, useWantContext } from '../../page/context-env.tsx'
 import { useMenuLabels } from '../../page/labels.ts'
 import { useSessionActions } from '../../page/session-actions-context.ts'
 import { ProjectGlyph, projectColor } from '../shared.tsx'
@@ -177,6 +179,66 @@ function Actions({ node, onOpen }: { node: GraphNode; onOpen: StylePanelProps['o
   )
 }
 
+/**
+ * Card 12 (A4): what resuming the session would load — the figure (measured at the last call, or
+ * estimated), the window when known, the cache state, and the estimate's categories (always
+ * labelled estimated). The estimate is asked for whatever the measurement (the categories).
+ */
+function ContextSection({ node, nowMs }: { node: GraphNode; nowMs: number }) {
+  const row = node.row!
+  const entry = useContextEntry(node.id)
+  const figure = contextFigure(row, entry)
+  const cache = cacheState(row.cache_window, nowMs)
+  // Fix r1 (D4): the categories of an estimate fetched under another signature are not shown.
+  const estimate = entry?.status === 'loaded' && entry.sig === contextSignature(row) ? entry.estimate : null
+  const measured = figure.kind === 'measured' ? row.context_measured : null
+
+  useWantContext(node)
+
+  return (
+    <div className="st-sec st-ctx" data-testid="session-tree-inspector-context" data-kind={figure.kind}>
+      <div className="st-sh">
+        <span>Context</span>
+        <span data-field="context">{figure.label}</span>
+      </div>
+      <div className="st-ctx-fig">
+        <b data-field="context-tokens">{figure.tokens === null ? figure.value : `${figure.kind === 'estimated' ? '~' : ''}${fullNumber(figure.tokens)} tokens`}</b>
+        {figure.percent !== null && figure.window !== null && (
+          <span data-field="context-window">
+            {' '}
+            / {fullNumber(figure.window)} · {figure.percent}%
+          </span>
+        )}
+      </div>
+      <div className="st-ctx-src" data-field="context-source">
+        {measured
+          ? `Measured at the last call${measured.sent_at ? `, ${dateTimeLabel(measured.sent_at)}` : ''}. Leaves out that call's uncached input and its reply.`
+          : figure.kind === 'estimated'
+            ? `Estimated (rough). Not measured: ${figure.notMeasured}.`
+            : figure.lines[0].replace(/^Context: /, '')}
+      </div>
+      <div className="st-ctx-cache" data-field="cache-state" data-state={cache.state}>
+        Cache: {cache.text}
+      </div>
+      {estimate && estimate.categories.length > 0 && (
+        <div className="st-ctx-cats" data-testid="session-tree-inspector-categories" data-total={estimate.total}>
+          <small>Estimated by category</small>
+          {estimate.categories.map(category => (
+            <div key={category.id} data-field="category" data-id={category.id} data-tokens={category.tokens}>
+              <span>{category.label}</span>
+              <span className="st-mono">~{fullNumber(category.tokens)}</span>
+            </div>
+          ))}
+          <div className="st-ctx-total" data-field="category-total">
+            <span>Estimated total</span>
+            <span className="st-mono">~{fullNumber(estimate.total)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }: StylePanelProps & { node: GraphNode; status?: LiveStatus }) {
   const row = node.row!
   const project = node.projectId ? model.projects.find(p => p.id === node.projectId) : undefined
@@ -208,10 +270,23 @@ function SessionDetails({ model, node, status, onSelect, onOpen, nowMs }: StyleP
           <Stat field="started" label="Started" value={dateTimeLabel(row.started_at)} />
           <Stat field="messages" label="Messages" value={String(row.message_count ?? 0)} />
           <Stat field="tool-calls" label="Tool calls" value={String(row.tool_call_count ?? 0)} />
-          <Stat field="tokens-in" label="Tokens in" value={compactNumber(row.input_tokens)} title={String(row.input_tokens ?? 0)} />
-          <Stat field="tokens-out" label="Tokens out" value={compactNumber(row.output_tokens)} title={String(row.output_tokens ?? 0)} />
-          <Stat field="cost" label="Cost" value={costLabel(row.actual_cost_usd, row.estimated_cost_usd)} />
           <Stat field="model" label="Model" value={row.model || '—'} title={row.model ?? undefined} />
+        </div>
+      </div>
+      <ContextSection node={node} nowMs={nowMs} />
+      <div className="st-sec" data-testid="session-tree-inspector-lifetime">
+        <div className="st-sh">
+          <span>Tokens used (lifetime)</span>
+          <span data-field="lifetime" title={lifetimeLine(row)}>
+            {usedLabel(lifetimeTokens(row))}
+          </span>
+        </div>
+        <div className="st-kv">
+          <Stat field="tokens-in" label="Input (uncached)" value={compactNumber(row.input_tokens)} title={fullNumber(row.input_tokens)} />
+          <Stat field="tokens-out" label="Output" value={compactNumber(row.output_tokens)} title={fullNumber(row.output_tokens)} />
+          <Stat field="cache-read" label="Cache read" value={compactNumber(row.cache_read_tokens)} title={fullNumber(row.cache_read_tokens)} />
+          <Stat field="cache-write" label="Cache write" value={compactNumber(row.cache_write_tokens)} title={fullNumber(row.cache_write_tokens)} />
+          <Stat field="cost" label="Cost" value={costLabel(row.actual_cost_usd, row.estimated_cost_usd)} />
         </div>
       </div>
       <div className="st-sec">

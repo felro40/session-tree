@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 import { projectAt, spotFor } from '../model/create.ts'
+import { contextTooltip } from '../model/context.ts'
 import type { GraphModel, GraphNode } from '../model/graph.ts'
 import { lineageOf } from '../model/graph.ts'
 import { GROUP_PREFIX, LABEL_WIDTH } from '../model/layout.ts'
@@ -33,6 +34,7 @@ import { blockHandles, projectColor } from '../styles/shared.tsx'
 import type { BlockData, FrameLayout, GroupLabelData, LinkData, StyleDefinition } from '../styles/types.ts'
 import { createCanvasRouting } from './canvas-routing.ts'
 import { canvasAreas, projectInfoOf, projectLabelOf } from './canvas-areas.ts'
+import { ContextDriver, useContextStore } from './context-env.tsx'
 import type { CreateDraft } from './create-session.tsx'
 import { FrameUiCtx } from './frame-context.ts'
 import type { FrameUi } from './frame-context.ts'
@@ -166,6 +168,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // latest group spots, which the drop records.
   const dragGroup = useRef<null | { grabbed: string; starts: ReadonlyMap<string, Point>; latest?: ReadonlyMap<string, Point> }>(null)
   const actions = useSessionActions()
+  const contextStore = useContextStore()
   const [tooltip, setTooltip] = useState<Tooltip>()
   const spaceDown = useRef(false)
   const altDown = useRef(false)
@@ -626,12 +629,21 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
         const box = wrapper.current.getBoundingClientRect()
         const rect = target.getBoundingClientRect()
-        const text = node.kind === 'standin' ? STANDIN_TIP : node.outOfScope ? OUT_OF_SCOPE_TIP : node.title
+        // Card 12: an editable session block's tooltip adds its context, lifetime tokens and cache
+        // state (read when it shows, so a late estimate is in it); a read-only block keeps its note.
+        const text =
+          node.kind === 'standin'
+            ? STANDIN_TIP
+            : node.outOfScope
+              ? OUT_OF_SCOPE_TIP
+              : node.row
+                ? [node.title, ...contextTooltip(node.row, contextStore?.get(node.id), Date.now())].join('\n')
+                : node.title
 
         setTooltip({ text, nodeId: node.id, x: rect.left - box.left, y: rect.bottom - box.top + 6 })
       }, TOOLTIP_DELAY_MS)
     },
-    [ctx, graphNode]
+    [ctx, graphNode, contextStore]
   )
 
   // R3 details React Flow does not cover: the middle button must not start the browser's
@@ -858,6 +870,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
                 />
               </ViewportPortal>
             )}
+            <ContextDriver model={model} positions={positions} shown={shown} nodeSize={style.nodeSize} wholeScope={style.id === 'rich'} />
             {Layer && (
               <Layer
                 model={model}

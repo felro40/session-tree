@@ -11,6 +11,7 @@ import type { StateAnswer, SyncTransport } from './model/layout-sync.ts'
 import { mergeProjects, parseProjectsTree } from './model/projects.ts'
 import { withTimeout } from './model/timeout.ts'
 import type { ProjectInfo } from './model/projects.ts'
+import type { ContextAnswer } from './model/context.ts'
 import type { SessionsResponse } from './model/sessions.ts'
 import type { DetailsAnswer } from './styles/rich/details.ts'
 
@@ -194,4 +195,15 @@ export function fetchDetails(ctx: PluginContext, profile: string, ids: string[],
     body: { profile, ids, tz_offset_minutes: Math.max(-840, Math.min(840, Math.round(tzOffsetMinutes))) },
     timeoutMs: 15000
   })
+}
+
+// --- Session context (card 12): the estimate per session ---------------------------------------
+
+/**
+ * `POST /sessions/context`: per stored id of `profile` (≤ 100), Hermes's estimate of the context a
+ * resume would load (`{total, categories}`, or `null` for a session that never ran) and the
+ * model's context window (`null` when unknown). The profile rides in the body, as for details.
+ */
+export function fetchContext(ctx: PluginContext, profile: string, ids: string[]): Promise<ContextAnswer> {
+  return ctx.rest<ContextAnswer>('/sessions/context', { method: 'POST', body: { profile, ids }, timeoutMs: 20000 })
 }

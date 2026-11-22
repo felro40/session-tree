@@ -259,10 +259,11 @@ def test_router_mutations_are_only_the_fenced_session_actions(plugin_api):
     # (``test_state_api.py::test_layout_writes_never_touch_the_session_store``). Card 6's
     # ``POST /sessions/details`` is a read (the id list is a body): ``test_details_are_read_only``.
     # Card 11 adds ``POST /state/kept``, which writes only the plugin's own kept.json + state.json
-    # (``test_kept.py::test_keeping_never_touches_the_session_store``).
+    # (``test_kept.py::test_keeping_never_touches_the_session_store``). Card 12's
+    # ``POST /sessions/context`` is a read too: ``test_context_api.py::test_p1_2_a_full_round_writes_nothing``.
     writes = sorted((route.path, method) for route in plugin_api.router.routes
                     for method in getattr(route, "methods", set()) if method not in {"GET", "HEAD"})
-    assert writes == [("/sessions/details", "POST"), ("/sessions/{session_id}/archive", "POST"), ("/sessions/{session_id}/delete", "POST"),
+    assert writes == [("/sessions/context", "POST"), ("/sessions/details", "POST"), ("/sessions/{session_id}/archive", "POST"), ("/sessions/{session_id}/delete", "POST"),
                       ("/sessions/{session_id}/read", "POST"), ("/sessions/{session_id}/rename", "POST"),
                       ("/settings", "PATCH"), ("/state/forget", "POST"), ("/state/kept", "POST"), ("/state/layout", "DELETE"),
                       ("/state/layout", "PUT"), ("/state/layout/project", "PUT"), ("/state/positions", "PATCH")]

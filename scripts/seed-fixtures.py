@@ -36,7 +36,13 @@ session and stamps its last activity now (fixture-only direct SQL on timestamps,
 so the core list's 300 s ``is_active`` heuristic reports it. ``--rich`` (card 6) adds the Rich cards
 family ``st-rich-*`` whose last messages hold Markdown, a code block, HTML-looking text, a very long
 message, a tool call and a long tool run (``seed_rich``). ``--more-projects`` adds a ``/branch`` pair
-in each of six more repos (``seed_more_projects``: the toolbar e2e's long scope strip). Prints a JSON
+in each of six more repos (``seed_more_projects``: the toolbar e2e's long scope strip). ``--context
+[PROFILE]`` (card 12) adds the session-context family ``st-ctx-*`` (``seed_context``: a valid
+measured clock, an ``unknown``-confidence clock, a clock made stale by a prune, one from another
+route, a stored prompt with no clock, a session that never ran); ``--archive ID [PROFILE]`` archives
+one more row of ID through the same prune write (``archive_one``: ``rewrite_pruned_rows``, else
+``archive_and_compact``), the e2e's in-place compaction. No direct SQL beyond the timestamp backdating
+every fixture gets. Prints a JSON
 manifest of what it created.
 
 Every row carries the owner stamp a signed-in Webapp tab gives the rows it creates (``user_id`` = the
@@ -347,6 +353,13 @@ def seed_rich(db: SessionDB, *, age_h: float = 30) -> dict:
         db.append_message("st-rich-toolrun", "tool", f"ok {i}", tool_call_id=call, tool_name="terminal", timestamp=stamp + 2 + 2 * i)
     out["children"]["st-rich-toolrun"] = "Long tool run"
     out["tool_prompt"] = RICH_TOOL_PROMPT
+    # Card 12: a stored system prompt and tool pin (what an agent's first build stores), so the Rich
+    # cards' context bars have estimates to show: the root's prompt four times the children's, so
+    # the bars differ (the e2e's bar width and contrast checks). No row, title or count changes.
+    for sid in [root, *out["children"]]:
+        db.update_system_prompt(sid, CONTEXT_PROMPT * (4 if sid == root else 1))
+        db.update_session_tool_names(sid, CONTEXT_PIN)
+    out["prompts"] = {"root": len(CONTEXT_PROMPT) * 4, "children": len(CONTEXT_PROMPT)}
     return out
 
 
@@ -369,6 +382,134 @@ def seed_more_projects(db: SessionDB) -> dict:
         root = s.session(f"st-more-{i}", f"Work in {name}", project=name, age_h=10 + i)
         s.branch(f"st-more-{i}-b", f"Branch of {name}", root, project=name, age_h=9 + i)
         out[name] = [root, f"st-more-{i}-b"]
+    return out
+
+
+# --- card 12: the session context fixtures (``--context``, ``--archive``) ---------------------------
+
+#: The stored system prompt of the context fixtures (a skills index, so the estimate has a skills row).
+CONTEXT_PROMPT = ("You are Hermes, a helpful assistant working in the user's repository. " * 160
+                  + "\n<available_skills>\n" + "\n".join(f"- skill-{i}: does task {i}" for i in range(40))
+                  + "\n</available_skills>\n")
+#: The tools[] pin (a legacy name list: each takes its registry schema, as ``pinned_tool_defs`` does).
+CONTEXT_PIN = ["terminal", "read_file", "write_file", "search_files", "patch", "delegate_task"]
+CONTEXT_MODEL = "claude-opus-4.1"
+CONTEXT_PROVIDER = "anthropic"
+#: Tool-call rounds in a context fixture: each ``--archive`` prunes one tool result in place.
+CONTEXT_TOOL_ROUNDS = 3
+#: The measured figures (``read_tokens``, ``write_tokens``) of each clock fixture.
+CONTEXT_CLOCKS = {
+    "st-ctx-measured": (120000, 34789),
+    "st-ctx-unknown": (83456, 0),
+    "st-ctx-compacted": (60000, 1234),
+    "st-ctx-route": (90000, 500),
+}
+#: Hours since each context fixture's last activity (its clock was sent then): the measured one six
+#: minutes ago (past the core 300 s running heuristic), so its 1-hour cache window is still warm.
+CONTEXT_AGES = {
+    "st-ctx-measured": 0.1,
+    "st-ctx-unknown": 1.2,
+    "st-ctx-compacted": 1.4,
+    "st-ctx-route": 1.6,
+    "st-ctx-estimate": 1.8,
+    "st-ctx-never": 2.0,
+}
+
+
+def _clock_json(sid: str, read: int, write: int, *, generation: int, confidence: str = "proven",
+                route: tuple[str, str, str] = (CONTEXT_PROVIDER, "", CONTEXT_MODEL), sent_ago: float = 120.0) -> str:
+    """A prompt-cache clock as ``agent.prompt_cache_clock`` writes it (``event_to_json(CacheEvent)``):
+    a 1-hour tier written ``sent_ago`` seconds ago (warm until then + 1 h), or an unknown window."""
+    from agent.prompt_cache_clock import UNKNOWN, CacheEvent, event_to_json
+
+    sent = time.time() - sent_ago
+    known = confidence != UNKNOWN
+    return event_to_json(CacheEvent(
+        route=route, destination=route, route_class="anthropic_markers" if known else "implicit",
+        requested_ttl="1h" if known else None, sent_at=sent, read_tokens=read, write_tokens=write,
+        tier="1h" if known else None, confidence=confidence,
+        reason="fixture_tier" if known else "implicit_cache_unobserved",
+        coverage={"1h": sent + HOUR} if known else {}, guaranteed_until=sent + HOUR if known else None,
+        estimated_until=sent + HOUR if known else None, session_id=sid, generation=generation))
+
+
+def archive_one(db: SessionDB, sid: str) -> dict:
+    """Archive one more row of *sid* the way a tool-result prune commits it
+    (``SessionDB.rewrite_pruned_rows``: the row keeps its id with the pruned content, and one archived
+    twin ``active = 0, compacted = 1`` of its old self), so ``prompt_cache_generation`` grows by one.
+    With no unpruned tool result left it falls back to an in-place compaction of the whole transcript
+    (``archive_and_compact`` with the same messages re-inserted)."""
+    before = db.prompt_cache_generation(sid)
+    conversation = db.get_messages_as_conversation(sid, include_row_ids=True)
+    tool = next((m for m in conversation if m.get("role") == "tool" and not str(m.get("content") or "").startswith("[pruned")), None)
+    if tool is not None:
+        db.rewrite_pruned_rows(sid, [(tool, {**tool, "content": "[pruned tool output]"})])
+        how = "prune"
+    else:
+        keep = [{k: v for k, v in m.items() if not k.startswith("_")} for m in conversation]
+        db.archive_and_compact(sid, keep)
+        how = "compact"
+    return {"archived": sid, "how": how, "generation_before": before, "generation": db.prompt_cache_generation(sid)}
+
+
+def seed_context(db: SessionDB) -> dict:
+    """``--context``: one hermes-plugins family (a root and five ``/branch`` children, so no single
+    is added) covering every context figure. Through ``SessionDB``: ``create_session`` with the
+    route in ``model_config``, ``append_message`` (a few turns and tool rounds),
+    ``update_system_prompt`` + ``update_session_tool_names`` (what an agent's first build stores),
+    ``update_token_counts(prompt_cache_clock=event_to_json(CacheEvent(...)))`` (what every token
+    batch writes) and ``rewrite_pruned_rows`` (a tool-result prune: the ``compacted`` clock).
+
+    * ``st-ctx-measured``  valid ``proven`` clock (read + write = 154,789): measured;
+    * ``st-ctx-unknown``   clock with confidence ``unknown`` (an implicit cache): estimated;
+    * ``st-ctx-compacted`` clock older than a prune (generation 0, now 1): estimated, ``compacted``;
+    * ``st-ctx-route``     clock recorded on another provider than the row's: estimated, ``route_changed``;
+    * ``st-ctx-estimate``  a stored prompt and pin, no clock: estimated;
+    * ``st-ctx-never``     messages but no stored prompt (it never ran): ``—``.
+    """
+    s = Seeder(db, "default")
+    out: dict = {"root": "st-ctx-measured", "children": [], "clocks": {}, "estimate_only": "st-ctx-estimate",
+                 "never": "st-ctx-never", "prompt": len(CONTEXT_PROMPT), "pin": CONTEXT_PIN}
+
+    def one(sid: str, title: str, *, parent: str | None, age: float, prompt: bool = True,
+            tokens: tuple[int, int] = (26000, 500)) -> str:
+        marker = {"provider": CONTEXT_PROVIDER, **({"_branched_from": parent} if parent else {})}
+        s.session(sid, title, project="hermes-plugins", age_h=age, messages=4, parent=parent, marker=marker,
+                  model=CONTEXT_MODEL, tokens=tokens)
+        stamp = NOW - age * HOUR - 60
+        for i in range(CONTEXT_TOOL_ROUNDS):
+            call = f"{sid}-call-{i}"
+            db.append_message(sid, "assistant", "", timestamp=stamp + 2 * i,
+                              tool_calls=[{"id": call, "type": "function", "function": {"name": "terminal", "arguments": "{\"command\": \"npm test\"}"}}])
+            db.append_message(sid, "tool", f"round {i}: " + "ok " * 400, tool_call_id=call, tool_name="terminal", timestamp=stamp + 2 * i + 1)
+        if prompt:
+            db.update_system_prompt(sid, CONTEXT_PROMPT)
+            db.update_session_tool_names(sid, CONTEXT_PIN)
+        if parent:
+            out["children"].append(sid)
+        return sid
+
+    def clock(sid: str, **kw) -> None:
+        # Sent at the session's last activity (the last call), so its cache window follows from it.
+        read, write = CONTEXT_CLOCKS[sid]
+        db.update_token_counts(sid, cache_read_tokens=read, cache_write_tokens=write, model=CONTEXT_MODEL,
+                               prompt_cache_clock=_clock_json(sid, read, write, generation=db.prompt_cache_generation(sid),
+                                                              sent_ago=CONTEXT_AGES[sid] * HOUR, **kw))
+        out["clocks"][sid] = read + write
+
+    age = CONTEXT_AGES
+    root = one("st-ctx-measured", "Measured context", parent=None, age=age["st-ctx-measured"], tokens=(26000, 500))
+    clock(root)
+    clock(one("st-ctx-unknown", "Cache confidence unknown", parent=root, age=age["st-ctx-unknown"], tokens=(250000, 8000)),
+          confidence="unknown")
+    compacted = one("st-ctx-compacted", "Stale after a prune", parent=root, age=age["st-ctx-compacted"])
+    clock(compacted)
+    out["archive"] = archive_one(db, compacted)
+    clock(one("st-ctx-route", "Route changed since", parent=root, age=age["st-ctx-route"]),
+          route=("openrouter", "https://openrouter.ai/api/v1", CONTEXT_MODEL))
+    one("st-ctx-estimate", "Estimate only", parent=root, age=age["st-ctx-estimate"])
+    one("st-ctx-never", "Never ran", parent=root, age=age["st-ctx-never"], prompt=False)
+    out["ids"] = [root, *out["children"]]
     return out
 
 
@@ -491,6 +632,26 @@ def append_turn(sid: str, profile: str | None = None) -> dict:
 
 
 def main() -> None:
+    if "--context" in sys.argv or "--archive" in sys.argv:
+        flag = "--context" if "--context" in sys.argv else "--archive"
+        args = sys.argv[sys.argv.index(flag) + 1:]
+        if flag == "--archive" and not args:
+            sys.exit("usage: --archive ID [PROFILE]")
+        profile = (args[1] if len(args) > 1 else None) if flag == "--archive" else (args[0] if args else None)
+        home = HOME / "profiles" / profile if profile and profile != "default" else HOME
+        db = SessionDB(db_path=home / "state.db")
+        try:
+            if flag == "--archive":
+                if db.get_session(args[0]) is None:
+                    sys.exit(f"no session {args[0]}")
+                print(json.dumps(archive_one(db, args[0])))
+            elif db.get_session("st-ctx-measured") is not None:
+                print(json.dumps({"context": "st-ctx-measured", "created": False}))
+            else:
+                print(json.dumps({**seed_context(db), "profile": profile or "default", "created": True}))
+        finally:
+            db.close()
+        return
     if "--rich" in sys.argv:
         db = SessionDB(db_path=HOME / "state.db")
         try:

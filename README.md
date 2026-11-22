@@ -12,12 +12,32 @@ user (below).
 - **Open it** from the sidebar ("Session Tree"), from ⌘K ("Open Session Tree") or at the route
   `/session-tree`. It is a full page, in the desktop app and in the Webapp.
 - **What you see.** Each session is a block (in Subway: a station) with its title, project colour,
-  last used, messages and tokens, plus its live status (running; needs input where a source exists),
+  last used, messages and its context size (`ctx`, below), plus its live status (running; needs input where a source exists),
   unread, pinned, cost and model. `/branch` children hang off their parent (solid links); the
   compression segments of one conversation fold into one block marked "compacted ×N"; a `/new` or
   idle reset is a dashed "continued as" link; a parent that is deleted, hidden or not loaded shows as
   a faded "Parent not loaded" stand-in. Delegate children and cron / kanban / tool sessions are
   hidden, like in the sidebar. The session open in the app is highlighted.
+- **Context size and tokens used** (card 12). The figure on a Subway, Swimlanes or Rich cards block
+  is the **context**: how many tokens resuming the session would load. `155k ctx` is **measured**:
+  the cache tokens (read + write) of the session's last model call, used only while that
+  measurement still holds (no compaction, prune or route change since, and a known cache
+  confidence). `~108k ctx` is an **estimate** (Hermes' own rough count of the stored system prompt,
+  tool definitions and transcript), shown whenever there is no usable measurement. `— ctx`: the
+  session never ran (no stored prompt). Dense blocks show no figure. Every block's tooltip adds the
+  lifetime tokens (`26,500 tokens used`: input + output over the session's life, the old figure,
+  unchanged), when and how the context figure was made, and the **cache state**: *warm until
+  14:07* (certainly cached), *may be warm until 15:02*, *expired 3h ago*, or *unknown* (with why:
+  compacted, the model or provider changed, or the cache's confidence is unknown). The Rich cards
+  bar shows the context against the largest one among every session in the scope, wherever you
+  have panned or zoomed (the bars stay unfilled for the moment until every figure in the scope has
+  arrived); a Swimlanes lane header keeps the
+  lifetime sum (`12 sessions · 645k used`). While a session's estimate is being refreshed (a new
+  message, a compaction) its block reads `… ctx`: an earlier estimate is never shown as current.
+  The Dense inspector has a **Context** section (the
+  figure, measured at <time> or estimated, the cache state, the estimate by category: system
+  prompt, tools, skills, subagent definitions, conversation) and a **Tokens used (lifetime)**
+  section (input uncached, output, cache read, cache write, cost).
 - **Navigate.** The plain wheel zooms toward the cursor (30–250 %); drag with the middle button to
   pan, or hold Space or Alt and left-drag (from a block too; Alt is for a laptop touchpad, which has
   no middle button). The toolbar has −, zoom %, + and Fit. A view is remembered per style, profile
@@ -96,7 +116,7 @@ user (below).
 | **Dense + inspector** (default) | compact pills, thin curved links, tidy trees left to right, an inspector panel on the right | the inspector's list | one layout per style (every scope shows it) |
 | **Project swimlanes** | one lane per project (alphabetical, no project last) with a header column, a local-day time axis, orthogonal links | a "no branches N" chip per lane | none: laid out from the data (no dragging, no Snap) |
 | **Subway map** | each lineage a thick coloured line, sessions as stations, `/branch` as the line splitting into a new track, octilinear tracks, ×N capsules, a dotted planned line for "continued as", a map key | the depot strip at the bottom | one layout per style (every scope shows it) |
-| **Rich cards** | airy 280 px cards with a last-message excerpt, a 7-day sparkline, model, a token bar; soft curved links | a right slide-out drawer | one layout per style (every scope shows it) |
+| **Rich cards** | airy 280 px cards with a last-message excerpt, a 7-day sparkline, model, a context bar; soft curved links | a right slide-out drawer | one layout per style (every scope shows it) |
 
 Each style keeps its own positions (one layout per style and profile; the block sizes differ), and
 every project scope of a style shows that same layout. Details: `docs/swimlanes.md`, `docs/subway.md`,
@@ -181,6 +201,17 @@ for the old per-scope positions).
   - The style's own panels over the canvas (the Rich drawer, the Subway depot and map key) offer no
     new session; the map key still lets pan, zoom and box selection through.
   - The project dot uses the project's colour; a project without one shows the theme's neutral dot.
+- **Context size** (card 12):
+  - The measured figure is the last call's cache read + write: it leaves out that call's uncached
+    input and its reply, so a resume loads a little more than it says.
+  - The estimate is rough (characters ÷ 4): about 30 % below the measured size on Claude in the
+    card author's sample, and above it on a route with an implicit cache.
+  - No live figure: a running session shows its last stored call; nothing is read from a live agent.
+  - The model's context window is never shown (no "155k / 200k"): Hermes has no way to resolve it
+    for a stored session without a possible network call or cache write (`docs/measured-facts.md`,
+    card 12 P2).
+  - "compacted ×N" still counts rotated compression chains only: an in-place compaction (the
+    default) keeps no durable count.
 
 ## Source map
 
@@ -196,6 +227,7 @@ for the old per-scope positions).
 | `src/model/actions.ts` | The session actions' pure rules: routes (rename RPC vs backend), move targets, the delete gate and note, the export file name, the mutation-snapshot fence client, optimistic row overrides. |
 | `src/model/create.ts`, `src/page/canvas-areas.ts`, `src/page/create-session.tsx` | Card 11: a new session from a canvas right-click — which project (`projectAt` over each style's own areas: `labelSpans`, `shelfSegments`, the Swimlanes lanes), the name (Hermes' title rules), the spot, the create (create → title → release the runtime; a refused name deletes its untitled row), one submit = one session; the canvas menu (`session-menu.tsx`), the ghost (`graph-canvas.tsx`) and the dialog. |
 | `src/model/selection.ts` | Card 9: the selection (a set with one primary block) and its rules — click, Shift toggle, box (full containment), Shift + box, Esc, Ctrl/⌘+A, the never-selectable blocks, what a refresh keeps — and the group offset of a multi-block drag (with Snap, by the grabbed block's snapped spot). |
+| `src/model/context.ts`, `src/page/context-env.tsx` | Card 12: the context figure every style uses (`contextFigure`: measured, `~` estimated, `—`), the tooltip lines, the cache state, the lifetime label, and the page's estimate store (batched ≤ 100 ids, per profile, refetched when the row's signature moves; an entry under another signature shows as loading) with its driver (every style: the viewport-near blocks; Rich cards: also every in-scope session, for the bars' scope scale) and React hooks. |
 | `src/styles/` | The style registry (`registry.ts`: the synced choice + device override), the style contract (`types.ts`, with the optional `frame` a data-only style uses), the Dense style (`dense/`), the Project swimlanes style (`swimlanes/`: the pure lane layout `layout.ts`, geometry `spec.ts`, blocks/links/chips, the header column + axis layers), the Rich cards style (`rich/`: top-down flow layout `layout.ts`, geometry `spec.ts`, the details store `details.ts`, canvas context `context.tsx`, cards/links `rich-flow.tsx`, details driver + drawer `layer.tsx`), the Subway map style (`subway/`: the track plan `plan.ts`, metro layout `layout.ts`, label placement `labels.ts`, geometry `spec.ts`, stations/tracks `subway-flow.tsx`, label driver + map key + depot `layer.tsx`, `subway.css`) and the test-only `e2e-alt/` (registered only in the e2e's own build). |
 | `src/page/` | The page (data, refresh), the shared canvas shell (`graph-canvas.tsx`, with a framed style's layers), toolbar (with the style switcher; its narrow-width layout is the pure `toolbar-layout.ts`), the Re-arrange confirm and Layout history dialog (`layout-history.tsx`, its row and confirm text `history-labels.ts`), the block menu (`session-menu.tsx`, SDK ContextMenu), the actions controller with its dialogs (`session-actions.tsx`) and the shared services (`services.ts`: layout store, device prefs, push + poll). |
 
@@ -207,6 +239,7 @@ for the old per-scope positions).
 | `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`: the session rows, the session actions the SDK has no verb for (rename, read state, archive, delete, export), each through the core endpoint's own code path, and the synced layout store. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
 | `dashboard/layout_store.py` | The synced layout store (standard library only): `<HERMES_HOME>/session-tree/state.json`, atomic writes under a thread lock + `fcntl.flock`, caps, corrupt-file backup, prune, the Layout history backups in `backups.json`, and (card 11) the kept-on-canvas markers in `kept.json` (`docs/layout-sync.md`). |
 | `dashboard/session_details.py` | Card 6: the Rich cards details (plain-text excerpt of the last message, 7-day activity) read through a read-only `SessionDB`, bounded per id (`docs/rich-cards.md`). |
+| `dashboard/session_context.py` | Card 12: each session's context — the measured figure, its validity and the cache window for the `/sessions` rows, and the estimate for `POST /sessions/context` — through Hermes's own functions only, on a read-only `SessionDB`. |
 | `desktop/plugin.js` | Desktop half. **Built output** of `src/` (`npm run build`), committed so the package installs without a build. |
 | `src/` | TypeScript + JSX source: `plugin.tsx` (registration), `page/`, `settings/`, `model/` (pure graph rules), `shims/react-dom.ts`. |
 | `tests/js/` | node:test unit tests and the static bundle guards. |
@@ -273,6 +306,21 @@ text (Markdown stripped, tags removed, tool-call payloads dropped), ≤ 240 char
 ids are omitted; a 101st id is a 422. Read-only, bounded per id (one paged read + one indexed
 count), about 1.8 ms per id on a 5,000-message session.
 
+Session context (card 12; `dashboard/session_context.py`): every `GET /sessions` row also carries
+`context_measured` (`{tokens, sent_at, confidence}`: the stored prompt-cache clock's read + write
+tokens, or `null` with no clock), `context_invalid_reason` (why that figure no longer holds:
+`compacted`, `route_changed`, `session_rotated`, `storage_unavailable`, or `null`) and
+`cache_window` (`{state: warm | may_be_warm | expired | unknown, guaranteed_until,
+estimated_until, reason}` or `null`), from Hermes's `event_from_json`, `current_generation`,
+`stored_cache_window` and `cache_certainly_warm` / `_cold` (one indexed count per row with a
+clock). `POST /sessions/context` `{profile, ids: [≤ 100]}` → `{profile, contexts: {id: {estimate:
+{total, categories: [{id, label, tokens}]} | null, context_window: null}}, elapsed_ms}`: Hermes's
+`stored_context_breakdown` over the stored system prompt, tool pin and model history, exactly as the
+core's cold-session context breakdown builds it, cached per (store, tip, conversation revision,
+prompt, pin), at most 1,000 entries; `estimate` is `null` for a session with no stored prompt and
+`context_window` is always `null` (P2). Unknown ids are omitted; a 101st id is a 422. Both are
+read-only.
+
 Gateway / SDK routes the page uses directly: `host.sessions.pin` / `setColor` (Pin, Appearance),
 `session.branch_stored` (Branch), `session.workspace.move` (Move to project), `session.title`
 (Rename of the session focused in the app), clipboard through the SDK `CopyButton`; card 11's
@@ -297,7 +345,7 @@ npm ci
 | `npm run lint` | ESLint (typescript-eslint, react-hooks, plugin fences) and `tsc --noEmit`. |
 | `npm test` | node:test unit tests, including the static guards on the built `desktop/plugin.js` (run `build` first). |
 | `npm run test:py` | pytest for `dashboard/plugin_api.py`, run inside the Python environment Hermes itself runs in (see `scripts/run-pytest.sh`). pytest comes from a test-only venv under `~/.cache/session-tree-e2e/`. |
-| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style; also the Re-arrange confirm, Layout history opened from its toast and restored from the other device, and a reopened page keeping its scope and view), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook), `scripts/e2e-toolbar.ts` (the toolbar at window widths 1600 → 360 px and page widths 1400 → 340 px, fractional ones around every layout change too, in every style, with nine projects, and under Hermes' UI scale at 80–125 %: no overlap, nothing squeezed or clipped, the bar shows the row / stacked / wrapped layout it applied and the same one at any UI scale, the scope strip's wheel and Shift + wheel scroll and selected chip, light theme), `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style), `scripts/e2e-select.ts` (card 9: box selection and group moves in Dense, Subway and Rich cards, two contexts, the 500-session group drag; `SESSION_TREE_SELECT_ONLY=scale` runs only that last check) and `scripts/e2e-shared.ts` (card 10: one layout per style — the migration on a copy of the real store, then in Dense, Subway and Rich: a scope never moves a block, the first visit and Fit frame the project, a block dragged in a scope shows in All and in a second context, a scoped Re-arrange with its Undo and Layout history entry; in Dense, the Undo of a project and an All Re-arrange after a block moved to another project, and the confirm's block count; `SESSION_TREE_REAL_STATE` names the store copy), and `scripts/e2e-create.ts` (card 11: a new session from a canvas right-click in Dense, Subway, Rich cards and Swimlanes — the offered project, the ghost, the row, the spot, the selection, a reload and a second context, Show all off in every style, a project scope, the dialog's paths, No project, the block menu unchanged, "Delete empty sessions"; its home names a model, `model.default: test-model`, so `session.create` works). The actions, sync, swimlanes, rich, subway, toolbar, final, select, shared and create suites mutate (or add to) their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-toolbar` / `-final` / `-select` / `-shared` / `-create` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
+| `npm run test:e2e` | `scripts/run-e2e.sh`: every e2e suite in turn — `scripts/e2e-foundation.ts` (card 1), `scripts/e2e-core-dense.ts` (card 2), `scripts/e2e-actions.ts` (card 3), `scripts/e2e-sync.ts` (card 4: two browser contexts as two devices, a package built with the test-only style; also the Re-arrange confirm, Layout history opened from its toast and restored from the other device, and a reopened page keeping its scope and view), `scripts/e2e-swimlanes.ts` (card 5), `scripts/e2e-rich.ts` (card 6: the test-only build too, for its needs-input hook), `scripts/e2e-subway.ts` (card 7: the test-only build, for the same hook), `scripts/e2e-toolbar.ts` (the toolbar at window widths 1600 → 360 px and page widths 1400 → 340 px, fractional ones around every layout change too, in every style, with nine projects, and under Hermes' UI scale at 80–125 %: no overlap, nothing squeezed or clipped, the bar shows the row / stacked / wrapped layout it applied and the same one at any UI scale, the scope strip's wheel and Shift + wheel scroll and selected chip, light theme), `scripts/e2e-final.ts` (card 7: the whole-plugin check with the **committed** `desktop/plugin.js` — every style's actions, two-context sync, light/dark per style, the 500-session fixture per style), `scripts/e2e-select.ts` (card 9: box selection and group moves in Dense, Subway and Rich cards, two contexts, the 500-session group drag; `SESSION_TREE_SELECT_ONLY=scale` runs only that last check) and `scripts/e2e-shared.ts` (card 10: one layout per style — the migration on a copy of the real store, then in Dense, Subway and Rich: a scope never moves a block, the first visit and Fit frame the project, a block dragged in a scope shows in All and in a second context, a scoped Re-arrange with its Undo and Layout history entry; in Dense, the Undo of a project and an All Re-arrange after a block moved to another project, and the confirm's block count; `SESSION_TREE_REAL_STATE` names the store copy), and `scripts/e2e-create.ts` (card 11: a new session from a canvas right-click in Dense, Subway, Rich cards and Swimlanes — the offered project, the ghost, the row, the spot, the selection, a reload and a second context, Show all off in every style, a project scope, the dialog's paths, No project, the block menu unchanged, "Delete empty sessions"; its home names a model, `model.default: test-model`, so `session.create` works) and `scripts/e2e-context.ts` (card 12: each session's context figure in Subway, Swimlanes and Rich cards from the `--context` fixtures, the block tooltip, the Dense inspector's Context and lifetime sections, the context bar, the lane header's `used`, an archive and an appended message live, an older backend, and pre-check P1 inside the plugin host). The actions, sync, swimlanes, rich, subway, toolbar, final, select, shared, create and context suites mutate (or add to) their fixtures, so each runs in its own fresh home `c<card>-<role>-actions` / `-sync` / `-swim` / `-rich` / `-subway` / `-toolbar` / `-final` / `-select` / `-shared` / `-create` / `-context` on the same ports, the previous one moved to the e2e trash (which is then pruned to the newest copy of each home name, `scripts/e2e/trash.ts`). The foundation and core-dense suites share the role's plain home, which `run-e2e.sh` resets first (`test-hermes reset`), so full runs repeat back to back with no manual step. Each starts the isolated test Hermes, signs in, enables the desktop half and checks the page in Chrome with real mouse/keyboard input. `KEEP_RUNNING=1` leaves the gateway up. |
 | `npm run clean:e2e` | `scripts/e2e/clean.ts`: frees the disk the test homes take (a full `test:e2e` makes 7 homes of about 460 MB). Removes the e2e trash and this role's stopped test homes of the current card (`c<card>-<role>`, `c<card>-<role>-<variant>`; `SESSION_TREE_ROLE`); `npm run clean:e2e -- --all` does every card's and role's. Keeps `pytest-venv` and everything that is not a test home (logs, screenshot folders), refuses (and removes nothing) while a test gateway runs, and prints each removed path with its size. All deleting goes through one guarded helper (`deleteTrashEntry`): only a direct child of the real `<e2e root>/trash`, never following a symlink (test homes link this checkout into `plugins/session-tree`), never a home whose gateway is alive. |
 | `node scripts/capture-fixtures.ts` | Re-captures `tests/js/fixtures/{default,scale}.json` (backend rows + `projects.tree`) from a running, seeded test Hermes. |
 

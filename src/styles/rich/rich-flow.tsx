@@ -20,14 +20,15 @@ import type { Rect } from '../../model/layout.ts'
 import { curveRouter } from '../../model/route.ts'
 import type { Port } from '../../model/route.ts'
 import { useSessionActions } from '../../page/session-actions-context.ts'
+import { useContextFigure } from '../../page/context-env.tsx'
 import { BlockHandles, ProjectGlyph, projectColor } from '../shared.tsx'
-import { tokenLabel } from '../swimlanes/spec.ts'
 import type { BlockData, LinkData } from '../types.ts'
 import { useDetails, useRichEnv } from './context.tsx'
 import type { DetailsEntry } from './details.ts'
 import {
   activityTooltip,
   cardTokens,
+  contextBar,
   MAX_GHOSTS,
   RICH_HEIGHT,
   RICH_RESET_X,
@@ -35,8 +36,7 @@ import {
   richPorts,
   shortModel,
   sparkPoints,
-  TOKEN_BAR,
-  tokenBarWidth
+  TOKEN_BAR
 } from './spec.ts'
 
 export type RichCardNode = Node<BlockData, 'rich-session'>
@@ -137,9 +137,13 @@ export const RichCard = memo(function RichCard({ data, selected }: NodeProps<Ric
   const env = useRichEnv()
   const row = node.row!
   const entry = useDetails(node.id)
+  const figure = useContextFigure(node)
+  // Card 12: the lifetime tokens stay as `data-tokens` (and in the tooltip); the bar and the
+  // figure show the context.
   const tokens = cardTokens(node)
   const max = env?.maxTokens ?? 0
-  const bar = tokenBarWidth(tokens, max)
+  // Fix r1 (D3): while the scope scale is pending the bar is unfilled and `data-context-of` is "".
+  const bar = contextBar(figure?.tokens ?? null, figure?.window ?? null, { max, pending: env?.pending ?? false })
   const ghosts = Math.min(node.compacted, MAX_GHOSTS)
 
   return (
@@ -160,7 +164,11 @@ export const RichCard = memo(function RichCard({ data, selected }: NodeProps<Ric
       data-lineage={data.inLineage ? 'true' : undefined}
       data-ghosts={ghosts}
       data-tokens={tokens}
-      data-token-max={max}
+      data-token-max={env?.pending ? '' : max}
+      data-context={figure?.tokens ?? ''}
+      data-context-kind={figure?.kind}
+      data-context-scale={bar.scale}
+      data-context-of={bar.of ?? ''}
       data-details={entry ? (entry.details ? 'loaded' : 'missing') : 'loading'}
       style={{ width: RICH_WIDTH, height: RICH_HEIGHT, '--st-pc': projectColor(project) } as CSSProperties}
     >
@@ -214,11 +222,13 @@ export const RichCard = memo(function RichCard({ data, selected }: NodeProps<Ric
           </span>
           <span data-field="last-used">{agoLabel(row.last_active || row.started_at, data.nowMs)}</span>
           <span data-field="messages">{row.message_count ?? 0} msgs</span>
-          <span className="st-rc-tok" title={`${tokens.toLocaleString()} tokens`}>
+          <span className="st-rc-tok" title={figure?.lines[0]}>
             <span className="st-rc-bar" style={{ width: TOKEN_BAR }}>
-              <b data-testid="session-tree-token-bar" style={{ width: bar }} />
+              <b data-testid="session-tree-token-bar" style={{ width: bar.width }} />
             </span>
-            <span data-field="tokens">{tokenLabel(tokens)}</span>
+            <span data-field="context" data-kind={figure?.kind}>
+              {figure?.label ?? '— ctx'}
+            </span>
           </span>
         </div>
       </div>

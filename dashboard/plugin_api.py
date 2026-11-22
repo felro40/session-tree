@@ -103,6 +103,13 @@ def _list_profile(name: str, home: Any, *, include_archived: bool, limit: int,
             root = row.get("_lineage_root_id")
             chain = db.get_compression_chain(root) if row.get("continuation_kind") == "compression" and root else None
             row["compacted_segments"] = max(0, len(chain) - 1) if chain else 0
+            # Card 12: the measured context, its validity and the cache window (additive fields;
+            # one indexed count for a row with a clock, nothing for one without). A clock this
+            # build cannot read leaves the three fields null, never the listing failed.
+            try:
+                row.update(session_context.row_fields(db, row, now))
+            except Exception:  # noqa: BLE001 - the row stays listed; the page shows "—"/"~"
+                logger.debug("session-tree: context fields of %s failed", row.get("id"), exc_info=True)
         return _tag_rows(rows, name, now)
 
     return _read_profile_db(name, home, errors, read) or []
@@ -117,6 +124,8 @@ def _shape(row: dict[str, Any]) -> dict[str, Any]:
     for key in ("_branched_from", "_reset_from", "_lineage_root_id", "_lineage_ids", "parent_session_id"):
         row.setdefault(key, None)
     row.setdefault("compacted_segments", 0)
+    for key in ("context_measured", "context_invalid_reason", "cache_window"):
+        row.setdefault(key, None)
     row.pop("_effective_last_active", None)
     _strip_session_list_rows([row])
     return row
@@ -721,3 +730,43 @@ def details(body: DetailsBody) -> dict[str, Any]:
         "days": session_details.activity_days(now, body.tz_offset_minutes),
         "details": found or {},
     }
+
+
+# --- session context (card 12) ---------------------------------------------------------------
+#
+# How many tokens resuming a session would load. The measured part rides on the ``/sessions``
+# rows (``context_measured``, ``context_invalid_reason``, ``cache_window``); this endpoint answers
+# the estimate (``dashboard/session_context.py``: Hermes's ``stored_context_breakdown`` over the
+# stored system prompt, tool pin and model history), which the page asks for lazily, for the
+# blocks it shows without a usable measurement and for the inspector's selection. A read (POST
+# only because the id list is a body), one read-only ``SessionDB`` open per request.
+
+session_context = _load_sibling("session_context")
+
+
+class ContextBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: One profile name (as ``/sessions/details``: not the query's routing ``profile``).
+    profile: StrictStr = Field(..., min_length=1, max_length=64)
+    #: Stored session ids; at most ``MAX_IDS`` (422 past it). Unknown ids are omitted.
+    ids: list[StrictStr] = Field(..., max_length=session_context.MAX_IDS)
+
+
+@router.post("/sessions/context")
+def context(body: ContextBody) -> dict[str, Any]:
+    """Per id: ``estimate`` (``{total, categories: [{id, label, tokens}]}``, or ``None`` for a
+    session with no stored system prompt: it never ran) and ``context_window`` (the model's
+    context length, or ``None``: card 12 P2, always ``None``). ``elapsed_ms``: this read's time.
+    Read-only."""
+    from hermes_cli.web_routers.profiles import _read_profile_db
+
+    name, home = _one_profile(body.profile)
+    ids = list(dict.fromkeys(_checked_session_id(sid) for sid in body.ids))
+    errors: list[dict[str, str]] = []
+    store = str(home)
+    found, elapsed = session_context.timed(
+        _read_profile_db, name, home, errors, lambda db: session_context.estimates(db, ids, store=store))
+    if errors:
+        raise HTTPException(status_code=503, detail=errors[0]["error"])
+    return {"profile": name, "contexts": found or {}, "elapsed_ms": round(elapsed, 2)}

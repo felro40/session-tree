@@ -21,7 +21,8 @@ The style contract (`src/styles/types.ts`) got three optional parts:
   **every registered style's Provider, always, in registry order** (`StyleProviders` in
   `graph-canvas.tsx`), so the tree above React Flow keeps its shape on a style switch and React
   Flow is never remounted (its viewport and measured nodes stay). Rich's `RichProvider` holds the
-  details store and the token scale (the largest session's tokens in the current scope).
+  details store and the context bar's scale (the largest context figure over every in-scope
+  session, pending until each has settled; card 12, fix r1).
 - `Layer` is drawn inside the flow (a React Flow child, so it reads the viewport store): Rich's
   `RichLayer` drives the details fetch and draws the drawer.
 - `panelDefaultOpen`: the panel / drawer's state on a device that never chose (Rich: closed, as in
@@ -75,9 +76,22 @@ grey sparkline box while they load), so the details arriving never move or resiz
 - Excerpt (R22): the backend's plain-text excerpt of the last user / assistant message; when there
   is none (the newest messages are a tool run, say) the row's `preview`, labelled
   **"First prompt:"**. Rendered as React text: no markup, no remote fetch.
-- Footer: model chip (`claude-opus-4.1` → `opus-4.1`), last used, messages, and a 54 px token bar
-  whose fill is `tokens / max` of the largest session in the current scope (all sessions for All
-  projects; the scoped project's for a scope), labelled with the value (`480k`, `1.4M`). The bar's
+- Footer: model chip (`claude-opus-4.1` → `opus-4.1`; it gives way, ellipsised, when the footer is
+  full), last used, messages, and a 32 px **context bar** (card 12; it was a 54 px lifetime-token
+  bar): its fill is the session's context figure (`contextFigure`: measured, else the estimate)
+  against the model's context window when that is known (never, today: card 12 P2), else against the
+  largest context in the current scope (all sessions for All projects; the scoped project's for a
+  scope), labelled `155k ctx`, `~108k ctx` or `— ctx`. Card 12 fix r1: that scale is read over
+  **every** in-scope session (the rows `maxTokensInScope` read: measured → its tokens, estimated →
+  the estimate's total, none or a failed estimate → 0), never only the ones in view, so Rich asks
+  for the estimate of every in-scope session without a usable measurement (≤ 100 ids a request;
+  the other styles keep asking for the viewport-near blocks only). Until each in-scope figure has
+  settled once the scale is **pending**: every scope-scaled bar is unfilled, with
+  `data-context-scale="pending"` and `data-context-of=""` (and `data-token-max=""`; a window-scaled bar does not wait).
+  Afterwards a session being refetched (its signature moved: a stale estimate shows as `… ctx`)
+  keeps its last settled value in the scale until its new figure lands. So the scale follows the
+  data, never the pan / zoom history. The lifetime tokens stay in `data-tokens` and
+  the block tooltip. The bar's
   full extent is a 1 px `--ui-text-tertiary` outline over a clear track and the fill is the full
   `--ui-accent` (card 8, F4: ≥ 3:1 against the card and against the track, light and dark; e2e).
 - Sparkline: 7 values, oldest first, today last; its tooltip (`title`) lists each local day

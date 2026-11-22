@@ -1,7 +1,7 @@
 /**
  * Project swimlanes blocks and links (mockup `variants/project-swimlanes/`): compact 170 × 54
  * cards with the project colour as a top border, a title line and one meta line (last used,
- * messages, tokens); status as a dot plus coloured meta text; `compacted ×N` as a pill with a
+ * messages, the context figure, card 12); status as a dot plus coloured meta text; `compacted ×N` as a pill with a
  * stacked-paper shadow; orthogonal links with rounded corners from the parent's right edge into
  * the child's left edge; a dashed accent "continued as" link; the lane's "no branches N" chip.
  */
@@ -16,11 +16,11 @@ import type { Rect } from '../../model/layout.ts'
 import { orthogonalRouter } from '../../model/route.ts'
 import type { Port } from '../../model/route.ts'
 import { useFrameUi } from '../../page/frame-context.ts'
+import { useContextFigure } from '../../page/context-env.tsx'
 import { useSessionActions } from '../../page/session-actions-context.ts'
 import { BlockHandles, ProjectGlyph, projectColor } from '../shared.tsx'
 import type { BlockData, LinkData } from '../types.ts'
-import { blockTokens } from './layout.ts'
-import { SWIM_HEIGHT, SWIM_RESET_X, SWIM_WIDTH, swimPorts, tokenLabel } from './spec.ts'
+import { SWIM_HEIGHT, SWIM_RESET_X, SWIM_WIDTH, swimPorts } from './spec.ts'
 
 export type SwimBlockNode = Node<BlockData, 'swim-session'>
 export type SwimStandinNode = Node<BlockData, 'swim-standin'>
@@ -60,6 +60,7 @@ export const SwimBlock = memo(function SwimBlock({ data, selected }: NodeProps<S
   const actions = useSessionActions()
   const row = node.row!
   const tone = status?.tone ?? 'idle'
+  const figure = useContextFigure(node)
   // R5: a ghost is the scoped block's parent from another project, read-only.
   const ghost = node.outOfScope
 
@@ -138,9 +139,13 @@ export const SwimBlock = memo(function SwimBlock({ data, selected }: NodeProps<S
             )}
             {status?.running ? <span className="st-run">running</span> : agoLabel(row.last_active || row.started_at, data.nowMs)}
             <i>·</i>
-            <span data-field="messages">{row.message_count ?? 0} msgs</span>
+            {/* Card 12: the context before the message count, which gives way (ellipsis) when the
+                170 px block is full. */}
+            <span data-field="context" data-kind={figure?.kind}>
+              {figure?.label ?? '— ctx'}
+            </span>
             <i>·</i>
-            <span data-field="tokens">{tokenLabel(blockTokens(node))}</span>
+            <span data-field="messages">{row.message_count ?? 0} msgs</span>
           </>
         )}
       </div>

@@ -17,9 +17,26 @@ export interface Session {
   errors: string[]
 }
 
+/**
+ * Card 12 (environment): the Webapp's "Update ready" notification (its update check found upstream
+ * commits on 2026-11-19, a network fact outside the test) sits over the toolbar's scope chips and
+ * intercepts real clicks. Every context starts with the Webapp's own snooze key set, exactly what
+ * dismissing that toast stores (`apps/desktop/src/store/updates.ts` `snoozeUpdateToast`).
+ */
+async function snoozeUpdateToast(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    try {
+      window.localStorage.setItem('hermes:update-toast-snooze-until', String(Date.now() + 7 * 86_400_000))
+    } catch {
+      // about:blank and other opaque origins have no localStorage: nothing to snooze there.
+    }
+  })
+}
+
 export async function launch({ colorScheme = 'light' }: { colorScheme?: 'dark' | 'light' } = {}): Promise<Session> {
   const browser = await chromium.launch({ executablePath: CHROME, headless: process.env.HEADED !== '1' })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme })
+  await snoozeUpdateToast(context)
   const page = await context.newPage()
   const errors: string[] = []
 
@@ -184,6 +201,7 @@ export async function close(session: Session): Promise<void> {
  */
 export async function addContext(session: Session, { colorScheme = 'light' }: { colorScheme?: 'dark' | 'light' } = {}): Promise<Session> {
   const context = await session.browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme })
+  await snoozeUpdateToast(context)
   const page = await context.newPage()
   const errors: string[] = []
 
