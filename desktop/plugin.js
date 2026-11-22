@@ -7726,6 +7726,10 @@ init_define_import_meta_env();
 
 // src/model/sessions.ts
 init_define_import_meta_env();
+function readFailureText(errors) {
+  if (errors?.length)
+    return errors.map(({ profile, error }) => `${profile}: ${error || "unreadable"}`).join("; ");
+}
 var HIDDEN_SOURCES = /* @__PURE__ */ new Set(["acp", "cron", "kanban", "oneshot", "subagent", "tool"]), trimmed = (value2) => value2?.trim() || void 0;
 function forkParentId(row) {
   if (!trimmed(row._reset_from))
@@ -14642,6 +14646,10 @@ function PageBody({ ctx, services: { sync, prefs } }) {
     }, children: failed.isFetching ? "Retrying…" : "Retry" }) }) });
   } else if (health.isPending || sessions.isPending || projects.isPending || !sync.settled(profile))
     body = /* @__PURE__ */ jsx20("div", { className: "session-tree__state", "data-testid": "session-tree-loading", children: /* @__PURE__ */ jsx20(EmptyState, { title: "Loading sessions…" }) });
+  else if (model.nodes.length === 0 && readFailureText(sessions.data?.errors))
+    body = /* @__PURE__ */ jsx20("div", { className: "session-tree__state", "data-testid": "session-tree-error", "data-failed": "sessions", children: /* @__PURE__ */ jsx20(ErrorState, { title: "Could not read sessions", description: readFailureText(sessions.data?.errors), children: /* @__PURE__ */ jsx20(Button4, { variant: "outline", "data-testid": "session-tree-retry", disabled: sessions.isFetching, onClick: () => {
+      sessions.refetch();
+    }, children: sessions.isFetching ? "Retrying…" : "Retry" }) }) });
   else if (model.nodes.length === 0)
     body = /* @__PURE__ */ jsx20("div", { className: "session-tree__state", "data-testid": "session-tree-empty", children: /* @__PURE__ */ jsx20(EmptyState, { title: "No sessions yet", description: "Sessions you start show up here." }) });
   else {

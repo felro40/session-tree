@@ -34,7 +34,7 @@ import { blockProjects, undoPositions, undoProject } from '../model/layout-undo.
 import { projectReset } from '../model/project-rearrange.ts'
 import { EMPTY_SELECTION, canvasSelectable, keepShown, reduceSelection, singleSelected } from '../model/selection.ts'
 import type { Selection, SelectionAction } from '../model/selection.ts'
-import { visibleRows } from '../model/sessions.ts'
+import { readFailureText, visibleRows } from '../model/sessions.ts'
 import { liveStatus } from '../model/status.ts'
 import type { HostStatusSnapshot } from '../model/status.ts'
 import { getStyle, registeredStyles, resolveStyleId } from '../styles/registry.ts'
@@ -710,6 +710,18 @@ function PageBody({ ctx, services: { sync, prefs } }: { ctx: PluginContext; serv
     body = (
       <div className="session-tree__state" data-testid="session-tree-loading">
         <EmptyState title="Loading sessions…" />
+      </div>
+    )
+  } else if (model.nodes.length === 0 && readFailureText(sessions.data?.errors)) {
+    // Every profile's read failed (a Hermes upgrade that moved the store API, say): an error with
+    // Retry naming each profile, never "No sessions yet" over sessions that do exist.
+    body = (
+      <div className="session-tree__state" data-testid="session-tree-error" data-failed="sessions">
+        <ErrorState title="Could not read sessions" description={readFailureText(sessions.data?.errors)}>
+          <Button variant="outline" data-testid="session-tree-retry" disabled={sessions.isFetching} onClick={() => void sessions.refetch()}>
+            {sessions.isFetching ? 'Retrying…' : 'Retry'}
+          </Button>
+        </ErrorState>
       </div>
     )
   } else if (model.nodes.length === 0) {

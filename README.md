@@ -238,8 +238,9 @@ for the old per-scope positions).
 | `plugin.yaml`, `__init__.py` | Agent half. No tools; it exists so `plugins.enabled` can mount the backend. |
 | `dashboard/manifest.json`, `dashboard/plugin_api.py` | Python backend (FastAPI `APIRouter`) at `/api/plugins/session-tree/`, reached with `ctx.rest`: the session rows, the session actions the SDK has no verb for (rename, read state, archive, delete, export), each through the core endpoint's own code path, and the synced layout store. Projects come from the gateway's own `projects.tree` RPC (`host.request`). |
 | `dashboard/layout_store.py` | The synced layout store (standard library only): `<HERMES_HOME>/session-tree/state.json`, atomic writes under a thread lock + `fcntl.flock`, caps, corrupt-file backup, prune, the Layout history backups in `backups.json`, and (card 11) the kept-on-canvas markers in `kept.json` (`docs/layout-sync.md`). |
-| `dashboard/session_details.py` | Card 6: the Rich cards details (plain-text excerpt of the last message, 7-day activity) read through a read-only `SessionDB`, bounded per id (`docs/rich-cards.md`). |
-| `dashboard/session_context.py` | Card 12: each session's context — the measured figure, its validity and the cache window for the `/sessions` rows, and the estimate for `POST /sessions/context` — through Hermes's own functions only, on a read-only `SessionDB`. |
+| `dashboard/hermes_store.py` | Every read of a profile's session store, in one place, for both Hermes store APIs: the legacy `SessionDB` (Hermes ≤ v0.23.2) and the storage interface (`persistence_assembly`, v0.23.3+). Picks by what the read-only handle has, never by version number, and returns the `SessionDB` shapes either way. |
+| `dashboard/session_details.py` | Card 6: the Rich cards details (plain-text excerpt of the last message, 7-day activity) read through a read-only store handle (`hermes_store.py`), bounded per id (`docs/rich-cards.md`). |
+| `dashboard/session_context.py` | Card 12: each session's context — the measured figure, its validity and the cache window for the `/sessions` rows, and the estimate for `POST /sessions/context` — through Hermes's own functions only, on a read-only store handle (`hermes_store.py`). |
 | `desktop/plugin.js` | Desktop half. **Built output** of `src/` (`npm run build`), committed so the package installs without a build. |
 | `src/` | TypeScript + JSX source: `plugin.tsx` (registration), `page/`, `settings/`, `model/` (pure graph rules), `shims/react-dom.ts`. |
 | `tests/js/` | node:test unit tests and the static bundle guards. |
@@ -253,8 +254,8 @@ for the old per-scope positions).
 
 - `GET /health?session_profile=<name|*>` → `{ ok, plugin, version, profiles }`.
 - `GET /sessions?session_profile=<name|*>&include_archived=<bool>&limit=<n>` → `{ sessions, profiles,
-  limit, truncated, errors }`. Rows are the core session list's (`SessionDB.list_sessions_rich`
-  through Hermes's own read-only profile helpers, exactly as `GET /api/profiles/sessions`), with
+  limit, truncated, errors }`. Rows are the core session list's (the same listing
+  `GET /api/profiles/sessions` runs, through Hermes's own read-only profile helpers), with
   `SessionInfo` fields plus `is_internal_child` and `compacted_segments` (the number of earlier
   compression segments folded into the row). `limit` defaults to 500 and is capped at 2000.
 - Every endpoint requires `session_profile`; a malformed name is a 400, an unknown profile a 404. The key is not `profile`: on plugin routes `?profile=` is the gateway's own profile selector (the Webapp sets it to the active profile on every `ctx.rest` call), so it cannot carry the data selection (see `docs/measured-facts.md`, pre-check 5).

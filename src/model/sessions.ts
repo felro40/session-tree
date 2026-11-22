@@ -59,6 +59,23 @@ export interface SessionsResponse {
   profiles: string[]
   truncated: boolean
   limit: number
+  /** Profiles whose session store could not be read (the backend lists every row it could). */
+  errors?: SessionsReadError[]
+}
+
+export interface SessionsReadError {
+  profile: string
+  error: string
+}
+
+/** Why an empty listing is a read failure, not "no sessions": each profile that failed with its
+ *  error, or undefined when every profile was read. */
+export function readFailureText(errors: readonly SessionsReadError[] | undefined): string | undefined {
+  if (!errors?.length) {
+    return undefined
+  }
+
+  return errors.map(({ profile, error }) => `${profile}: ${error || 'unreadable'}`).join('; ')
 }
 
 /** Sources the desktop sidebar never lists as conversations (its recents

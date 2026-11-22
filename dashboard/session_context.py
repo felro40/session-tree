@@ -33,7 +33,9 @@ Private Hermes helpers are reached in one place each (``_hermes_private``), and
 * ``gateway.session_tui_reads._saved_route`` (the persisted ``(provider, base_url, model)``) and
   ``._model_history`` (the tip's working context as live replay loads it).
 
-The caller opens the database read-only (``_read_profile_db``); nothing here writes.
+Each store read goes through ``dashboard/hermes_store.py`` (legacy ``SessionDB`` on Hermes ≤ v0.23.2,
+the storage interface on v0.23.3+). The caller opens the store read-only (``_read_profile_db``);
+nothing here writes.
 """
 
 from __future__ import annotations
@@ -44,6 +46,26 @@ import threading
 import time
 from collections import OrderedDict
 from typing import Any, Iterable, Optional
+
+
+def _sibling(name: str) -> Any:
+    """A module next to this file, shared with ``plugin_api._load_sibling`` (same module name)."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    module_name = f"hermes_dashboard_plugin_session_tree_{name}"
+    if module_name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(module_name, Path(__file__).with_name(f"{name}.py"))
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load {name}.py next to {__file__}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[module_name]
+
+
+hermes_store = _sibling("hermes_store")
 
 #: Ids per ``POST /sessions/context`` request (the page batches in requests of at most this many).
 MAX_IDS = 100
@@ -67,9 +89,10 @@ def _hermes_private() -> dict[str, Any]:
     }
 
 
-def saved_route(row: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """``(provider, base_url, model)`` as the row persists them (``_saved_route``)."""
-    return _hermes_private()["_saved_route"](row)
+def saved_route(row: dict[str, Any], db: Any = None) -> tuple[Any, Any, Any]:
+    """``(provider, base_url, model)`` as the row persists them (``_saved_route``). ``db`` says
+    which shape ``_saved_route`` reads (``hermes_store.route_source``); without it, the row dict."""
+    return _hermes_private()["_saved_route"](row if db is None else hermes_store.route_source(db, row))
 
 
 def model_history(db: Any, tip: str) -> list[dict[str, Any]]:
@@ -130,8 +153,8 @@ def row_fields(db: Any, row: dict[str, Any], now: float) -> dict[str, Any]:
     if event is None:
         return {"context_measured": None, "context_invalid_reason": None, "cache_window": None}
     session_id = str(row.get("id") or "")
-    generation = current_generation(db, session_id)
-    route = saved_route(row)
+    generation = current_generation(hermes_store.generation_reader(db), session_id)
+    route = saved_route(row, db)
     window = stored_cache_window(raw, session_id=session_id, generation=generation, saved_route=route)
     return {
         "context_measured": {
@@ -221,14 +244,15 @@ def _shape_estimate(result: Optional[dict[str, Any]]) -> Optional[dict[str, Any]
 
 def estimate_of(db: Any, session_id: str, *, store: str, cache: EstimateCache = CACHE) -> tuple[bool, Optional[dict[str, Any]]]:
     """``(found, estimate)`` for one stored id: ``found`` False for an id the store does not have."""
-    row = db.get_session(session_id)
+    row = hermes_store.get_session(db, session_id)
     if not row:
         return False, None
     # The compression tip the session's model context lives in (``_context_id``).
-    tip = db.get_compression_tip(session_id) or session_id
+    tip = hermes_store.compression_tip(db, session_id)
     if tip != session_id:
-        row = db.get_session(tip) or row
-    key = (store, tip, db.conversation_revision(tip), _digest(row.get("system_prompt")), _digest(row.get("tool_names")))
+        row = hermes_store.get_session(db, tip) or row
+    key = (store, tip, hermes_store.conversation_revision(db, tip),
+           _digest(row.get("system_prompt")), _digest(row.get("tool_names")))
     hit, value = cache.get(key)
     if hit:
         return True, value

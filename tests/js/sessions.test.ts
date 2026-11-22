@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { ALL_PROJECTS, buildGraph } from '../../src/model/graph.ts'
-import { compactedCount, displayTitle, forkParentId, HIDDEN_SOURCES, isHiddenRow, visibleRows } from '../../src/model/sessions.ts'
+import { compactedCount, displayTitle, forkParentId, HIDDEN_SOURCES, isHiddenRow, readFailureText, visibleRows } from '../../src/model/sessions.ts'
 import type { SessionRow } from '../../src/model/sessions.ts'
 
 const row = (id: string, extra: Partial<SessionRow> = {}): SessionRow => ({
@@ -129,5 +129,22 @@ describe('compactedCount and displayTitle', () => {
     assert.equal(displayTitle(row('a', { title: ' T ' })), 'T')
     assert.equal(displayTitle(row('a', { title: null, preview: 'first prompt' })), 'first prompt')
     assert.equal(displayTitle(row('a', { title: null, preview: null })), 'Untitled session')
+  })
+})
+
+describe('readFailureText', () => {
+  it('is undefined when every profile was read, so an empty listing stays "No sessions yet"', () => {
+    assert.equal(readFailureText(undefined), undefined)
+    assert.equal(readFailureText([]), undefined)
+  })
+
+  it('names each profile whose store could not be read', () => {
+    assert.equal(
+      readFailureText([
+        { profile: 'default', error: 'list_sessions_rich' },
+        { profile: 'coder', error: '' }
+      ]),
+      'default: list_sessions_rich; coder: unreadable'
+    )
   })
 })
