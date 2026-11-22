@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PREFIX, REPO, _load
+from conftest import PREFIX, REPO, _load, fixture_store
 
 CTX = "ctx"
 MEASURED, UNKNOWN, COMPACTED, ROUTE, ESTIMATE, NEVER = (
@@ -36,7 +36,7 @@ def seeder(manifest):
 
 def _seed_home(path: Path, seeder) -> Path:
     path.mkdir(parents=True, exist_ok=True)
-    db = seeder.SessionDB(db_path=path / "state.db")
+    db = fixture_store.open_store(path / "state.db")
     try:
         seeder.seed_context(db)
     finally:
@@ -117,8 +117,11 @@ def test_the_hermes_functions_and_wrapped_private_helpers_keep_their_signatures(
     assert params(prompt_cache_clock._invalid_reason) == [("event", pos), ("session_id", kw), ("generation", kw), ("route", kw)]
     assert params(prompt_cache_clock._saved_route_changed) == [("event", pos), ("saved", pos)]
     assert params(session_tui_reads._saved_route) == [("row", pos)]
-    assert params(session_tui_reads._model_history) == [("db", pos), ("tip", pos)]
-    assert params(session_tui_reads._stored_breakdown) == [("row", pos), ("conversation", pos), ("usage", pos), ("tip", kw), ("db", kw)]
+    # The store parameter is named after the store API, a capability (not a version): ``db`` beside the
+    # legacy ``SessionDB``, ``store`` beside the storage interface. The plugin passes it by position.
+    store = "db" if fixture_store.legacy_session_db() is not None else "store"
+    assert params(session_tui_reads._model_history) == [(store, pos), ("tip", pos)]
+    assert params(session_tui_reads._stored_breakdown) == [("row", pos), ("conversation", pos), ("usage", pos), ("tip", kw), (store, kw)]
     private = plugin_api.session_context._hermes_private()
     assert private["_invalid_reason"] is prompt_cache_clock._invalid_reason
     assert private["_model_history"] is session_tui_reads._model_history
@@ -206,15 +209,25 @@ def test_session_rotated_and_storage_unavailable(ctx_home, module):
 
     db = _open_session_db_at_path(ctx_home / "state.db", read_only=True)
     try:
-        row = dict(db.get_session(MEASURED))
+        row = dict(fixture_store.hermes_store.get_session(db, MEASURED))
         moved = module.row_fields(db, {**row, "id": "st-ctx-elsewhere"}, time.time())
         assert moved["context_invalid_reason"] == "session_rotated" and moved["cache_window"]["state"] == "unknown"
 
-        class Broken:
+        class Failing:
             def prompt_cache_generation(self, sid):
                 raise sqlite3.OperationalError("disk I/O error")
 
-        broken = module.row_fields(Broken(), row, time.time())
+        # A store whose generation read fails, shaped like the handle the core gives (by capability):
+        # the storage interface reads it from ``usage`` (and has ``sessions``), SessionDB from itself.
+        if fixture_store.hermes_store.is_storage_interface(db):
+            class Broken:
+                sessions = None
+                usage = Failing()
+
+            broken_db: object = Broken()
+        else:
+            broken_db = Failing()
+        broken = module.row_fields(broken_db, row, time.time())
         assert broken["context_invalid_reason"] == "storage_unavailable" and broken["context_measured"]["tokens"] == 154789
     finally:
         db.close()
@@ -224,7 +237,7 @@ def test_an_archive_flips_measured_to_estimated(client, fresh, seeder):
     name = "ctxfresh"
     before = rows(client, name)[MEASURED]
     assert before["context_invalid_reason"] is None
-    db = seeder.SessionDB(db_path=fresh / "state.db")
+    db = fixture_store.open_store(fresh / "state.db")
     try:
         result = seeder.archive_one(db, MEASURED)
     finally:
@@ -246,13 +259,19 @@ def test_the_estimate_equals_stored_breakdown(client, ctx, module):
 
     answered = contexts(client, ALL)
     db = _open_session_db_at_path(ctx / "state.db", read_only=True)
+    store = fixture_store.hermes_store
     try:
         for sid in ALL:
-            row = db.get_session(sid)
+            row = store.get_session(db, sid)
             if sid == NEVER:
                 assert not row.get("system_prompt") and answered[sid]["estimate"] is None
                 continue
-            expected = _stored_breakdown(row, _model_history(db, sid), {}, tip=sid, db=db)
+            # Hermes's own function on the handle the core gives (by capability): a SessionRecord and
+            # ``store=`` beside the storage interface, the row dict and ``db=`` beside SessionDB.
+            if store.is_storage_interface(db):
+                expected = _stored_breakdown(db.sessions.get(sid), _model_history(db, sid), {}, tip=sid, store=db)
+            else:
+                expected = _stored_breakdown(row, _model_history(db, sid), {}, tip=sid, db=db)
             got = answered[sid]["estimate"]
             assert got["total"] == expected["estimated_total"] > 0
             assert got["categories"] == [{"id": c["id"], "label": c["label"], "tokens": c["tokens"]} for c in expected["categories"]]
@@ -329,7 +348,7 @@ def test_the_server_cache_hits_invalidates_on_a_new_message_and_is_capped(client
     first = contexts(client, [ESTIMATE], name)[ESTIMATE]["estimate"]
     again = contexts(client, [ESTIMATE], name)[ESTIMATE]["estimate"]
     assert computed == [ESTIMATE] and again == first and module.CACHE.hits >= 1
-    db = seeder.SessionDB(db_path=fresh / "state.db")
+    db = fixture_store.open_store(fresh / "state.db")
     try:
         db.append_message(ESTIMATE, "user", "one more question " * 50, timestamp=time.time())
     finally:
@@ -378,7 +397,7 @@ def test_p1_2_a_full_round_writes_nothing(client, ctx, module):
 def clocked_500(tmp_path_factory, seeder) -> Path:
     """500 sessions, every one with a valid clock (the listing's worst case: one count per row)."""
     home = tmp_path_factory.mktemp("ctx-500")
-    db = seeder.SessionDB(db_path=home / "state.db")
+    db = fixture_store.open_store(home / "state.db")
     try:
         for i in range(500):
             sid = f"st-c500-{i:04d}"
@@ -415,8 +434,8 @@ def test_p1_4_the_listing_time_added_on_500_rows_with_a_clock(client, plugin_api
 
     db = _open_session_db_at_path(clocked_500 / "state.db", read_only=True)
     try:
-        listed = db.list_sessions_rich(limit=500, offset=0, order_by_last_active=True, compact_rows=True,
-                                       include_pinned=True, include_archived=False, archived_only=False)
+        listed = fixture_store.hermes_store.list_rows(db, limit=500, include_archived=False, include_subagents=False,
+                                                      exclude_sources=None)
         samples = []
         for _ in range(7):
             started = time.perf_counter()
