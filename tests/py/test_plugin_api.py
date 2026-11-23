@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PREFIX, REPO
+from conftest import PREFIX, REPO, fixture_store
 
 #: The SessionInfo fields /sessions must carry (card 1: lineage, flags, place, figures, text).
 REQUIRED_FIELDS = {
@@ -294,14 +294,9 @@ def _post(client, sid: str, action: str, body: dict, profile: str = "default"):
 
 
 def _stored(home: Path, sid: str) -> dict:
-    """The row through Hermes's own read path (a read-only SessionDB)."""
-    from hermes_state import SessionDB
-
-    db = SessionDB(db_path=home / "state.db", read_only=True)
-    try:
-        return db.get_session(sid) or {}
-    finally:
-        db.close()
+    """The row through Hermes's own read path (a read-only store handle, ``hermes_store.get_session``)."""
+    with fixture_store.open_reader(home) as db:
+        return fixture_store.hermes_store.get_session(db, sid) or {}
 
 
 def test_rename_reads_back_and_a_stale_snapshot_is_refused(client, hermes_home):
@@ -328,16 +323,11 @@ def test_a_mutation_without_the_fence_is_refused_by_the_core_guard(client, herme
 
 
 def test_read_state_toggles_and_reads_back(client, hermes_home):
-    from hermes_state import SessionDB
-
     marked = _post(client, "st-single-07", "read", {"unread": True, **_fence(_snapshot(client, "st-single-07").json())})
     assert marked.status_code == 200, marked.text
     assert by_id(rows_of(client, session_profile="default"))["st-single-07"]["unread"] is True
-    db = SessionDB(db_path=hermes_home / "state.db", read_only=True)
-    try:
-        assert db.session_unread(db.get_session("st-single-07")) is True
-    finally:
-        db.close()
+    with fixture_store.open_reader(hermes_home) as db:
+        assert fixture_store.session_unread(db, "st-single-07") is True
     read = _post(client, "st-single-07", "read", {"unread": False, **_fence(_snapshot(client, "st-single-07").json())})
     assert read.status_code == 200, read.text
     assert by_id(rows_of(client, session_profile="default"))["st-single-07"]["unread"] is False
@@ -464,8 +454,6 @@ def test_export_keeps_a_non_finite_float_byte_for_byte(client, hermes_home):
     # Hermes stores an infinite cost (NaN it cannot: SQLite turns it into NULL and the NOT NULL
     # usage column refuses it), and the core export writes it as ``Infinity``, which JSON.parse
     # refuses. The envelope still carries the exact bytes. The row is removed again afterwards.
-    from hermes_state import SessionDB
-
     seeder = sys.modules["session_tree_seed_fixtures"]
     seeder.add_branch("st-export-inf", "st-hp-root", "Infinite cost", cost=float("inf"))
     try:
@@ -473,11 +461,8 @@ def test_export_keeps_a_non_finite_float_byte_for_byte(client, hermes_home):
         assert data == _core_export("st-export-inf")
         assert b'"estimated_cost_usd":Infinity' in data
     finally:
-        db = SessionDB(db_path=hermes_home / "state.db")
-        try:
+        with fixture_store.open_store(hermes_home) as db:
             db.delete_session("st-export-inf")
-        finally:
-            db.close()
     assert _stored(hermes_home, "st-export-inf") == {}
 
 

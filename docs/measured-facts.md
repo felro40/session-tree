@@ -2529,3 +2529,119 @@ tolerant of `about:blank`.
   base `a6b5e520` (exports via `git archive`), so it is a time-of-day dependence of that check's
   500-row fixture, not this fix (the fix changes no Swimlanes code; run 1, before midnight, passed
   28/28). Not fixed here (outside B1/B2).
+
+# Measured facts — Session Tree 13 (the test seeder and Python tests on the Hermes storage interface)
+
+Base `3183b386` (the `dashboard/hermes_store.py` read fix). Hermes v0.23.3 is the user's
+`~/.hermes/hermes-agent` at `caafe5389ae5`. Hermes v0.23.2 is a `git archive ae2a81ccc00e` export
+under the coder profile's scratch, run with `HERMES_AGENT_DIR=<export>`; under that env
+`hermes_state.__file__` is the export's.
+
+## Why the switch is per handle, not "does persistence_assembly exist"
+
+- Under `HERMES_AGENT_DIR=<v0.23.2 export>`, `importlib.util.find_spec("persistence_assembly")`
+  still finds `~/.hermes/installs/…/workspace/persistence_assembly.py`, the v0.23.3 install's copy.
+  So whether that module is importable says nothing about the Hermes that runs.
+- `scripts/fixture_store.py` opens the legacy `SessionDB` when `hermes_state` carries the real
+  class: `vars(hermes_state)["SessionDB"]` has `update_token_counts`. The v0.23.3 stub is served
+  by the module's `__getattr__`, so the probe emits no deprecation warning. Otherwise it opens
+  `persistence_assembly.open_persistence(profile_scope(home=…), eager=True)`.
+- After the open, every call branches on `hermes_store.is_storage_interface(handle)`. That is the
+  same probe the runtime reads use. It is decided once, at open.
+
+## Fixture writes, old → new
+
+| Seeder call (old `SessionDB` name kept) | storage interface (v0.23.3+) |
+|---|---|
+| `create_session(id, source, **kw)` | `sessions.create(NewSession(session_id=id, source=source, **kw))` (the `model_config` markers pass through unchanged) |
+| `append_message` / `append_messages_batch` | `messages.append(id, NewMessage.from_live(msg))` / `messages.append_batch(…, chunk_rows=)` |
+| `update_token_counts(**counts)` | the `UsageDelta` that `agent.turn_usage.queue_usage` builds from the same keywords, then `usage.queue_usage` + `usage.flush_usage()` |
+| `set_session_title` / `end_session` / `set_session_pinned` / `set_session_archived` | `sessions.set_title` / `end` / `set_pinned` / `set_archived` |
+| `update_system_prompt` / `update_session_tool_names` | `sessions.update_system_prompt` / `update_tool_pin` |
+| `delete_session` | `sessions.delete(id, media_root=…)` + `session_retention.after_sessions_removed` (what the v0.23.3 `SessionDB` stub does) |
+| `rewrite_pruned_rows` / `archive_and_compact` | `messages.rewrite_pruned_rows([PrunedRowChange(held_message(o), NewMessage.from_live(r), NewMessage.from_live(o))])` / `agent.conversation_compression_archive.commit_compaction` |
+| `prompt_cache_generation`, `get_session`, `get_compression_tip` / `_lineage` | through `hermes_store` (`generation_reader`, `get_session`, `compression_tip`, `compression_lineage`) |
+
+Fixture-only SQL is unchanged, the same statements on both paths, each marked `# fixture-only:`:
+
+- `started_at`, `last_activity_at`, `ended_at`: the backdating.
+- `ended_at`, `end_reason` cleared and `last_activity_at = now`: `--activate`.
+- `ended_at`, `end_reason` cleared: `--compact`'s re-open of the tip.
+
+The re-open API (`reopen_session` / `sessions.reopen`) would also retire queued prompts, freeze
+reset children and un-archive. No value that the old path set through `SessionDB` lacked a
+repository write on v0.23.3.
+
+## Fixture equivalence (v0.23.3 vs v0.23.2)
+
+The same throwaway script ran on each version, with NOW pinned and the projects dir shared. It
+seeded these homes:
+
+- the e2e default home (`main()`: seed_default + work 3 + scale 500, the manifest);
+- rich-home, ctx-home and patho-home;
+- a ctx home archived 4× (`archive_one`: 3 prunes, then the in-place-compaction fallback);
+- an "ops" home put through every CLI flag in turn: `--touch` ×2, `--branch`, `--unowned-branch`,
+  `--whole-cost-branch`, `--compact` ×2, `--append` ×2, `--activate`, `--delete`, `--context`,
+  `--archive`, `--rich`, `--more-projects`, `--pathological`, `--context work`.
+
+It then dumped `sessions` / `messages` and the plugin's `/sessions` (listing and lineage),
+`/sessions/details` and `/sessions/context` for every home.
+
+- **Row counts are identical in every home.**
+
+  | Home | default | work | scale | rich | ctx | patho | ctx-archived | ops | ops/work | ops/scale |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | sessions | 49 | 3 | 500 | 7 | 6 | 25 | 6 | 103 | 9 | 500 |
+  | messages | 254 | 6 | 1000 | 89 | 61 | 50 | 74 | 533 | 69 | 1000 |
+
+- The manifests are equal. 50 created: 24 singles, 4 hidden, 2 archived, work 3, scale 500.
+- **Every column is equal except these wall-clock or minted values:**
+  - `messages.message_uid` / `tool_call_uid` / `tool_call_uids`: minted at random on insert.
+  - `messages.timestamp` / `display_identity` (6 rows): `--append` and `--compact` write now.
+  - `sessions.started_at` (52): pathological rows (never backdated) and the 2 compact continuations.
+  - `sessions.ended_at` (2): the compacted tips, ended now.
+  - `sessions.last_activity_at` (1): `--activate`.
+  - `sessions.prompt_cache_clock` (16): the clock's `sent_at` is `time.time()`.
+- **The endpoint answers are equal except the same fields:** `started_at`, `last_active`,
+  `context_measured.sent_at`, `prompt_cache_clock`, `cache_window.{guaranteed,estimated}_until`.
+
+## Changed assertions (old → new)
+
+- `test_context_api` signature lock: `_model_history(db, tip)` / `_stored_breakdown(…, db=)` →
+  the store parameter is `db` beside `SessionDB` and `store` beside the storage interface, chosen
+  by capability. The plugin passes it by position.
+- `test_the_estimate_equals_stored_breakdown`: beside the storage interface, Hermes's
+  `_stored_breakdown` takes the `SessionRecord` (`db.sessions.get`) and `store=`.
+- `test_session_rotated_and_storage_unavailable`: the failing store is shaped like the running
+  handle. The storage interface has `sessions` and a failing `usage.prompt_cache_generation`.
+  `SessionDB` fails on itself.
+- Direct reads of `SessionDB` in the tests now go through `hermes_store` (`get_session`,
+  `list_rows`) or `fixture_store` (`open_reader`, `session_unread`).
+- New `tests/py/test_hermes_store.py`, 12 tests: one per public `hermes_store` function plus a
+  meta-test over its public functions. Mutation-checked: breaking `compression_tip` and adding an
+  untested public function failed exactly those two tests.
+
+## The e2e test package
+
+`buildTestPackage` (`scripts/e2e/harness.ts`) did not copy `dashboard/hermes_store.py` at the
+base, so every package suite's backend failed to load. Measured on v0.23.3: sync 4/25. It is
+copied now.
+
+## Gates (HEAD `32dee9b`; later commits change only docs)
+
+- lint exit 0; `npm test` exit 0, 493/493.
+- build exit 0: `desktop/plugin.js` 803 115 B, sha256 `19e4307a…f239df48c`, identical to the base.
+  The tree stays clean.
+- `npm run test:py` on v0.23.3: exit 0, **416 passed**, 0 failed / errors / skipped / xfailed. The
+  base was 155 passed, 1 failed, 248 errors.
+- `npm run test:py` on v0.23.2: exit 0, **416 passed**, 0 failed / errors / skipped / xfailed. The
+  base was 404 passed.
+- Full `npm run test:e2e` on v0.23.3 (exit 1, 308/309):
+  - foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28, rich 23, subway 19,
+    toolbar 17, final 14, select 35, shared 23, create 30.
+  - context **15/16**. The failing check is "an older backend": it installs base `a6b5e520`'s
+    `dashboard/`, whose `plugin_api.py` calls `SessionDB.list_sessions_rich`. On v0.23.3 that
+    backend answers "Could not read sessions — default: list_sessions_rich". No pre-card-12 backend
+    can read a v0.23.3 store, so the check's premise does not hold there. It is not changed here.
+- The real-Hermes guard passed in every suite. `git -C ~/.hermes/hermes-agent status --short` was
+  empty before and after.

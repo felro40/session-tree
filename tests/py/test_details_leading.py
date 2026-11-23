@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from conftest import PREFIX, REPO, _load
+from conftest import PREFIX, REPO, _load, fixture_store
 
 PATHO = "patho"
 #: The card's per-id bar (ms), as in test_details_bounds.py, and the target the review gave (~15 ms).
@@ -35,7 +35,7 @@ def seeder(manifest):
 @pytest.fixture(scope="module")
 def lead_home(tmp_path_factory, seeder) -> Path:
     home = tmp_path_factory.mktemp("lead-home")
-    db = seeder.SessionDB(db_path=home / "state.db")
+    db = fixture_store.open_store(home / "state.db")
     try:
         seeder.seed_pathological(db)  # st-patho-<name> and st-patho-lead-<name>
     finally:

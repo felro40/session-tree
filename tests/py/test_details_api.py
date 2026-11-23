@@ -1,7 +1,7 @@
 """Card 6 (Rich cards): ``POST /sessions/details`` — the excerpt and the 7-day activity.
 
 The content cases run against their own small Hermes home (``rich_home``: a ``state.db`` seeded
-through ``SessionDB`` with ``scripts/seed-fixtures.py``'s ``seed_rich``), served as an extra
+through ``scripts/fixture_store.py`` with ``scripts/seed-fixtures.py``'s ``seed_rich``), served as an extra
 profile ``rich`` through the plugin's profile targets; the shared default home is only read.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PREFIX, REPO, _load
+from conftest import PREFIX, REPO, _load, fixture_store
 
 RICH = "rich"
 
@@ -29,7 +29,7 @@ def seeder(manifest):
 @pytest.fixture(scope="module")
 def rich_home(tmp_path_factory, seeder) -> Path:
     home = tmp_path_factory.mktemp("rich-home")
-    db = seeder.SessionDB(db_path=home / "state.db")
+    db = fixture_store.open_store(home / "state.db")
     try:
         seeder.seed_rich(db)
     finally:
@@ -56,7 +56,7 @@ def details(client, ids: list[str], profile: str = RICH, tz: int = 0) -> dict:
 
 
 def _write_db(seeder, home: Path):
-    return seeder.SessionDB(db_path=home / "state.db")
+    return fixture_store.open_store(home / "state.db")
 
 
 # --- the excerpt --------------------------------------------------------------------------------
@@ -232,7 +232,7 @@ def test_per_id_cost_on_a_5000_message_session_is_under_50_ms(client, rich, seed
         db.close()
     ro = _open_session_db_at_path(rich / "state.db", read_only=True)
     try:
-        assert ro.get_session("st-big")["message_count"] == 5000
+        assert fixture_store.hermes_store.get_session(ro, "st-big")["message_count"] == 5000
         samples = []
         for _ in range(7):
             started = time.perf_counter()

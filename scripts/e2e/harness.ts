@@ -218,7 +218,7 @@ export function buildTestPackage(t: TestHermes): string {
     mkdirSync(join(dir, sub), { recursive: true })
   }
 
-  for (const file of ['plugin.yaml', '__init__.py', 'dashboard/manifest.json', 'dashboard/plugin_api.py', 'dashboard/layout_store.py', 'dashboard/session_details.py', 'dashboard/session_context.py']) {
+  for (const file of ['plugin.yaml', '__init__.py', 'dashboard/manifest.json', 'dashboard/plugin_api.py', 'dashboard/layout_store.py', 'dashboard/hermes_store.py', 'dashboard/session_details.py', 'dashboard/session_context.py']) {
     copyFileSync(join(REPO, file), join(dir, file))
   }
 
