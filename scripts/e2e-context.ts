@@ -14,11 +14,12 @@
  * context, the lifetime tokens and the cache state. The Dense inspector's Context and Lifetime
  * sections; the Rich bar's width; the Swimlanes lane header ends in `used`. Live: an archive
  * (`--archive`, a tool-result prune) flips a measured block to `~…` after the refresh, and an
- * appended message refetches the estimate. An older backend (the base commit's `dashboard/`,
- * this page) shows `— ctx` with no error. Screenshots, light and dark: <root>/shots/.
+ * appended message refetches the estimate. A backend without the context fields (`— ctx`, no
+ * context request) is covered by the unit tests in tests/js/context.test.ts, not here.
+ * Screenshots, light and dark: <root>/shots/.
  */
-import { copyFileSync, existsSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
 import type { Page } from 'playwright-core'
@@ -43,7 +44,7 @@ import {
   viewport,
   waitFor
 } from './e2e/common.ts'
-import { buildTestPackage, isolatedEnv, PLUGIN_ID, REPO, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
+import { buildTestPackage, isolatedEnv, REPO, seedFixtures, setup, signInLink, stopGateway, stopRoleHomes, testHermes, testHermesPids, webappBase } from './e2e/harness.ts'
 import { diffSnapshots, snapshotRealHermes } from './e2e/real-hermes-guard.ts'
 import { contextFigure, contextSignature, contextTooltip, fullNumber, usedLabel, lifetimeTokens, cacheState } from '../src/model/context.ts'
 import type { ContextAnswer, ContextEntry } from '../src/model/context.ts'
@@ -54,8 +55,6 @@ const t = testHermes(undefined, { variant: 'context' })
 const shots = join(t.root, 'shots')
 const { results, facts, check, onFailure } = suite()
 
-/** The base commit of card 12: its backend predates the context fields and endpoint. */
-const BASE_COMMIT = 'a6b5e520fa8fc851d390b413462ebc9257829811'
 const MEASURED = 'st-ctx-measured'
 const UNKNOWN = 'st-ctx-unknown'
 const COMPACTED = 'st-ctx-compacted'
@@ -165,34 +164,6 @@ function outsideConnections(pids: readonly number[]): string[] {
     .map(line => line.trim().split(/\s+/))
     .filter(cols => cols.length >= 4 && !/^(127\.|\[::1\]|\[::ffff:127\.)/.test(cols[3]))
     .map(cols => `${cols[2]} -> ${cols[3]}`)
-}
-
-/** The base commit's backend with this card's page: `<root>/package-old`. */
-function oldBackendPackage(newPackage: string): string {
-  const dir = join(t.root, 'package-old')
-
-  for (const sub of ['dashboard', 'desktop']) {
-    mkdirSync(join(dir, sub), { recursive: true })
-  }
-
-  for (const file of ['plugin.yaml', '__init__.py', 'dashboard/manifest.json', 'dashboard/plugin_api.py', 'dashboard/layout_store.py', 'dashboard/session_details.py']) {
-    writeFileSync(join(dir, file), execFileSync('git', ['show', `${BASE_COMMIT}:${file}`], { cwd: REPO }))
-  }
-
-  copyFileSync(join(newPackage, 'desktop', 'plugin.js'), join(dir, 'desktop', 'plugin.js'))
-
-  return dir
-}
-
-/** Point the test home's package link at `target` (the old link is moved aside, never deleted). */
-function relink(target: string): void {
-  const link = join(t.home, 'plugins', PLUGIN_ID)
-
-  if (existsSync(link)) {
-    renameSync(link, join(t.root, `plugin-link-${Date.now()}`))
-  }
-
-  symlinkSync(target, link)
 }
 
 async function main(): Promise<void> {
@@ -618,47 +589,9 @@ async function main(): Promise<void> {
       assert(fromPlugin.length === 0, fromPlugin.join('\n'))
       assert(s.errors.length === 0, s.errors.join('\n'))
     })
-
-    await check('an older backend (the base commit\'s dashboard/, this page): `— ctx` and the lifetime figure, no context request, no error', async () => {
-      await page.goto('about:blank')
-      stopGateway(t)
-      relink(oldBackendPackage(packageDir))
-      await signIn(t, page)
-      await openTree(t, s).catch(async () => {
-        await enableDesktopHalf(t, page)
-        await openTree(t, s)
-      })
-      const oldRows = await rowsOf(s)
-
-      assert(oldRows.length > 0 && !('context_measured' in oldRows[0]), 'the backend is not the old one')
-      const from = Date.now()
-
-      await switchStyle(page, 'rich')
-      await reloadTree(t, s)
-      await fit(page)
-      await sleep(1500)
-      const shown = await shownLabels(page)
-      const tip = await tooltipOf(page, MEASURED)
-      const requests = log.filter(entry => entry.at >= from && entry.path.startsWith('/sessions/context'))
-      const row = oldRows.find(each => each.id === MEASURED)!
-
-      assert(IDS.every(id => shown[id]?.text === '— ctx' && shown[id]?.kind === 'none'), JSON.stringify(shown))
-      assert(requests.length === 0, `context requests: ${requests.length}`)
-      assert(tip.includes('Context: not reported by this Hermes backend') && tip.includes(`${fullNumber(lifetimeTokens(row))} tokens used`), tip)
-      const fromPlugin = stacks.filter(stack => /blob:|session-tree|desktop-plugins/.test(stack))
-
-      assert(fromPlugin.length === 0 && s.errors.length === 0, [...fromPlugin, ...s.errors].join('\n'))
-      await page.screenshot({ path: join(shots, 'context-old-backend-light.png') })
-
-      return { shown: shown[MEASURED], tip: tip.split('\n') }
-    })
   } finally {
     await close(s)
     stopGateway(t)
-
-    if (existsSync(join(t.root, 'package-old'))) {
-      relink(packageDir)
-    }
 
     if (process.env.KEEP_RUNNING === '1') {
       signInLink(t)

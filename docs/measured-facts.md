@@ -2645,3 +2645,31 @@ copied now.
     can read a v0.23.3 store, so the check's premise does not hold there. It is not changed here.
 - The real-Hermes guard passed in every suite. `git -C ~/.hermes/hermes-agent status --short` was
   empty before and after.
+
+# Measured facts — Dropped e2e check: an older backend (2026-11-22)
+
+Base `f09fba1` (dev). Hermes v0.23.3 is the user's `~/.hermes/hermes-agent` at `caafe5389ae5`.
+
+## Why
+
+- `scripts/e2e-context.ts` had a check "an older backend": it installed base `a6b5e520`'s
+  `dashboard/` into the test home and expected `— ctx`, no context request and no error.
+- That backend calls `SessionDB.list_sessions_rich`, which Hermes v0.23.3 removed. On v0.23.3 and
+  later it cannot list sessions at all, so the check could never pass. The full `npm run test:e2e`
+  above was 308/309, and this check was the only failure (context 15/16).
+- The check is deleted, with its helpers (`BASE_COMMIT`, `oldBackendPackage`, `relink`, the
+  `finally` relink). No old backend is faked and no skip is added.
+
+## What still covers it
+
+- `tests/js/context.test.ts:183`: an older backend's row (no context fields) shows `— ctx`, is
+  never fetched and never throws.
+- `tests/js/context.test.ts:319`: the Rich bar counts that row 0.
+
+## Gates
+
+- lint exit 0; `npm test` exit 0, 493/493.
+- build exit 0: `desktop/plugin.js` unchanged (no `src/` change), the tree stays clean.
+- `SESSION_TREE_CARD=6 SESSION_TREE_ROLE=coder node scripts/e2e-context.ts` on v0.23.3: exit 0,
+  `e2e-context: 15 passed, 0 failed`. This includes the cleanup check and the real-Hermes guard.
+  `git -C ~/.hermes/hermes-agent status --short` was empty afterwards.
