@@ -2279,3 +2279,397 @@ Shown to fail once: a marker write that also set a `state.json` key failed both 
   committed file.
 - At `3090206`: 778 449 bytes, `npm test` 449/449, `npm run test:py` 381 passed,
   `npm run test:e2e` 289/289 in one run.
+
+# Measured facts — Session Tree 12 (each session's context size beside its lifetime tokens)
+
+Start commit `a6b5e520` (`dev`). Isolated test Hermes from the checkout at `ae2a81ccc0`, coder
+homes `c9-coder-context` (e2e, port 19390) and pytest's tmp homes under `c9-coder/pytest-tmp`.
+Every clock comes from a fixture (`seed-fixtures.py --context`): the test Hermes has no provider.
+
+## Pre-check P1 — the read path (before any UI)
+
+The Hermes functions, all imported by `dashboard/session_context.py` and nowhere else:
+
+| Function | Where (`ae2a81ccc0`) | Used for |
+|---|---|---|
+| `agent.prompt_cache_clock.event_from_json` | `prompt_cache_clock.py` | parse `sessions.prompt_cache_clock` (read from the listing row, never through `get_prompt_cache_clock`, which flushes) |
+| `agent.prompt_cache_clock.current_generation` | idem | the session's generation (`SessionDB.prompt_cache_generation`: one indexed `COUNT`), only for a row with a clock |
+| `agent.prompt_cache_clock.stored_cache_window`, `cache_certainly_warm`, `cache_certainly_cold`, `UNKNOWN` | idem | the cold-session cache window and its state |
+| `agent.context_breakdown.stored_context_breakdown` | `context_breakdown.py` | the estimate |
+| `tools.mcp_tool_agent.pinned_tool_defs` | `tools/mcp_tool_agent.py` | the tool pin's definitions (imports `model_tools`) |
+| **private** `agent.prompt_cache_clock._invalid_reason` | idem | the validity rule (session id, generation) … |
+| **private** `agent.prompt_cache_clock._saved_route_changed` | idem | … then the persisted route, exactly as `stored_cache_window` applies them (its `route=None` + saved-route check; `_invalid_reason`'s own `route` compares a live agent's full display route) |
+| **private** `gateway.session_tui_reads._saved_route` | `gateway/session_tui_reads.py` | `(provider, base_url, model)` as the row persists them |
+| **private** `gateway.session_tui_reads._model_history` | idem | the tip's model history, as `_stored_breakdown` reads it |
+
+Each private helper is reached through one function (`_hermes_private`), and
+`tests/py/test_context_api.py::test_the_hermes_functions_and_wrapped_private_helpers_keep_their_signatures`
+pins every signature (it fails when an import or a parameter moves). The estimate is built exactly
+as `_stored_breakdown` builds it (prompt, `json.loads(tool_names)` with the same fallback,
+`pinned_tool_defs`, `_model_history` of the compression tip); `test_the_estimate_equals_stored_breakdown`
+compares categories and total with `_stored_breakdown` itself, for every fixture.
+
+1. **They import and run** in pytest (Hermes' own Python, through the test launcher) and in the
+   plugin host (e2e: the test gateway answers `/sessions` with the three fields and
+   `/sessions/context` with the estimate for every fixture).
+2. **They write nothing.** pytest `test_p1_2_a_full_round_writes_nothing`: across a full
+   `/sessions` + `/sessions/context` round (cache cleared, so every estimate is computed), `state.db`,
+   `state.db-wal` and `state.db-shm` keep mtime, size and sha256, and `PRAGMA data_version` on a
+   read-only connection held across the round is unchanged (2 → 2). In the plugin host (e2e P1
+   check, `scripts/e2e/db-probe.py` holding a connection on the test home's `state.db`): the same
+   three files unchanged, `data_version` 2 → 2. (`get_session`, which the estimate uses for the
+   resolved prompt and pin, calls `flush_for_read`: on a fresh read-only handle its token queue is
+   empty, a no-op — measured by the same unchanged files.)
+3. **No process, no socket, no MCP.** pytest `test_p1_3_…` runs the round under a guard
+   (`socket.connect` / `connect_ex` / `sendto`, `socket.create_connection`, `socket.getaddrinfo`
+   and `os.fork` raise; `subprocess.Popen` recorded) and compares the test process's children: no
+   socket attempt, no process, no new child; `model_tools` was imported **cold** under the guard
+   (first in the file). Code reading: `model_tools` runs `discover_builtin_tools()` and
+   `discover_plugins()` on import; MCP discovery is deliberately not run there
+   (`model_tools.py` "MCP discovery is deliberately NOT run here"). In the plugin host (e2e): the
+   gateway's process list is the same before and after the round (2 processes) and it has no
+   established TCP connection to a non-local peer before or after.
+4. **Cost.**
+   - The estimate: pytest, one id over HTTP (TestClient): computed median 2.65 ms (first 3.74 ms),
+     cached 2.02 ms. In the plugin host: `elapsed_ms` of the first `/sessions/context` (6 ids,
+     computed) **9.76 ms**, the same ids again (cached) **1.52 ms**. The card author's figures on
+     the real profile: 0.38 s for the first call in a process (imports), ≤ 0.01 s after.
+   - `/sessions` on 500 rows, **every row with a valid clock** (the worst case: one count each):
+     median 29.2 ms with the fields, 19.7 ms without — **+9.5 ms per 500 rows**; `row_fields`
+     alone over the 500 rows 8.6 ms (asserted < 50 ms). Under the card's 50 ms budget, so the
+     fields stay on the `/sessions` rows. In the plugin host, the 500-row scale profile (no clocks)
+     listed in 194 ms over HTTP, page bridge included.
+
+## Pre-check P2 — the context window: `null` everywhere
+
+`agent.model_metadata.get_model_context_length` (`:2208`) resolves in order: config override /
+MoA / endpoint-scoped / provider profile, then **1** the persistent cache, **2** live `/models` for
+custom endpoints, **4** Anthropic `/v1/models`, **5** provider-aware live catalogs (Nous, Codex
+OAuth, OpenRouter, models.dev …), **6** OpenRouter metadata (`fetch_model_metadata`), **7** a
+local server probe, **8** the hardcoded table, **9** a 256K fallback. Steps 2, 4–7 may open the
+network; step 1's validation (`_validate_cached_context_length`) may invalidate the cache file
+(`_invalidate_cached_context_length`, a write) or probe a local endpoint, and step 2 / Novita
+**save** what they learn (`save_context_length`). There is no offline entry point, and stopping
+after the offline steps would return a value Hermes itself would not (step 8 is used only after the
+network steps, step 9 is a guess). So no path is proven network- and write-free: the window is
+`null` everywhere (`session_context.context_window`), the page never shows a denominator, and the
+Rich bar uses the in-scope scale. The page still supports a window (`contextFigure` /
+`contextBar` unit tests), should a later Hermes offer an offline resolution.
+
+## The fixtures (`seed-fixtures.py --context`, `--archive ID [PROFILE]`)
+
+One hermes-plugins family (a root and five `/branch` children: no single is added), through
+`SessionDB`: `create_session` (route in `model_config`), `append_message` (4 turns, 3 tool rounds),
+`update_system_prompt` + `update_session_tool_names` (a 12,220-character prompt with a skills index,
+a legacy pin of 6 tool names), `update_token_counts(prompt_cache_clock=event_to_json(CacheEvent(…)))`
+and `rewrite_pruned_rows` (a tool-result prune). No direct SQL beyond the timestamp backdating every
+fixture gets.
+
+| Session | Clock | `/sessions` | Shown |
+|---|---|---|---|
+| `st-ctx-measured` | proven, 120,000 + 34,789, sent 6 min ago, 1-hour tier | measured 154,789, no reason, cache `warm` | `155k ctx` |
+| `st-ctx-unknown` | confidence `unknown` (83,456) | no reason, cache `unknown` | `~7k ctx` |
+| `st-ctx-compacted` | generation 0, then a prune (generation 1) | `compacted` | `~7k ctx` |
+| `st-ctx-route` | route `openrouter`, row `anthropic` | `route_changed` | `~7k ctx` |
+| `st-ctx-estimate` | none (prompt + pin stored) | null fields | `~7k ctx` |
+| `st-ctx-never` | none, no prompt | null fields | `— ctx` |
+
+`--archive ID` prunes the next tool result in place (`rewrite_pruned_rows`: one archived twin,
+generation + 1, `transcript_revision` + 1, `message_count` unchanged), else compacts in place
+(`archive_and_compact`). The default fixtures, the second and the scale profile are unchanged
+(no count changed); the `--context` family is seeded only by `e2e-context`, and
+is not in `fixtures-manifest.json` (each flag prints its own manifest, like `--rich`).
+
+## Changed assertions (old → new)
+
+- `scripts/e2e-swimlanes.ts:775` — the lane header's text: `/ tok$/` → `/ used$/`.
+- `scripts/e2e-core-dense.ts:777-778` — the inspector's `tokens-in` / `tokens-out` title:
+  `String(row.input_tokens)` → `fullNumber(row.input_tokens)` (A7: separators, `26,000`); the
+  shown value (`compactNumber`) and the field names are unchanged.
+- `scripts/e2e-rich.ts` "the token bar width is tokens / the largest session in scope …" →
+  "card 12 (A2): the bar shows the context — its width is the context / the largest context in
+  scope …": the scale is the largest context figure (`data-context`, `data-token-max`) instead of
+  the largest `input + output`; the label is `[data-field="context"]` and equals the backend's
+  figure instead of `[data-field="tokens"]`; the sample is the widest bar, `st-rich-root`
+  (`~…k ctx`, full width) instead of `st-sys-tip`'s token label; `data-tokens` is still asserted
+  equal to the row's lifetime tokens; scoped to mdesign (no context there) every bar is empty and
+  the scale 0.
+- `scripts/e2e-rich.ts:43` `const TOKEN_BAR = 54` → the page's own `TOKEN_BAR` (32 px).
+- `scripts/e2e-rich.ts` `tokenBarContrast`: the measured bars are the cards with
+  `data-context > 0` (was `data-tokens > 0`). For it, `seed_rich` (`--rich`, rich suite and pytest
+  only) now stores a system prompt and tool pin on the `st-rich-*` family (the root's prompt 4× the
+  children's, so the bars differ): no row, title, message or count changes. A first try seeded the
+  `--context` family into the rich home instead; its 6 extra cards moved the fit zoom and the
+  "R13 on drop" check's drag landed off its target (full run 1, rich 21/23), so it was dropped.
+- `tests/py/test_plugin_api.py::test_router_mutations_are_only_the_fenced_session_actions`:
+  `("/sessions/context", "POST")` added to the router's non-GET routes (a read: P1.2).
+
+## Rich cards footer
+
+The figure (`155k ctx`, `~108k ctx`) is longer than the old token figure, and the 280 px card's
+footer was already full: the bar is now **32 px** (`TOKEN_BAR`, was 54), the footer's gaps 5 px
+(was 8), and the model chip gives way first (ellipsis, `title` keeps the model). e2e-context
+asserts every card's figure ends inside the card body. In Swimlanes the 170 px block's meta line
+reads `6m ago · 155k ctx · 10 msgs`: the context before the message count, which takes the
+ellipsis when the line is full (`textContent` unchanged).
+
+## Environment change during the card: the Webapp's "Update ready" toast
+
+Between full run 1 and run 2 (2026-11-19) the test Webapp's update check (GitHub API, a network
+fact) began reporting upstream commits; its persistent "Update ready" notification sits over the
+toolbar's scope chips and intercepted real clicks (run 2: core-dense 29/30, actions 20/30, toolbar
+14/17, shared 10/23, every failure "… intercepts pointer events" / "Update ready"; the same code
+passed in run 1). `scripts/e2e/browser.ts` now starts every test browser context with the
+Webapp's own snooze key (`hermes:update-toast-snooze-until`, what dismissing the toast stores),
+tolerant of `about:blank`.
+
+## Bundle and gates (code `9e401cf`)
+
+- **`desktop/plugin.js`: 800 952 bytes** (was 780 401 at `a6b5e520`: +20 551), sha256
+  `6aa175697a8901cb…`, 93 esbuild inputs; `npm run build` reproduces it byte for byte (`git status`
+  clean). Only `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` stay external (the guards).
+- lint exit 0; build exit 0; `npm test` exit 0, **481/481** (was 453: `context.test.ts` +28);
+  `npm run test:py` exit 0, **404 passed** (was 381: `test_context_api.py` +23).
+- `npm run test:e2e` run 3 on `854183c`: foundation 19, core-dense 30, actions 30, sync 25,
+  swimlanes 28, rich 23, subway 19, toolbar 17, final 14, select 35, shared 23 — all green; create
+  29/30 and context 14/15, each failing only "no page errors" on the first snooze script throwing on
+  `about:blank`; fixed in `9e401cf`, then create **30/30** and context **15/15** re-run alone.
+  Split total **308/308** (baseline 293 + context 15).
+
+## Review r1 fixes (B1, B2; fix start `da1fd44`)
+
+### B1 — the Rich context bar's scale over the whole scope
+
+- **The rule** (`src/styles/rich/spec.ts` `contextScaleInScope`, `ScopeScaleMemory`; used by
+  `src/styles/rich/context.tsx`): the bars' denominator is the largest context figure over the
+  rows `maxTokensInScope` read at the base commit (every in-scope session node; measured → its
+  tokens, estimated → `estimate.total`, none / failed / an older backend's row → 0). It is
+  **pending** until every one of them has settled once; then a row that is refetching (loading
+  again) keeps its last settled value until the new figure lands. Pending: every scope-scaled bar
+  is unfilled and the card carries `data-context-scale="pending"`, `data-context-of=""`,
+  `data-token-max=""` (the attribute stays, empty). A window-scaled bar (never today, P2) does not
+  wait for the scope.
+- **The data** (`src/page/context-env.tsx` `ContextDriver wholeScope`, `inScopeWanted` in
+  `src/model/context.ts`): in Rich cards the driver asks for every in-scope row without a usable
+  measurement, plus the viewport-near ones (dimmed out-of-scope cards, as before); the other styles
+  ask for the viewport-near blocks only. The store batches ≤ 100 ids a request (unchanged).
+- **The reviewer's probe as e2e** (`e2e-context` "Rich cards (fix r1, B1) …", real wheel and the
+  toolbar's Fit): `--rich` seeded after the live checks (`st-ctx-measured` already archived, so
+  every card is estimated), wheel-zoomed to 2.5 on `st-rich-code`, reloaded (zoom 2.5 kept; on
+  screen: `st-hp-mockup`, `st-rich-html`, `st-rich-code`; the largest, `st-rich-root` 14 085, off
+  screen), waited for a settled scale: `data-context-of` 14 085, fill 0.4048 (5 703 / 14 085);
+  after Fit: 14 085 and 0.4048 — r1 read 6 482 (≈ 88 %) and 14 085 (≈ 40 %). The page's estimate
+  requests in the whole suite: at most 52 ids each.
+- **Mutation check:** with the driver's `wholeScope` off and the pending state ignored, the same
+  suite fails this check (`scale 0 vs the largest in-scope card st-rich-root 14085`) and the Fit bar
+  check; restored, it passes.
+- **Batching on the 500-row scale fixture** (`e2e-rich` "500-session fixture (Show all) …", Rich,
+  All projects): **5 requests of 100 ids** (500 distinct ids), **102 ms** from the first request to
+  the last answer (full run on `1180b63`), against 143 viewport-near ids asked for details at
+  open. The 2 s pan stayed at 61.8 fps. A unit test also batches a 250-row scope as 100 + 100 + 50.
+
+### B2 — a stale estimate is never the current figure
+
+- **The rule** (`src/model/context.ts` `contextFigure`): an entry whose `sig` differs from the
+  row's `contextSignature` is `loading` (`… ctx`, tooltip "Context: estimating…"); the Dense
+  inspector lists the estimate's categories only for an entry under the row's signature. Measured
+  rows are unaffected. A failure holds back a retry (30 s) only under the signature it failed
+  under, so a stale failed entry is asked for again at once.
+- **The e2e** (`e2e-context`): the archive check fetches the backend's estimate under the new
+  signature itself (`?e2e=direct` on the suite's own requests, so they never count as the page's),
+  waits for the block to show exactly that figure (`~7k ctx`) and for the page's refetch response
+  to finish (one request, `["st-ctx-measured"]`); only then does the append check open its window,
+  and it asserts the append refetched `["st-ctx-estimate"]` alone. No sleep was added; the old
+  `sleep(800)` went (the check waits for the backend's new figure instead). Before the tagging, the
+  suite's own direct estimate calls appeared in the window (the first try failed on them).
+- **5 consecutive runs alone** on `1180b63`: 16/16, 16/16, 16/16, 16/16, 16/16.
+
+### Changed assertions (old → new)
+
+- `scripts/e2e-context.ts` `entryOf(answer, id)` → `entryOf(answer, row)`: the expected entry
+  carries the row's signature (`sig: ''` → `contextSignature(row)`), used by the figures, tooltip,
+  flip and append checks.
+- `scripts/e2e-context.ts` archive check: "flips to an estimate" (`kind === 'estimated'`) → the
+  block equals the backend's figure under the new signature **and** the page's refetch for it
+  finished.
+- `scripts/e2e-context.ts` append check: the request window opens after the archive refetch; the
+  `sleep(800)` → a wait for the backend's new figure on the block; `asked.every(id => id ===
+  ESTIMATE)` → `asked.length > 0 && …`, counting the page's requests only.
+- `scripts/e2e-context.ts` Rich bar check and `scripts/e2e-rich.ts` bar check: they also wait
+  until no card's scale is pending.
+- `scripts/e2e-rich.ts` bar check: the expected figures' `sig: ''` → `contextSignature(row)`
+  (full run on `1180b63` failed it: every expected figure was loading, `bars off: [] (max 14085)`).
+- `scripts/e2e-rich.ts` 500-row check: also asserts every in-scope id asked for its context
+  estimate, ≤ 100 ids a request.
+- New: `e2e-context` "Rich cards (fix r1, B1) …" (suite 15 → 16 checks).
+- Unit (`tests/js/context.test.ts`, 481 → 491 in `npm test`): the stale-entry rule (3), the scope
+  scale (pending, order independence, 0 for failed / none / old rows, refetch keeps the last value,
+  in-scope only), the pending bar, the whole-scope want and its batches, a failure under an older
+  signature; `maxContextInScope` (replaced by `contextScaleInScope`) and its test are gone.
+
+### Bundle (code `1180b63`)
+
+- **`desktop/plugin.js`: 802 359 bytes** (+1 407 on `da1fd44`'s 800 952), sha256
+  `2f4679bcd777b7db…`; `npm run build` reproduces it byte for byte.
+
+### Gates (code `d26b24d`; `815eb2f` and later change only docs)
+
+- lint exit 0; build exit 0 (byte-identical, tree clean); `npm test` exit 0, **491/491**;
+  `npm run test:py` exit 0, **404 passed**.
+- `e2e-context` alone, 5 consecutive runs on `1180b63`: 16/16 each.
+- Full `npm run test:e2e`, run 1 on `1180b63` (exit 1, 308/309): foundation 19, core-dense 30,
+  actions 30, sync 25, swimlanes 28, rich **22/23**, subway 19, toolbar 17, final 14, select 35,
+  shared 23, create 30, context 16. The rich failure was this fix's own test (the bar check's
+  expected figures had `sig: ''`, so D4 made them loading); fixed in `d26b24d`, rich **23/23** alone.
+- Full run 2 on `815eb2f` (exit 1, 308/309): foundation 19, core-dense 30, actions 30, sync 25,
+  swimlanes **27/28**, rich 23, subway 19, toolbar 17, final 14, select 35, shared 23, create 30,
+  context 16. The swimlanes failure, "B1-r3 … st-scale-0007 is not drawn at the default view",
+  started when the local clock passed midnight (the run reached swimlanes ≈ 00:00 EST,
+  2026-11-20): run alone afterwards it fails the same way on this head, on `da1fd44` and on the
+  base `a6b5e520` (exports via `git archive`), so it is a time-of-day dependence of that check's
+  500-row fixture, not this fix (the fix changes no Swimlanes code; run 1, before midnight, passed
+  28/28). Not fixed here (outside B1/B2).
+
+# Measured facts — Session Tree 13 (the test seeder and Python tests on the Hermes storage interface)
+
+Base `3183b386` (the `dashboard/hermes_store.py` read fix). Hermes v0.23.3 is the user's
+`~/.hermes/hermes-agent` at `caafe5389ae5`. Hermes v0.23.2 is a `git archive ae2a81ccc00e` export
+under the coder profile's scratch, run with `HERMES_AGENT_DIR=<export>`; under that env
+`hermes_state.__file__` is the export's.
+
+## Why the switch is per handle, not "does persistence_assembly exist"
+
+- Under `HERMES_AGENT_DIR=<v0.23.2 export>`, `importlib.util.find_spec("persistence_assembly")`
+  still finds `~/.hermes/installs/…/workspace/persistence_assembly.py`, the v0.23.3 install's copy.
+  So whether that module is importable says nothing about the Hermes that runs.
+- `scripts/fixture_store.py` opens the legacy `SessionDB` when `hermes_state` carries the real
+  class: `vars(hermes_state)["SessionDB"]` has `update_token_counts`. The v0.23.3 stub is served
+  by the module's `__getattr__`, so the probe emits no deprecation warning. Otherwise it opens
+  `persistence_assembly.open_persistence(profile_scope(home=…), eager=True)`.
+- After the open, every call branches on `hermes_store.is_storage_interface(handle)`. That is the
+  same probe the runtime reads use. It is decided once, at open.
+
+## Fixture writes, old → new
+
+| Seeder call (old `SessionDB` name kept) | storage interface (v0.23.3+) |
+|---|---|
+| `create_session(id, source, **kw)` | `sessions.create(NewSession(session_id=id, source=source, **kw))` (the `model_config` markers pass through unchanged) |
+| `append_message` / `append_messages_batch` | `messages.append(id, NewMessage.from_live(msg))` / `messages.append_batch(…, chunk_rows=)` |
+| `update_token_counts(**counts)` | the `UsageDelta` that `agent.turn_usage.queue_usage` builds from the same keywords, then `usage.queue_usage` + `usage.flush_usage()` |
+| `set_session_title` / `end_session` / `set_session_pinned` / `set_session_archived` | `sessions.set_title` / `end` / `set_pinned` / `set_archived` |
+| `update_system_prompt` / `update_session_tool_names` | `sessions.update_system_prompt` / `update_tool_pin` |
+| `delete_session` | `sessions.delete(id, media_root=…)` + `session_retention.after_sessions_removed` (what the v0.23.3 `SessionDB` stub does) |
+| `rewrite_pruned_rows` / `archive_and_compact` | `messages.rewrite_pruned_rows([PrunedRowChange(held_message(o), NewMessage.from_live(r), NewMessage.from_live(o))])` / `agent.conversation_compression_archive.commit_compaction` |
+| `prompt_cache_generation`, `get_session`, `get_compression_tip` / `_lineage` | through `hermes_store` (`generation_reader`, `get_session`, `compression_tip`, `compression_lineage`) |
+
+Fixture-only SQL is unchanged, the same statements on both paths, each marked `# fixture-only:`:
+
+- `started_at`, `last_activity_at`, `ended_at`: the backdating.
+- `ended_at`, `end_reason` cleared and `last_activity_at = now`: `--activate`.
+- `ended_at`, `end_reason` cleared: `--compact`'s re-open of the tip.
+
+The re-open API (`reopen_session` / `sessions.reopen`) would also retire queued prompts, freeze
+reset children and un-archive. No value that the old path set through `SessionDB` lacked a
+repository write on v0.23.3.
+
+## Fixture equivalence (v0.23.3 vs v0.23.2)
+
+The same throwaway script ran on each version, with NOW pinned and the projects dir shared. It
+seeded these homes:
+
+- the e2e default home (`main()`: seed_default + work 3 + scale 500, the manifest);
+- rich-home, ctx-home and patho-home;
+- a ctx home archived 4× (`archive_one`: 3 prunes, then the in-place-compaction fallback);
+- an "ops" home put through every CLI flag in turn: `--touch` ×2, `--branch`, `--unowned-branch`,
+  `--whole-cost-branch`, `--compact` ×2, `--append` ×2, `--activate`, `--delete`, `--context`,
+  `--archive`, `--rich`, `--more-projects`, `--pathological`, `--context work`.
+
+It then dumped `sessions` / `messages` and the plugin's `/sessions` (listing and lineage),
+`/sessions/details` and `/sessions/context` for every home.
+
+- **Row counts are identical in every home.**
+
+  | Home | default | work | scale | rich | ctx | patho | ctx-archived | ops | ops/work | ops/scale |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | sessions | 49 | 3 | 500 | 7 | 6 | 25 | 6 | 103 | 9 | 500 |
+  | messages | 254 | 6 | 1000 | 89 | 61 | 50 | 74 | 533 | 69 | 1000 |
+
+- The manifests are equal. 50 created: 24 singles, 4 hidden, 2 archived, work 3, scale 500.
+- **Every column is equal except these wall-clock or minted values:**
+  - `messages.message_uid` / `tool_call_uid` / `tool_call_uids`: minted at random on insert.
+  - `messages.timestamp` / `display_identity` (6 rows): `--append` and `--compact` write now.
+  - `sessions.started_at` (52): pathological rows (never backdated) and the 2 compact continuations.
+  - `sessions.ended_at` (2): the compacted tips, ended now.
+  - `sessions.last_activity_at` (1): `--activate`.
+  - `sessions.prompt_cache_clock` (16): the clock's `sent_at` is `time.time()`.
+- **The endpoint answers are equal except the same fields:** `started_at`, `last_active`,
+  `context_measured.sent_at`, `prompt_cache_clock`, `cache_window.{guaranteed,estimated}_until`.
+
+## Changed assertions (old → new)
+
+- `test_context_api` signature lock: `_model_history(db, tip)` / `_stored_breakdown(…, db=)` →
+  the store parameter is `db` beside `SessionDB` and `store` beside the storage interface, chosen
+  by capability. The plugin passes it by position.
+- `test_the_estimate_equals_stored_breakdown`: beside the storage interface, Hermes's
+  `_stored_breakdown` takes the `SessionRecord` (`db.sessions.get`) and `store=`.
+- `test_session_rotated_and_storage_unavailable`: the failing store is shaped like the running
+  handle. The storage interface has `sessions` and a failing `usage.prompt_cache_generation`.
+  `SessionDB` fails on itself.
+- Direct reads of `SessionDB` in the tests now go through `hermes_store` (`get_session`,
+  `list_rows`) or `fixture_store` (`open_reader`, `session_unread`).
+- New `tests/py/test_hermes_store.py`, 12 tests: one per public `hermes_store` function plus a
+  meta-test over its public functions. Mutation-checked: breaking `compression_tip` and adding an
+  untested public function failed exactly those two tests.
+
+## The e2e test package
+
+`buildTestPackage` (`scripts/e2e/harness.ts`) did not copy `dashboard/hermes_store.py` at the
+base, so every package suite's backend failed to load. Measured on v0.23.3: sync 4/25. It is
+copied now.
+
+## Gates (HEAD `32dee9b`; later commits change only docs)
+
+- lint exit 0; `npm test` exit 0, 493/493.
+- build exit 0: `desktop/plugin.js` 803 115 B, sha256 `19e4307a…f239df48c`, identical to the base.
+  The tree stays clean.
+- `npm run test:py` on v0.23.3: exit 0, **416 passed**, 0 failed / errors / skipped / xfailed. The
+  base was 155 passed, 1 failed, 248 errors.
+- `npm run test:py` on v0.23.2: exit 0, **416 passed**, 0 failed / errors / skipped / xfailed. The
+  base was 404 passed.
+- Full `npm run test:e2e` on v0.23.3 (exit 1, 308/309):
+  - foundation 19, core-dense 30, actions 30, sync 25, swimlanes 28, rich 23, subway 19,
+    toolbar 17, final 14, select 35, shared 23, create 30.
+  - context **15/16**. The failing check is "an older backend": it installs base `a6b5e520`'s
+    `dashboard/`, whose `plugin_api.py` calls `SessionDB.list_sessions_rich`. On v0.23.3 that
+    backend answers "Could not read sessions — default: list_sessions_rich". No pre-card-12 backend
+    can read a v0.23.3 store, so the check's premise does not hold there. It is not changed here.
+- The real-Hermes guard passed in every suite. `git -C ~/.hermes/hermes-agent status --short` was
+  empty before and after.
+
+# Measured facts — Dropped e2e check: an older backend (2026-11-22)
+
+Base `f09fba1` (dev). Hermes v0.23.3 is the user's `~/.hermes/hermes-agent` at `caafe5389ae5`.
+
+## Why
+
+- `scripts/e2e-context.ts` had a check "an older backend": it installed base `a6b5e520`'s
+  `dashboard/` into the test home and expected `— ctx`, no context request and no error.
+- That backend calls `SessionDB.list_sessions_rich`, which Hermes v0.23.3 removed. On v0.23.3 and
+  later it cannot list sessions at all, so the check could never pass. The full `npm run test:e2e`
+  above was 308/309, and this check was the only failure (context 15/16).
+- The check is deleted, with its helpers (`BASE_COMMIT`, `oldBackendPackage`, `relink`, the
+  `finally` relink). No old backend is faked and no skip is added.
+
+## What still covers it
+
+- `tests/js/context.test.ts:183`: an older backend's row (no context fields) shows `— ctx`, is
+  never fetched and never throws.
+- `tests/js/context.test.ts:319`: the Rich bar counts that row 0.
+
+## Gates
+
+- lint exit 0; `npm test` exit 0, 493/493.
+- build exit 0: `desktop/plugin.js` unchanged (no `src/` change), the tree stays clean.
+- `SESSION_TREE_CARD=6 SESSION_TREE_ROLE=coder node scripts/e2e-context.ts` on v0.23.3: exit 0,
+  `e2e-context: 15 passed, 0 failed`. This includes the cleanup check and the real-Hermes guard.
+  `git -C ~/.hermes/hermes-agent status --short` was empty afterwards.

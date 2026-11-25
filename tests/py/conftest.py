@@ -1,7 +1,12 @@
-"""pytest fixtures: an isolated Hermes home (tmp dir) seeded through Hermes's own SessionDB API.
+"""pytest fixtures: an isolated Hermes home (tmp dir) seeded through Hermes's own write API.
 
 Run with ``npm run test:py`` (scripts/run-pytest.sh): the tests execute inside the Python
 environment Hermes itself runs in, via the test-Hermes launcher, never against ~/.hermes.
+Point ``HERMES_AGENT_DIR`` at another Hermes tree (e.g. an extracted v0.23.2) to run against it.
+
+Fixtures are written through ``scripts/fixture_store.py``, which picks the storage interface
+(Hermes v0.23.3+) or the legacy ``SessionDB`` (v0.23.2 and earlier) by capability; fixture reads
+go through ``dashboard/hermes_store.py`` (``fixture_store.hermes_store``) where it has the read.
 """
 
 from __future__ import annotations
@@ -15,6 +20,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 PREFIX = "/api/plugins/session-tree"
+sys.path.insert(0, str(REPO / "scripts"))
+
+import fixture_store  # noqa: E402
 
 
 def _load(name: str, path: Path):
@@ -43,7 +51,7 @@ def hermes_home(tmp_path_factory) -> Path:
 def manifest(hermes_home: Path) -> dict:
     seeder = _load("session_tree_seed_fixtures", REPO / "scripts" / "seed-fixtures.py")
     seeder.ensure_repos()
-    db = seeder.SessionDB(db_path=hermes_home / "state.db")
+    db = fixture_store.open_store(hermes_home / "state.db")
     try:
         manifest = seeder.seed_default(db)
     finally:

@@ -12,16 +12,18 @@
 
 Read-only and bounded per id, never a whole-transcript scan:
 
-* the row: ``SessionDB.get_session`` (primary key); an id the profile does not have is omitted;
-* the excerpt: Hermes's own paged read, ``SessionDB.get_messages(id, latest=True,
-  limit=EXCERPT_PAGE)`` (``ORDER BY id DESC LIMIT`` on ``idx_messages_session_id``);
+* the row: the store's session read by primary key; an id the profile does not have is omitted;
+* the excerpt: Hermes's own paged read of the newest ``EXCERPT_PAGE`` messages (``ORDER BY id DESC
+  LIMIT`` on ``idx_messages_session_id``);
 * the activity: one ``COUNT … GROUP BY`` day over the 7-day timestamp range on the
-  ``(session_id, active, timestamp)`` index, through SessionDB's read-only reader (``_read_all``;
-  Hermes has no per-day count API). It covers the conversation's compression lineage
-  (``SessionDB.get_compression_lineage``, at most ``MAX_LINEAGE`` segments), counting a message
-  carried into a later segment once (same role and timestamp).
+  ``(session_id, active, timestamp)`` index, through Hermes's read-only pooled reader (Hermes has
+  no per-day count API). It covers the conversation's compression lineage (at most
+  ``MAX_LINEAGE`` segments), counting a message carried into a later segment once (same role and
+  timestamp).
 
-The caller opens the database read-only (``_read_profile_db``); nothing here writes.
+Each read goes through ``dashboard/hermes_store.py`` (legacy ``SessionDB`` on Hermes ≤ v0.23.2, the
+storage interface on v0.23.3+). The caller opens the store read-only (``_read_profile_db``);
+nothing here writes.
 """
 
 from __future__ import annotations
@@ -31,6 +33,26 @@ import math
 import re
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
+
+
+def _sibling(name: str) -> Any:
+    """A module next to this file, shared with ``plugin_api._load_sibling`` (same module name)."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    module_name = f"hermes_dashboard_plugin_session_tree_{name}"
+    if module_name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(module_name, Path(__file__).with_name(f"{name}.py"))
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load {name}.py next to {__file__}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[module_name]
+
+
+hermes_store = _sibling("hermes_store")
 
 #: Ids per request (the page batches its viewport in requests of at most this many).
 MAX_IDS = 100
@@ -206,7 +228,7 @@ def clip(text: str, limit: int = EXCERPT_MAX) -> str:
 
 def excerpt_of(db: Any, session_id: str) -> tuple[Optional[str], Optional[str]]:
     """(excerpt, role) of the newest user / assistant message with text, from one paged read."""
-    messages = db.get_messages(session_id, latest=True, limit=EXCERPT_PAGE)
+    messages = hermes_store.latest_messages(db, session_id, EXCERPT_PAGE)
     for message in reversed(messages):
         if message.get("role") not in _ROLES or message.get("_compressed_summary"):
             continue
@@ -236,7 +258,8 @@ def activity_of(db: Any, segments: list[str], now: float, tz_offset_minutes: int
     start = first * DAY - offset
     end = (today + 1) * DAY - offset
     marks = ",".join("?" for _ in segments)
-    rows = db._read_all(
+    rows = hermes_store.read_all(
+        db,
         f"""SELECT CAST((timestamp + ?) / {DAY} AS INTEGER) AS day, COUNT(DISTINCT role || ':' || timestamp) AS n
             FROM messages
             WHERE session_id IN ({marks}) AND (active = 1 OR compacted = 1)
@@ -254,7 +277,7 @@ def activity_of(db: Any, segments: list[str], now: float, tz_offset_minutes: int
 
 def lineage_of(db: Any, session_id: str) -> list[str]:
     """The conversation's compression segments (root → this id), newest ``MAX_LINEAGE`` kept."""
-    lineage = db.get_compression_lineage(session_id) or [session_id]
+    lineage = hermes_store.compression_lineage(db, session_id) or [session_id]
     if session_id not in lineage:
         lineage = [*lineage, session_id]
     return lineage[-MAX_LINEAGE:]
@@ -264,7 +287,7 @@ def details(db: Any, ids: Iterable[str], now: float, tz_offset_minutes: int) -> 
     """Per id the profile has: excerpt, excerpt_role and activity. Unknown ids are omitted."""
     out: dict[str, dict[str, Any]] = {}
     for session_id in ids:
-        if session_id in out or not db.get_session(session_id):
+        if session_id in out or not hermes_store.get_session(db, session_id):
             continue
         excerpt, role = excerpt_of(db, session_id)
         out[session_id] = {

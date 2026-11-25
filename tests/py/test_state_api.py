@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PREFIX
+from conftest import PREFIX, fixture_store
 
 
 @pytest.fixture
@@ -302,7 +302,7 @@ def test_layout_writes_never_touch_the_session_store(client, state_file, hermes_
     assert _fingerprint(hermes_home) == before
 
 
-# --- compression lineages through real SessionDB rows (card-4 review B2 + NB3) ------------------
+# --- compression lineages through real stored rows (card-4 review B2 + NB3) ------------------
 
 @pytest.fixture(scope="module")
 def lineage(manifest, hermes_home: Path):
@@ -311,7 +311,7 @@ def lineage(manifest, hermes_home: Path):
     import sys
 
     seeder = sys.modules["session_tree_seed_fixtures"]
-    db = seeder.SessionDB(db_path=hermes_home / "state.db")
+    db = fixture_store.open_store(hermes_home / "state.db")
     try:
         s = seeder.Seeder(db, "default")
         s.session("st-b2-root", "B2 lineage", project="syscanvas", age_h=50, end_reason="compression")

@@ -15,6 +15,7 @@ import { join } from 'node:path'
 
 import type { Page } from 'playwright-core'
 
+import { fullNumber } from '../src/model/context.ts'
 import { compactNumber, costLabel } from '../src/model/format.ts'
 import type { SessionRow, SessionsResponse } from '../src/model/sessions.ts'
 import { close, enableDesktopHalf, goto, launch, signIn } from './e2e/browser.ts'
@@ -774,8 +775,8 @@ async function main(): Promise<void> {
       assert((await field('project')) === 'syscanvas', `project ${await field('project')}`)
       assert((await field('messages')) === String(row.message_count), 'messages')
       assert((await field('tool-calls')) === String(row.tool_call_count ?? 0), 'tool calls')
-      assert((await title('tokens-in')) === String(row.input_tokens) && (await field('tokens-in')) === compactNumber(row.input_tokens), 'tokens in')
-      assert((await title('tokens-out')) === String(row.output_tokens) && (await field('tokens-out')) === compactNumber(row.output_tokens), 'tokens out')
+      assert((await title('tokens-in')) === fullNumber(row.input_tokens) && (await field('tokens-in')) === compactNumber(row.input_tokens), 'tokens in')
+      assert((await title('tokens-out')) === fullNumber(row.output_tokens) && (await field('tokens-out')) === compactNumber(row.output_tokens), 'tokens out')
       assert((await field('cost')) === costLabel(row.actual_cost_usd, row.estimated_cost_usd), 'cost')
       assert((await field('model')) === row.model, 'model')
       assert((await field('compression')).includes(`×${row.compacted_segments}`), 'compression')

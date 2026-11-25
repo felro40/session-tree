@@ -112,6 +112,14 @@ export function tokenLabel(value: number): string {
 }
 
 /**
+ * Card 12 (A3): a lane header's totals — the lifetime tokens summed (`input + output`): a sum of
+ * contexts would mean nothing. `3 sessions · 41k used`.
+ */
+export function laneTotalsLabel(sessions: number, tokens: number): string {
+  return `${sessions} session${sessions === 1 ? '' : 's'} · ${tokenLabel(tokens)} used`
+}
+
+/**
  * The shared layout spec (block size, Show all) for the canvas shell's bookkeeping: rectangles
  * for the router and which families are on the canvas. The lanes themselves come from `layout.ts`.
  */

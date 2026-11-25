@@ -4,7 +4,8 @@ isolated test home through the test-Hermes launcher (``<root>/hermes --run-path`
 The handler needs exclusive maintenance of the profile's store (``_with_session_maintenance``): a
 running gateway owns it and the HTTP route answers 409 "Exclusive maintenance refused" (measured,
 ``docs/measured-facts.md``). So the e2e stops the test gateway, runs this, and starts it again.
-Nothing here touches ``state.db`` itself: the core handler deletes through ``SessionDB``.
+Nothing here touches ``state.db`` itself: the core handler deletes through Hermes's own store
+(``SessionDB`` on v0.23.2, the storage interface on v0.23.3+), so this needs no fixture writer.
 
     <root>/hermes --run-path scripts/e2e/core-delete-empty.py <profile>
 """

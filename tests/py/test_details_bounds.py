@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from conftest import PREFIX, REPO, _load
+from conftest import PREFIX, REPO, _load, fixture_store
 
 PATHO = "patho"
 #: The card's per-id bar (ms of processing per id), and the 100-id request's wall bar (s).
@@ -37,7 +37,7 @@ def seeder(manifest):
 @pytest.fixture(scope="module")
 def patho_home(tmp_path_factory, seeder) -> Path:
     home = tmp_path_factory.mktemp("patho-home")
-    db = seeder.SessionDB(db_path=home / "state.db")
+    db = fixture_store.open_store(home / "state.db")
     try:
         seeder.seed_pathological(db)                                  # st-patho-<name>
         seeder.seed_pathological(db, prefix="st-p100", copies=5)      # 5 × 20 = 100 ids

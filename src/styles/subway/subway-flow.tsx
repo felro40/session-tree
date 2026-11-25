@@ -1,7 +1,7 @@
 /**
  * Subway map (mockup `variants/subway-map/`): every conversation lineage is a thick coloured line
  * (a shade of its project colour per track), every session a ringed station with its label beside
- * it (title, at most 2 lines, and a muted meta line: last used, messages, tokens). Compacted ×N is
+ * it (title, at most 2 lines, and a muted meta line: last used, messages, context). Compacted ×N is
  * a capsule station with "×N" inside; the stand-in a hollow dashed station "not loaded" at the
  * start of a dashed grey line; "continued as" a dotted planned line with its label.
  *
@@ -20,8 +20,8 @@ import type { Rect } from '../../model/layout.ts'
 import { octilinearRouter } from '../../model/route.ts'
 import type { Port } from '../../model/route.ts'
 import { useSessionActions } from '../../page/session-actions-context.ts'
+import { useContextFigure } from '../../page/context-env.tsx'
 import { BlockHandles } from '../shared.tsx'
-import { tokenLabel } from '../swimlanes/spec.ts'
 import type { BlockData, LinkData } from '../types.ts'
 import { useLabelSpot, useSubwayEnv } from './context.tsx'
 import { labelRect } from './labels.ts'
@@ -71,7 +71,7 @@ export const SubwayStation = memo(function SubwayStation({ data, selected }: Nod
   const spot: LabelSpot = placed?.spot ?? 'above'
   const row = node.row!
   const track = env?.plan().track.get(node.id)
-  const tokens = Math.max(0, Number(row.input_tokens) || 0) + Math.max(0, Number(row.output_tokens) || 0)
+  const figure = useContextFigure(node)
   const below = spot === 'below' || spot === 'below-left'
   const details = [row.model ? `model ${row.model}` : '', `cost ${costLabel(row.actual_cost_usd, row.estimated_cost_usd)}`].filter(Boolean).join(' · ')
 
@@ -115,7 +115,9 @@ export const SubwayStation = memo(function SubwayStation({ data, selected }: Nod
         <div className="st-sw-meta">
           <span data-field="last-used">{agoLabel(row.last_active || row.started_at, data.nowMs)}</span>
           <span data-field="messages">{row.message_count ?? 0} msgs</span>
-          <span data-field="tokens">{tokenLabel(tokens)} tok</span>
+          <span data-field="context" data-kind={figure?.kind}>
+            {figure?.label ?? '— ctx'}
+          </span>
           {status?.running && <span className="st-sw-pill is-run">running</span>}
           {status?.needsInput && (
             <span className="st-sw-pill is-ask" data-testid="session-tree-needs-input">
